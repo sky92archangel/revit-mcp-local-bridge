@@ -157,12 +157,6 @@ namespace RevitAIHubSetup
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             AddConnector("auto", "自动识别并配置本机 AI 客户端（推荐）");
-            AddConnector("codex", "Codex（MCP）");
-            AddConnector("workbuddy", "WorkBuddy（MCP）");
-            AddConnector("generic-mcp", "其它 MCP 应用");
-            AddConnector("function-api", "其它 Function Calling / HTTP 应用");
-            AddConnector("openai-compatible", "任意 OpenAI 兼容 API（内置本机助手）");
-            AddConnector("rest", "自定义 HTTP / API 应用");
             _connectorHint = new Label
             {
                 AutoSize = true,
@@ -194,6 +188,7 @@ namespace RevitAIHubSetup
             _apiSettingsLabel = FieldLabel("模型 API");
             _apiSettingsLabel.Visible = false;
             _connectorSelector.SelectedIndex = 0;
+            _connectorSelector.Enabled = false;
 
             _revitDirectory = new TextBox { Dock = DockStyle.Fill };
             _revitDirectory.TextChanged += delegate { RefreshEnvironment(); };
@@ -233,7 +228,7 @@ namespace RevitAIHubSetup
             choiceCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var revitLabel = FieldLabel("Revit 版本");
             revitLabel.Margin = new Padding(0, 7, 8, 0);
-            var connectorLabel = FieldLabel("连接应用");
+            var connectorLabel = FieldLabel("AI 客户端");
             connectorLabel.Margin = new Padding(0, 7, 8, 0);
             choiceCard.Controls.Add(revitLabel, 0, 0);
             choiceCard.Controls.Add(_packageSelector, 1, 0);
@@ -1021,7 +1016,7 @@ namespace RevitAIHubSetup
             _copyMcpButton.Enabled = !busy && _installed;
             _uninstallButton.Enabled = !busy;
             _packageSelector.Enabled = !busy;
-            _connectorSelector.Enabled = !busy;
+            _connectorSelector.Enabled = false;
             _revitDirectory.Enabled = !busy;
             _refreshButton.Enabled = !busy;
             _closeRevitButton.Enabled = !busy;

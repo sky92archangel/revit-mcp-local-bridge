@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Text;
+using System.Windows.Forms;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -55,6 +58,14 @@ namespace RevitCommandBridge
                     assemblyPath,
                     typeof(ShowConnectionCommand),
                     RibbonIcon.Status);
+                AddButton(
+                    panel,
+                    "RCB_CopyMcp",
+                    "复制\nMCP",
+                    "复制当前 Revit 年份的通用 MCP 配置，可直接粘贴到 Codex、WorkBuddy 或其它 MCP 客户端。",
+                    assemblyPath,
+                    typeof(CopyMcpConfigCommand),
+                    RibbonIcon.Mcp);
                 AddButton(
                     panel,
                     "RCB_Help",
@@ -120,6 +131,7 @@ namespace RevitCommandBridge
     {
         Panel,
         Status,
+        Mcp,
         Help
     }
 
@@ -136,6 +148,9 @@ namespace RevitCommandBridge
                     break;
                 case RibbonIcon.Help:
                     background = WpfColor.FromRgb(226, 137, 38);
+                    break;
+                case RibbonIcon.Mcp:
+                    background = WpfColor.FromRgb(0, 126, 140);
                     break;
                 default:
                     background = WpfColor.FromRgb(35, 113, 178);
@@ -177,6 +192,15 @@ namespace RevitCommandBridge
                         new WpfFormattedText("?", System.Globalization.CultureInfo.InvariantCulture, WpfFlowDirection.LeftToRight,
                             new WpfTypeface("Segoe UI"), 9.5, new WpfSolidColorBrush(background)),
                         new WpfPoint(13.25, 10.75));
+                }
+                else if (icon == RibbonIcon.Mcp)
+                {
+                    WpfPen link = new WpfPen(WpfBrushes.White, 2.2);
+                    link.StartLineCap = WpfPenLineCap.Round;
+                    link.EndLineCap = WpfPenLineCap.Round;
+                    context.DrawEllipse(null, link, new WpfPoint(12, 18), 4.5, 4.5);
+                    context.DrawEllipse(null, link, new WpfPoint(20, 12), 4.5, 4.5);
+                    context.DrawLine(link, new WpfPoint(14.8, 15.2), new WpfPoint(17.2, 14.8));
                 }
             }
             drawing.Freeze();
@@ -238,6 +262,46 @@ namespace RevitCommandBridge
                 TaskDialog.Show(
                     "Revit 命令桥",
                     "✓ Revit 这一端已连接。\n\n下一步不是在这里输入命令。请回到 Codex、WorkBuddy 或已连接的 AI 对话框，发送：\n\n请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型。");
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return Result.Failed;
+            }
+        }
+    }
+
+    [Transaction(TransactionMode.Manual)]
+    public sealed class CopyMcpConfigCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            try
+            {
+                BridgeRuntime.Start();
+                string version = BridgeBuildInfo.RevitVersion;
+                string configPath = Path.Combine(
+                    BridgeFileQueue.RootDirectory,
+                    "connections",
+                    "generic-mcp-revit-" + version + ".mcp.json");
+                if (!File.Exists(configPath))
+                {
+                    TaskDialog.Show(
+                        "Revit 命令桥 - MCP 配置",
+                        "未找到当前版本的 MCP 配置。\n\n请重新运行安装器并完成“配置 AI 客户端”，然后再点击此按钮。\n\n预期文件：\n" + configPath);
+                    return Result.Cancelled;
+                }
+
+                string config = File.ReadAllText(configPath, Encoding.UTF8);
+                if (string.IsNullOrWhiteSpace(config))
+                {
+                    throw new InvalidOperationException("MCP 配置文件为空：" + configPath);
+                }
+                Clipboard.SetText(config);
+                TaskDialog.Show(
+                    "Revit 命令桥 - MCP 配置",
+                    "✓ MCP 配置已复制到剪贴板。\n\n到 Codex、WorkBuddy 或其它 MCP 客户端的配置页面粘贴或导入即可。\n\n配置文件：\n" + configPath);
                 return Result.Succeeded;
             }
             catch (Exception ex)

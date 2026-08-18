@@ -58,7 +58,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -RevitVe
 
 ## 接入不同客户端
 
-安装时由使用者选择连接的应用；连接配置会生成在安装目录的 `connections` 文件夹，不会悄悄改写 Codex、WorkBuddy 或其它应用的私有配置。详见 [CONNECTORS.md](./CONNECTORS.md)。
+安装器固定使用“自动识别并配置本机 AI 客户端”。它会生成并保存连接配置到安装目录的 `connections` 文件夹；未识别的客户端直接使用“复制 MCP”按钮提供的通用配置。详见 [CONNECTORS.md](./CONNECTORS.md)。
 
 | 客户端能力 | 入口 | 适用场景 |
 | --- | --- | --- |
@@ -131,7 +131,7 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8765/commands?wait_seconds=60' -ContentType 'application/json; charset=utf-8' -Body $body
 ~~~
 
-远程模型 API 本身不直接访问本机 Revit；本机 Harness 把 Function Calling 参数转发到这个 REST 端点，或直接启动 MCP Server。安装器的“任意 OpenAI 兼容 API”选项已内置这个本机 Harness；API Key 使用 Windows DPAPI 按当前用户加密保存，不写入 MCP/REST 配置文件。
+远程模型 API 本身不直接访问本机 Revit；本机 Harness 把 Function Calling 参数转发到这个 REST 端点，或直接启动 MCP Server。自动识别未覆盖的 OpenAI 兼容客户端可直接使用随安装包提供的本机 Harness；API Key 使用 Windows DPAPI 按当前用户加密保存，不写入 MCP/REST 配置文件。
 
 ## 工作方式
 

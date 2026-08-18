@@ -231,11 +231,27 @@ if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
     throw 'Close all Revit processes before installing or updating the add-in.'
 }
 
+function Copy-PackageToInstallDirectory {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$DestinationDirectory
+    )
+
+    $existingNode = Join-Path (Join-Path $DestinationDirectory 'runtime') 'node.exe'
+    foreach ($packageItem in @(Get-ChildItem -LiteralPath $SourceDirectory -Force)) {
+        if ($packageItem.Name -ieq 'runtime' -and (Test-FileSystemPath $existingNode)) {
+            Write-Output ('复用已安装的 Node 运行时：' + $existingNode)
+            continue
+        }
+        Copy-Item -LiteralPath $packageItem.FullName -Destination $DestinationDirectory -Recurse -Force
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $InstallDirectory | Out-Null
 $packagePathForCopy = [System.IO.Path]::GetFullPath($PackageDirectory).TrimEnd('\')
 $installPathForCopy = [System.IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\')
 if (-not [string]::Equals($packagePathForCopy, $installPathForCopy, [StringComparison]::OrdinalIgnoreCase)) {
-    Get-ChildItem -LiteralPath $PackageDirectory -Force | Copy-Item -Destination $InstallDirectory -Recurse -Force
+    Copy-PackageToInstallDirectory -SourceDirectory $PackageDirectory -DestinationDirectory $InstallDirectory
 }
 
 $installedAssembly = Join-Path $InstallDirectory 'RevitCommandBridge.dll'
