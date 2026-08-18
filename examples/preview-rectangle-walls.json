@@ -1,0 +1,13 @@
+{
+  "operation": "create_rectangle_walls",
+  "args": {
+    "width_mm": 12000,
+    "depth_mm": 8000,
+    "height_mm": 3600,
+    "thickness_mm": 200,
+    "x_mm": 0,
+    "y_mm": 0
+  },
+  "preview": true,
+  "source": "example"
+}

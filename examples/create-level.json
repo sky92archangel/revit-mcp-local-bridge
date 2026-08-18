@@ -1,0 +1,9 @@
+{
+  "operation": "create_level",
+  "args": {
+    "name": "二层",
+    "elevation_mm": 3600
+  },
+  "preview": true,
+  "source": "example"
+}

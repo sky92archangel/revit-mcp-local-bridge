@@ -1,0 +1,4 @@
+﻿Revit Command Bridge Source Package
+Contents: src, setup, scripts, deploy, examples, schemas, build/install scripts, Revit 2020 template.
+The release folder contains the optional self-contained installer; generated dist folders, PDB files, and user-specific configurations are excluded.
+Rebuild: run build.ps1 with a locally installed supported Revit API.

@@ -1,0 +1,37 @@
+{
+  "operation": "execute_plan",
+  "args": {
+    "steps": [
+      {
+        "id": "check_project",
+        "operation": "query_document",
+        "args": {}
+      },
+      {
+        "id": "support",
+        "operation": "create_direct_shape",
+        "args": {
+          "name": "预览混凝土支座",
+          "category": "OST_GenericModel",
+          "geometry": [
+            {
+              "kind": "box",
+              "min": { "x": 0, "y": 0, "z": 0 },
+              "max": { "x": 3000, "y": 2000, "z": 2500 }
+            }
+          ]
+        }
+      },
+      {
+        "id": "select_support",
+        "operation": "select_elements",
+        "args": {
+          "targets": ["$support"],
+          "show": true
+        }
+      }
+    ]
+  },
+  "preview": true,
+  "source": "example"
+}

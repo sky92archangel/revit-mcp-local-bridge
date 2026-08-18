@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://revit-command-bridge.local/schemas/execute-plan.schema.json",
+  "title": "Revit Command Bridge execute_plan",
+  "description": "受控的通用 Revit 建模计划；长度默认毫米，点使用 {x,y,z}。",
+  "type": "object",
+  "required": ["operation", "args"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+    },
+    "operation": {
+      "const": "execute_plan"
+    },
+    "args": {
+      "type": "object",
+      "required": ["steps"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "required": ["operation"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._-]{1,128}$"
+              },
+              "operation": {
+                "enum": [
+                  "query_document",
+                  "query_catalog",
+                  "query_elements",
+                  "create_level",
+                  "create_grid",
+                  "create_wall",
+                  "create_direct_shape",
+                  "create_mep_curve",
+                  "connect_mep",
+                  "place_family_instance",
+                  "create_structural_member",
+                  "set_parameters",
+                  "delete_elements",
+                  "select_elements"
+                ]
+              },
+              "args": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "preview": {
+      "type": "boolean",
+      "default": false
+    },
+    "document_title": {
+      "type": ["string", "null"]
+    },
+    "source": {
+      "type": "string"
+    },
+    "created_utc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

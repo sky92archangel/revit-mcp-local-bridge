@@ -1,0 +1,109 @@
+﻿[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^20\d{2}$')]
+    [string]$RevitVersion,
+    [string]$RevitInstallDirectory,
+    [string]$OutputDirectory,
+    [switch]$SkipInstaller
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($RevitInstallDirectory)) {
+    $standardDirectory = Join-Path $env:ProgramFiles "Autodesk\Revit $RevitVersion"
+    if (Test-Path -LiteralPath (Join-Path $standardDirectory 'RevitAPI.dll')) {
+        $RevitInstallDirectory = $standardDirectory
+    }
+    else {
+        throw "Revit $RevitVersion API not found. Pass -RevitInstallDirectory with the folder containing RevitAPI.dll."
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $OutputDirectory = Join-Path $PSScriptRoot "dist\RevitCommandBridge-$RevitVersion"
+}
+
+$csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+$revitApi = Join-Path $RevitInstallDirectory 'RevitAPI.dll'
+$revitApiUi = Join-Path $RevitInstallDirectory 'RevitAPIUI.dll'
+
+foreach ($requiredPath in @($csc, $revitApi, $revitApiUi)) {
+    if (-not (Test-Path -LiteralPath $requiredPath)) {
+        throw "Missing build dependency: $requiredPath"
+    }
+}
+
+$apiAssembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom($revitApi)
+if ($apiAssembly.ImageRuntimeVersion -notlike 'v4.*') {
+    throw "Revit $RevitVersion API runtime is $($apiAssembly.ImageRuntimeVersion); use the matching runtime adapter build."
+}
+
+$sourceDirectory = Join-Path $PSScriptRoot 'src'
+$sourceFiles = @(Get-ChildItem -LiteralPath $sourceDirectory -Filter '*.cs' | Sort-Object Name | ForEach-Object FullName)
+if ($sourceFiles.Count -eq 0) {
+    throw "No C# source files found: $sourceDirectory"
+}
+
+New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$assemblyPath = Join-Path $OutputDirectory 'RevitCommandBridge.dll'
+$symbols = @()
+$parameterType = $apiAssembly.GetType('Autodesk.Revit.DB.Parameter', $false)
+if ($null -ne $parameterType -and $null -ne $parameterType.GetMethod('GetUnitTypeId', [Type[]]@())) {
+    $symbols += 'REVIT_FORGE_UNITS'
+}
+$compilerArguments = @(
+    '/nologo',
+    '/target:library',
+    '/platform:anycpu',
+    '/optimize+',
+    '/debug:pdbonly',
+    $(if ($symbols.Count -gt 0) { '/define:' + ($symbols -join ';') } else { $null }),
+    ('/out:' + $assemblyPath),
+    ('/reference:' + $revitApi),
+    ('/reference:' + $revitApiUi),
+    '/reference:System.Web.Extensions.dll',
+    '/reference:System.Windows.Forms.dll',
+    '/reference:System.Drawing.dll',
+    '/reference:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF\WindowsBase.dll',
+    '/reference:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF\PresentationCore.dll'
+) + $sourceFiles | Where-Object { $null -ne $_ }
+
+& $csc @compilerArguments
+if ($LASTEXITCODE -ne 0) {
+    throw "RevitCommandBridge compilation failed with exit code: $LASTEXITCODE"
+}
+
+foreach ($directoryName in @('scripts', 'examples', 'deploy', 'schemas', 'src')) {
+    $source = Join-Path $PSScriptRoot $directoryName
+    if (Test-Path -LiteralPath $source) {
+        $destination = Join-Path $OutputDirectory $directoryName
+        New-Item -ItemType Directory -Force -Path $destination | Out-Null
+        Get-ChildItem -LiteralPath $source -Force | Copy-Item -Destination $destination -Recurse -Force
+    }
+}
+
+foreach ($fileName in @('README.md', 'PROTOCOL.md', 'ARCHITECTURE.md', 'ENGINEERING-RECORD.md', 'VERSION-SUPPORT.md', 'CONNECTORS.md', 'install-revit.ps1', 'uninstall-revit.ps1', 'install-revit2020.ps1', 'build-revit-adapter.ps1')) {
+    $source = Join-Path $PSScriptRoot $fileName
+    if (Test-Path -LiteralPath $source) {
+        Copy-Item -LiteralPath $source -Destination (Join-Path $OutputDirectory $fileName) -Force
+    }
+}
+
+$packageMetadata = [ordered]@{
+    product = 'RevitCommandBridge'
+    revit_version = $RevitVersion
+    protocol = 'revit-command-bridge/2.0'
+    runtime = 'net48'
+}
+$packageMetadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory 'bridge.config.json') -Encoding UTF8
+
+if (-not $SkipInstaller.IsPresent) {
+    & (Join-Path $PSScriptRoot 'build-installer.ps1') -DistDirectory (Join-Path $PSScriptRoot 'dist') | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Revit AI Hub setup build failed with exit code: $LASTEXITCODE"
+    }
+}
+
+Write-Host "Build completed for Revit ${RevitVersion}: $assemblyPath"
