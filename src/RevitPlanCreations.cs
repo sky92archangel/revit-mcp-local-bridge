@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.DB.Plumbing;
@@ -146,6 +147,445 @@ namespace RevitCommandBridge
             data["element_ids"] = new[] { wall.Id.IntegerValue };
             data["type_target"] = targetType.Name;
             return data;
+        }
+
+        public static Dictionary<string, object> CreateFloor(PlanStep step, PlanExecutionContext context)
+        {
+            Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
+            FloorType floorType = ResolveFloorType(context.Document, step.Arguments);
+            bool structural = PlanValues.Boolean(step.Arguments, false, "structural", "is_structural");
+            double offsetMm = PlanValues.Millimeters(step.Arguments, 0.0, "offset_mm", "offset");
+            CurveArray profile = BuildClosedProfile(
+                step.Arguments,
+                level.Elevation + PlanValues.ToFeet(offsetMm),
+                "create_floor");
+            var data = new Dictionary<string, object>
+            {
+                { "level", level.Name },
+                { "type", floorType.Name },
+                { "type_id", floorType.Id.IntegerValue },
+                { "structural", structural },
+                { "offset_mm", offsetMm },
+                { "boundary_segment_count", profile.Size }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Floor floor = context.Document.Create.NewFloor(profile, floorType, level, structural);
+            data["element_id"] = floor.Id.IntegerValue;
+            data["element_ids"] = new[] { floor.Id.IntegerValue };
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateRoom(PlanStep step, PlanExecutionContext context)
+        {
+            Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
+            XYZ point = PlanValues.Point(step.Arguments, "point");
+            string name = PlanValues.String(step.Arguments, null, "name", "room_name");
+            string number = PlanValues.String(step.Arguments, null, "number", "room_number");
+            var data = new Dictionary<string, object>
+            {
+                { "level", level.Name },
+                { "point", PlanValues.PointData(point) },
+                { "name", name },
+                { "number", number }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Room room = context.Document.Create.NewRoom(level, new UV(point.X, point.Y));
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                room.Name = name;
+            }
+            if (!string.IsNullOrWhiteSpace(number))
+            {
+                room.Number = number;
+            }
+            data["element_id"] = room.Id.IntegerValue;
+            data["element_ids"] = new[] { room.Id.IntegerValue };
+            data["name"] = room.Name;
+            data["number"] = room.Number;
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateSpace(PlanStep step, PlanExecutionContext context)
+        {
+            Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
+            XYZ point = PlanValues.Point(step.Arguments, "point");
+            string name = PlanValues.String(step.Arguments, null, "name", "space_name");
+            string number = PlanValues.String(step.Arguments, null, "number", "space_number");
+            var data = new Dictionary<string, object>
+            {
+                { "level", level.Name },
+                { "point", PlanValues.PointData(point) },
+                { "name", name },
+                { "number", number }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Space space = context.Document.Create.NewSpace(level, new UV(point.X, point.Y));
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                space.Name = name;
+            }
+            if (!string.IsNullOrWhiteSpace(number))
+            {
+                space.Number = number;
+            }
+            data["element_id"] = space.Id.IntegerValue;
+            data["element_ids"] = new[] { space.Id.IntegerValue };
+            data["name"] = space.Name;
+            data["number"] = space.Number;
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateModelCurve(PlanStep step, PlanExecutionContext context)
+        {
+            XYZ start = PlanValues.Point(step.Arguments, "start");
+            XYZ end = PlanValues.Point(step.Arguments, "end");
+            if (start.DistanceTo(end) < 1e-8)
+            {
+                throw new BridgeCommandException("模型线 start 与 end 不能重合。");
+            }
+            string name = PlanValues.String(step.Arguments, null, "name");
+            var data = new Dictionary<string, object>
+            {
+                { "start", PlanValues.PointData(start) },
+                { "end", PlanValues.PointData(end) },
+                { "name", name }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            XYZ direction = (end - start).Normalize();
+            XYZ seed = Math.Abs(direction.DotProduct(XYZ.BasisZ)) < 0.9 ? XYZ.BasisZ : XYZ.BasisX;
+            XYZ normal = direction.CrossProduct(seed).Normalize();
+            SketchPlane sketchPlane = SketchPlane.Create(
+                context.Document,
+                Plane.CreateByNormalAndOrigin(normal, start));
+            ModelCurve curve = context.Document.Create.NewModelCurve(
+                Line.CreateBound(start, end),
+                sketchPlane);
+            data["element_id"] = curve.Id.IntegerValue;
+            data["element_ids"] = new[] { curve.Id.IntegerValue };
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                data["name_applied"] = false;
+            }
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateView(PlanStep step, PlanExecutionContext context)
+        {
+            string kind = PlanValues.String(step.Arguments, "3d", "kind", "view_kind", "view_type")
+                .Trim()
+                .ToLowerInvariant()
+                .Replace("-", "_")
+                .Replace(" ", "_");
+            ViewFamily family;
+            switch (kind)
+            {
+                case "3d":
+                case "three_dimensional":
+                case "three_d":
+                    family = ViewFamily.ThreeDimensional;
+                    break;
+                case "floor_plan":
+                case "plan":
+                    family = ViewFamily.FloorPlan;
+                    break;
+                case "ceiling_plan":
+                    family = ViewFamily.CeilingPlan;
+                    break;
+                case "structural_plan":
+                    family = ViewFamily.StructuralPlan;
+                    break;
+                default:
+                    throw new BridgeCommandException("create_view.kind 仅支持 3d、floor_plan、ceiling_plan、structural_plan。");
+            }
+            ViewFamilyType type = ResolveViewFamilyType(context.Document, step.Arguments, family);
+            string name = PlanValues.String(step.Arguments, null, "name", "view_name");
+            bool perspective = PlanValues.Boolean(step.Arguments, false, "perspective");
+            Level level = family == ViewFamily.ThreeDimensional
+                ? null
+                : RevitLookups.ResolveLevel(context.Document, step.Arguments);
+            var data = new Dictionary<string, object>
+            {
+                { "kind", kind },
+                { "view_family", family.ToString() },
+                { "type", type.Name },
+                { "type_id", type.Id.IntegerValue },
+                { "level", level == null ? null : level.Name },
+                { "perspective", perspective },
+                { "name", name }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            View view;
+            if (family == ViewFamily.ThreeDimensional)
+            {
+                view = perspective
+                    ? (View)View3D.CreatePerspective(context.Document, type.Id)
+                    : View3D.CreateIsometric(context.Document, type.Id);
+            }
+            else
+            {
+                if (perspective)
+                {
+                    throw new BridgeCommandException("perspective=true 仅适用于 3d 视图。");
+                }
+                view = ViewPlan.Create(context.Document, type.Id, level.Id);
+            }
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                view.Name = name;
+            }
+            data["element_id"] = view.Id.IntegerValue;
+            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["name"] = view.Name;
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateSheet(PlanStep step, PlanExecutionContext context)
+        {
+            FamilySymbol titleBlock = ResolveOptionalTitleBlock(context.Document, step.Arguments);
+            string sheetNumber = PlanValues.String(step.Arguments, null, "sheet_number", "number");
+            string name = PlanValues.String(step.Arguments, null, "name", "sheet_name");
+            var data = new Dictionary<string, object>
+            {
+                { "title_block_type_id", titleBlock == null ? (object)null : titleBlock.Id.IntegerValue },
+                { "title_block", titleBlock == null ? null : titleBlock.Name },
+                { "sheet_number", sheetNumber },
+                { "name", name }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            ViewSheet sheet = ViewSheet.Create(
+                context.Document,
+                titleBlock == null ? ElementId.InvalidElementId : titleBlock.Id);
+            if (!string.IsNullOrWhiteSpace(sheetNumber))
+            {
+                sheet.SheetNumber = sheetNumber;
+            }
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                sheet.Name = name;
+            }
+            data["element_id"] = sheet.Id.IntegerValue;
+            data["element_ids"] = new[] { sheet.Id.IntegerValue };
+            data["sheet_number"] = sheet.SheetNumber;
+            data["name"] = sheet.Name;
+            return data;
+        }
+
+        public static Dictionary<string, object> PlaceViewOnSheet(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId sheetId = context.ResolveSingleElementId(step.Arguments, "sheet_id", "sheet", "target_sheet");
+            ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view", "target_view");
+            if (sheetId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
+                viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "deferred", true },
+                    { "reason", "preview 中前置图纸或视图引用尚无真实 ID。" }
+                };
+            }
+            ViewSheet sheet = context.Document.GetElement(sheetId) as ViewSheet;
+            View view = context.Document.GetElement(viewId) as View;
+            if (sheet == null)
+            {
+                throw new BridgeCommandException("sheet_id 不是有效图纸：" + sheetId.IntegerValue);
+            }
+            if (view == null || view.IsTemplate)
+            {
+                throw new BridgeCommandException("view_id 不是可放置的视图：" + viewId.IntegerValue);
+            }
+            XYZ point = PlanValues.Point(step.Arguments, "point");
+            var data = new Dictionary<string, object>
+            {
+                { "sheet_id", sheetId.IntegerValue },
+                { "view_id", viewId.IntegerValue },
+                { "point", PlanValues.PointData(point) },
+                { "can_place", Viewport.CanAddViewToSheet(context.Document, sheetId, viewId) }
+            };
+            if (!(bool)data["can_place"])
+            {
+                throw new BridgeCommandException("该视图不能放置到指定图纸；它可能已被放置，或属于明细表/图例等特殊视图。");
+            }
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Viewport viewport = Viewport.Create(context.Document, sheetId, viewId, point);
+            data["element_id"] = viewport.Id.IntegerValue;
+            data["element_ids"] = new[] { viewport.Id.IntegerValue };
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateOpening(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host", "wall_id", "wall");
+            if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "deferred", true },
+                    { "reason", "preview 中前置墙体引用尚无真实 ID。" }
+                };
+            }
+            Wall wall = context.Document.GetElement(hostId) as Wall;
+            if (wall == null)
+            {
+                throw new BridgeCommandException("create_opening.host_id 必须指向墙体。");
+            }
+            XYZ start = PlanValues.Point(step.Arguments, "start");
+            XYZ end = PlanValues.Point(step.Arguments, "end");
+            if (start.DistanceTo(end) < 1e-8)
+            {
+                throw new BridgeCommandException("洞口 start 与 end 不能重合。");
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "host_id", hostId.IntegerValue },
+                { "start", PlanValues.PointData(start) },
+                { "end", PlanValues.PointData(end) }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Opening opening = context.Document.Create.NewOpening(wall, start, end);
+            data["element_id"] = opening.Id.IntegerValue;
+            data["element_ids"] = new[] { opening.Id.IntegerValue };
+            return data;
+        }
+
+        private static CurveArray BuildClosedProfile(
+            IDictionary<string, object> arguments,
+            double baseElevation,
+            string operation)
+        {
+            object raw = PlanValues.Get(arguments, "boundary", "profile", "points");
+            List<Dictionary<string, object>> points = PlanValues.DictionaryList(raw, operation + ".boundary");
+            if (points.Count < 3)
+            {
+                throw new BridgeCommandException(operation + ".boundary 至少需要 3 个点。");
+            }
+            var resolved = new List<XYZ>();
+            foreach (Dictionary<string, object> point in points)
+            {
+                double x = PlanValues.RequireMillimeters(point, "x", "x_mm");
+                double y = PlanValues.RequireMillimeters(point, "y", "y_mm");
+                double zOffset = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
+                resolved.Add(new XYZ(
+                    PlanValues.ToFeet(x),
+                    PlanValues.ToFeet(y),
+                    baseElevation + PlanValues.ToFeet(zOffset)));
+            }
+            double z = resolved[0].Z;
+            if (resolved.Any(point => Math.Abs(point.Z - z) > 1e-8))
+            {
+                throw new BridgeCommandException(operation + ".boundary 必须共面且水平。");
+            }
+            var profile = new CurveArray();
+            for (int index = 0; index < resolved.Count; index++)
+            {
+                XYZ start = resolved[index];
+                XYZ end = resolved[(index + 1) % resolved.Count];
+                if (start.DistanceTo(end) < 1e-8)
+                {
+                    throw new BridgeCommandException(operation + ".boundary 不能包含重合的相邻点。");
+                }
+                profile.Append(Line.CreateBound(start, end));
+            }
+            return profile;
+        }
+
+        private static ViewFamilyType ResolveViewFamilyType(
+            Document document,
+            IDictionary<string, object> arguments,
+            ViewFamily expectedFamily)
+        {
+            object typeId = PlanValues.Get(arguments, "type_id", "view_type_id");
+            if (typeId != null)
+            {
+                ViewFamilyType byId = document.GetElement(
+                    new ElementId(RevitLookups.ParsePositiveId(typeId, "view_type_id"))) as ViewFamilyType;
+                if (byId == null || byId.ViewFamily != expectedFamily)
+                {
+                    throw new BridgeCommandException("view_type_id 不是 " + expectedFamily + " 视图类型。");
+                }
+                return byId;
+            }
+            string requestedName = PlanValues.String(arguments, null, "type", "type_name", "view_type_name");
+            List<ViewFamilyType> candidates = new FilteredElementCollector(document)
+                .OfClass(typeof(ViewFamilyType))
+                .Cast<ViewFamilyType>()
+                .Where(candidate => candidate.ViewFamily == expectedFamily)
+                .OrderBy(candidate => candidate.Name)
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(requestedName))
+            {
+                candidates = candidates.Where(candidate =>
+                    string.Equals(candidate.Name, requestedName, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            if (candidates.Count == 0)
+            {
+                throw new BridgeCommandException("当前项目没有可用 " + expectedFamily + " 视图类型。");
+            }
+            return candidates[0];
+        }
+
+        private static FamilySymbol ResolveOptionalTitleBlock(
+            Document document,
+            IDictionary<string, object> arguments)
+        {
+            object rawId = PlanValues.Get(arguments, "title_block_type_id", "titleblock_type_id");
+            string family = PlanValues.String(arguments, null, "title_block_family", "titleblock_family");
+            string type = PlanValues.String(arguments, null, "title_block_type", "titleblock_type");
+            if (rawId == null && string.IsNullOrWhiteSpace(family) && string.IsNullOrWhiteSpace(type))
+            {
+                return null;
+            }
+            var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            if (rawId != null)
+            {
+                lookup["type_id"] = rawId;
+            }
+            if (!string.IsNullOrWhiteSpace(family))
+            {
+                lookup["family"] = family;
+            }
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                lookup["type"] = type;
+            }
+            FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(document, lookup);
+            if (symbol.Category == null ||
+                symbol.Category.Id.IntegerValue != new ElementId(BuiltInCategory.OST_TitleBlocks).IntegerValue)
+            {
+                throw new BridgeCommandException("指定的 title_block 不是图框族类型。");
+            }
+            return symbol;
         }
 
         public static Dictionary<string, object> CreateDirectShape(PlanStep step, PlanExecutionContext context)
@@ -361,28 +801,181 @@ namespace RevitCommandBridge
         public static Dictionary<string, object> PlaceFamilyInstance(PlanStep step, PlanExecutionContext context)
         {
             FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(context.Document, step.Arguments);
-            XYZ point = PlanValues.Point(step.Arguments, "point");
-            Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
             StructuralType structuralType = ResolveStructuralType(step.Arguments, StructuralType.NonStructural);
-            string placementType = symbol.Family == null ? "unknown" : symbol.Family.FamilyPlacementType.ToString();
-            EnsurePointPlacementSupported(symbol);
+            if (symbol.Family == null)
+            {
+                throw new BridgeCommandException("族类型缺少 Family 信息。");
+            }
+            FamilyPlacementType placementType = symbol.Family.FamilyPlacementType;
             var data = new Dictionary<string, object>
             {
-                { "family", symbol.Family == null ? null : symbol.Family.Name },
+                { "family", symbol.Family.Name },
                 { "type", symbol.Name },
                 { "type_id", symbol.Id.IntegerValue },
-                { "level", level.Name },
-                { "point", PlanValues.PointData(point) },
-                { "placement_type", placementType },
+                { "placement_type", placementType.ToString() },
                 { "structural_type", structuralType.ToString() }
             };
-            if (context.Preview)
+            FamilyInstance instance;
+            switch (placementType)
             {
-                return data;
-            }
+                case FamilyPlacementType.OneLevelBased:
+                case FamilyPlacementType.TwoLevelsBased:
+                    XYZ point = PlanValues.Point(step.Arguments, "point");
+                    Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
+                    data["point"] = PlanValues.PointData(point);
+                    data["level"] = level.Name;
+                    if (context.Preview)
+                    {
+                        return data;
+                    }
+                    ActivateSymbol(context.Document, symbol);
+                    instance = context.Document.Create.NewFamilyInstance(point, symbol, level, structuralType);
+                    break;
 
-            ActivateSymbol(context.Document, symbol);
-            FamilyInstance instance = context.Document.Create.NewFamilyInstance(point, symbol, level, structuralType);
+                case FamilyPlacementType.OneLevelBasedHosted:
+                    XYZ hostedPoint = PlanValues.Point(step.Arguments, "point");
+                    ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
+                    if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                    {
+                        return DeferredPlacement(data, "$host");
+                    }
+                    Element host = RequireElement(context.Document, hostId, "host_id");
+                    data["point"] = PlanValues.PointData(hostedPoint);
+                    data["host_id"] = hostId.IntegerValue;
+                    data["host_class"] = host.GetType().FullName;
+                    if (context.Preview)
+                    {
+                        return data;
+                    }
+                    ActivateSymbol(context.Document, symbol);
+                    instance = context.Document.Create.NewFamilyInstance(hostedPoint, symbol, host, structuralType);
+                    break;
+
+                case FamilyPlacementType.WorkPlaneBased:
+                    XYZ workPlanePoint = PlanValues.Point(step.Arguments, "point");
+                    data["point"] = PlanValues.PointData(workPlanePoint);
+                    bool useHostFace = PlanValues.Get(step.Arguments, "host_face_index", "face_index") != null ||
+                        string.Equals(PlanValues.String(step.Arguments, null, "placement_mode", "mode"), "face", StringComparison.OrdinalIgnoreCase);
+                    if (useHostFace)
+                    {
+                        ElementId faceHostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
+                        if (faceHostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                        {
+                            return DeferredPlacement(data, "$host");
+                        }
+                        Element faceHost = RequireElement(context.Document, faceHostId, "host_id");
+                        int faceIndex = PlanValues.Integer(step.Arguments, 0, "host_face_index", "face_index");
+                        Reference face = FindFaceReference(faceHost, faceIndex);
+                        XYZ direction = ReadReferenceDirection(step.Arguments);
+                        data["host_id"] = faceHostId.IntegerValue;
+                        data["host_face_index"] = faceIndex;
+                        data["reference_direction"] = PlanValues.PointData(direction);
+                        if (context.Preview)
+                        {
+                            return data;
+                        }
+                        ActivateSymbol(context.Document, symbol);
+                        instance = context.Document.Create.NewFamilyInstance(face, workPlanePoint, direction, symbol);
+                    }
+                    else
+                    {
+                        if (context.Preview)
+                        {
+                            object existingWorkPlaneId = PlanValues.Get(step.Arguments, "work_plane_id", "sketch_plane_id");
+                            data["work_plane_id"] = existingWorkPlaneId == null ? (object)null : existingWorkPlaneId;
+                            data["work_plane_mode"] = existingWorkPlaneId == null ? "create" : "existing";
+                            return data;
+                        }
+                        SketchPlane workPlane = ResolveOrCreateWorkPlane(context, step.Arguments, workPlanePoint);
+                        data["work_plane_id"] = workPlane.Id.IntegerValue;
+                        ActivateSymbol(context.Document, symbol);
+                        instance = context.Document.Create.NewFamilyInstance(workPlanePoint, symbol, workPlane, structuralType);
+                    }
+                    break;
+
+                case FamilyPlacementType.ViewBased:
+                    XYZ viewPoint = PlanValues.Point(step.Arguments, "point");
+                    View view = ResolveTargetView(context, step.Arguments, "view_id", "view");
+                    data["point"] = PlanValues.PointData(viewPoint);
+                    data["view_id"] = view.Id.IntegerValue;
+                    data["view_name"] = view.Name;
+                    if (context.Preview)
+                    {
+                        return data;
+                    }
+                    ActivateSymbol(context.Document, symbol);
+                    instance = context.Document.Create.NewFamilyInstance(viewPoint, symbol, view);
+                    break;
+
+                case FamilyPlacementType.CurveBased:
+                case FamilyPlacementType.CurveBasedDetail:
+                case FamilyPlacementType.CurveDrivenStructural:
+                    XYZ start = PlanValues.Point(step.Arguments, "start");
+                    XYZ end = PlanValues.Point(step.Arguments, "end");
+                    if (start.DistanceTo(end) < 1e-8)
+                    {
+                        throw new BridgeCommandException("线基族 start 与 end 不能重合。");
+                    }
+                    Line line = Line.CreateBound(start, end);
+                    data["start"] = PlanValues.PointData(start);
+                    data["end"] = PlanValues.PointData(end);
+                    if (placementType == FamilyPlacementType.CurveBasedDetail ||
+                        PlanValues.Get(step.Arguments, "view_id", "view") != null)
+                    {
+                        View curveView = ResolveTargetView(context, step.Arguments, "view_id", "view");
+                        data["view_id"] = curveView.Id.IntegerValue;
+                        data["view_name"] = curveView.Name;
+                        if (context.Preview)
+                        {
+                            return data;
+                        }
+                        ActivateSymbol(context.Document, symbol);
+                        instance = context.Document.Create.NewFamilyInstance(line, symbol, curveView);
+                    }
+                    else
+                    {
+                        Level curveLevel = RevitLookups.ResolveLevel(context.Document, step.Arguments);
+                        data["level"] = curveLevel.Name;
+                        if (context.Preview)
+                        {
+                            return data;
+                        }
+                        ActivateSymbol(context.Document, symbol);
+                        instance = context.Document.Create.NewFamilyInstance(line, symbol, curveLevel, structuralType);
+                    }
+                    break;
+
+                case FamilyPlacementType.Adaptive:
+                    List<XYZ> adaptivePoints = ReadAdaptivePoints(step.Arguments);
+                    data["adaptive_point_count"] = adaptivePoints.Count;
+                    if (context.Preview)
+                    {
+                        return data;
+                    }
+                    ActivateSymbol(context.Document, symbol);
+                    instance = AdaptiveComponentInstanceUtils.CreateAdaptiveComponentInstance(context.Document, symbol);
+                    IList<ElementId> pointIds = AdaptiveComponentInstanceUtils.GetInstancePlacementPointElementRefIds(instance);
+                    if (pointIds.Count != adaptivePoints.Count)
+                    {
+                        throw new BridgeCommandException(
+                            "自适应族需要 " + pointIds.Count + " 个 adaptive_points，当前收到 " + adaptivePoints.Count + " 个。");
+                    }
+                    for (int index = 0; index < pointIds.Count; index++)
+                    {
+                        ReferencePoint referencePoint = context.Document.GetElement(pointIds[index]) as ReferencePoint;
+                        if (referencePoint == null)
+                        {
+                            throw new BridgeCommandException("未能定位自适应族放置点：" + pointIds[index].IntegerValue);
+                        }
+                        referencePoint.Position = adaptivePoints[index];
+                    }
+                    data["adaptive_point_ids"] = pointIds.Select(id => id.IntegerValue).ToArray();
+                    break;
+
+                default:
+                    throw new BridgeCommandException(
+                        "族“" + symbol.Family.Name + "”使用暂未识别的放置类型：" + placementType + "。");
+            }
             data["element_id"] = instance.Id.IntegerValue;
             data["element_ids"] = new[] { instance.Id.IntegerValue };
             return data;
@@ -447,6 +1040,46 @@ namespace RevitCommandBridge
                 return data;
             }
             throw new BridgeCommandException("create_structural_member.kind 仅支持 beam、brace、column。");
+        }
+
+        private static FloorType ResolveFloorType(
+            Document document,
+            IDictionary<string, object> arguments)
+        {
+            object idValue = PlanValues.Get(arguments, "type_id", "floor_type_id");
+            if (idValue != null)
+            {
+                FloorType byId = document.GetElement(
+                    new ElementId(RevitLookups.ParsePositiveId(idValue, "floor_type_id"))) as FloorType;
+                if (byId == null)
+                {
+                    throw new BridgeCommandException("floor_type_id 不是有效 FloorType。");
+                }
+                if (byId.IsFoundationSlab)
+                {
+                    throw new BridgeCommandException("floor_type_id 指向基础底板。create_floor 仅支持普通楼板类型。");
+                }
+                return byId;
+            }
+
+            string requestedName = PlanValues.String(arguments, null, "type", "type_name", "floor_type");
+            List<FloorType> candidates = new FilteredElementCollector(document)
+                .OfClass(typeof(FloorType))
+                .Cast<FloorType>()
+                .Where(candidate => !candidate.IsFoundationSlab)
+                .OrderBy(candidate => candidate.Name)
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(requestedName))
+            {
+                candidates = candidates.Where(candidate =>
+                    string.Equals(candidate.Name, requestedName, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            if (candidates.Count == 0)
+            {
+                throw new BridgeCommandException(
+                    "当前项目没有可用普通楼板类型。请先用 query_catalog(kind=types) 查询，或在项目中创建普通楼板类型。");
+            }
+            return candidates[0];
         }
 
         private static T ResolveSystemType<T>(Document document, IDictionary<string, object> arguments, string fieldName)
@@ -658,19 +1291,154 @@ namespace RevitCommandBridge
             return parsed;
         }
 
-        private static void EnsurePointPlacementSupported(FamilySymbol symbol)
+        private static Dictionary<string, object> DeferredPlacement(
+            Dictionary<string, object> data,
+            string reference)
         {
-            if (symbol.Family == null)
+            data["deferred"] = true;
+            data["reason"] = "preview 中前置元素引用尚无真实 ID：" + reference;
+            return data;
+        }
+
+        private static View ResolveTargetView(
+            PlanExecutionContext context,
+            IDictionary<string, object> arguments,
+            params string[] names)
+        {
+            ElementId id = context.ResolveSingleElementId(arguments, names);
+            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
             {
-                throw new BridgeCommandException("族类型缺少 Family 信息。");
+                throw new BridgeCommandException("预览中视图引用尚无真实 ID。请将该步骤单独预览，或直接指定已有 view_id。");
             }
-            FamilyPlacementType placementType = symbol.Family.FamilyPlacementType;
-            if (placementType != FamilyPlacementType.OneLevelBased &&
-                placementType != FamilyPlacementType.TwoLevelsBased)
+            View view = context.Document.GetElement(id) as View;
+            if (view == null || view.IsTemplate)
+            {
+                throw new BridgeCommandException("参数 " + string.Join("/", names) + " 必须指向有效非样板视图。");
+            }
+            return view;
+        }
+
+        private static SketchPlane ResolveOrCreateWorkPlane(
+            PlanExecutionContext context,
+            IDictionary<string, object> arguments,
+            XYZ origin)
+        {
+            object rawId = PlanValues.Get(arguments, "work_plane_id", "sketch_plane_id");
+            if (rawId != null)
+            {
+                SketchPlane existing = context.Document.GetElement(
+                    new ElementId(RevitLookups.ParsePositiveId(rawId, "work_plane_id"))) as SketchPlane;
+                if (existing == null)
+                {
+                    throw new BridgeCommandException("work_plane_id 不是有效工作平面。");
+                }
+                return existing;
+            }
+            Dictionary<string, object> normalValues = PlanValues.Get(arguments, "work_plane_normal", "normal") == null
+                ? null
+                : PlanValues.Dictionary(PlanValues.Get(arguments, "work_plane_normal", "normal"), "work_plane_normal");
+            XYZ normal = normalValues == null
+                ? XYZ.BasisZ
+                : new XYZ(
+                    PlanValues.Number(normalValues, 0.0, "x"),
+                    PlanValues.Number(normalValues, 0.0, "y"),
+                    PlanValues.Number(normalValues, 0.0, "z"));
+            if (normal.GetLength() < 1e-8)
+            {
+                throw new BridgeCommandException("work_plane_normal 不能为零向量。");
+            }
+            return SketchPlane.Create(
+                context.Document,
+                Plane.CreateByNormalAndOrigin(normal.Normalize(), origin));
+        }
+
+        private static XYZ ReadReferenceDirection(IDictionary<string, object> arguments)
+        {
+            object raw = PlanValues.Get(arguments, "reference_direction", "direction");
+            if (raw == null)
+            {
+                return XYZ.BasisX;
+            }
+            Dictionary<string, object> values = PlanValues.Dictionary(raw, "reference_direction");
+            XYZ direction = new XYZ(
+                PlanValues.Number(values, 0.0, "x"),
+                PlanValues.Number(values, 0.0, "y"),
+                PlanValues.Number(values, 0.0, "z"));
+            if (direction.GetLength() < 1e-8)
+            {
+                throw new BridgeCommandException("reference_direction 不能为零向量。");
+            }
+            return direction.Normalize();
+        }
+
+        private static Reference FindFaceReference(Element host, int requestedIndex)
+        {
+            if (requestedIndex < 0)
+            {
+                throw new BridgeCommandException("host_face_index 必须大于或等于 0。");
+            }
+            var references = new List<Reference>();
+            var options = new Options
+            {
+                ComputeReferences = true,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            CollectFaceReferences(host.get_Geometry(options), references);
+            if (requestedIndex >= references.Count)
             {
                 throw new BridgeCommandException(
-                    "族“" + symbol.Family.Name + "”的放置类型为 " + placementType + "；当前 place_family_instance 仅支持 OneLevelBased 和 TwoLevelsBased 非宿主族。");
+                    "host_face_index=" + requestedIndex + " 超出宿主可引用面的数量 " + references.Count + "。");
             }
+            return references[requestedIndex];
+        }
+
+        private static void CollectFaceReferences(GeometryElement geometry, ICollection<Reference> target)
+        {
+            if (geometry == null)
+            {
+                return;
+            }
+            foreach (GeometryObject item in geometry)
+            {
+                Solid solid = item as Solid;
+                if (solid != null && solid.Faces != null)
+                {
+                    foreach (Face face in solid.Faces)
+                    {
+                        if (face.Reference != null)
+                        {
+                            target.Add(face.Reference);
+                        }
+                    }
+                    continue;
+                }
+                GeometryInstance instance = item as GeometryInstance;
+                if (instance != null)
+                {
+                    CollectFaceReferences(instance.GetInstanceGeometry(), target);
+                }
+            }
+        }
+
+        private static List<XYZ> ReadAdaptivePoints(IDictionary<string, object> arguments)
+        {
+            List<Dictionary<string, object>> raw = PlanValues.DictionaryList(
+                PlanValues.Get(arguments, "adaptive_points", "points"),
+                "adaptive_points");
+            if (raw.Count == 0)
+            {
+                throw new BridgeCommandException("自适应族需要 adaptive_points 数组。");
+            }
+            var points = new List<XYZ>();
+            foreach (Dictionary<string, object> item in raw)
+            {
+                double x = PlanValues.RequireMillimeters(item, "x", "x_mm");
+                double y = PlanValues.RequireMillimeters(item, "y", "y_mm");
+                double z = PlanValues.Millimeters(item, 0.0, "z", "z_mm");
+                points.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(z)));
+            }
+            return points;
         }
 
         private static void ActivateSymbol(Document document, FamilySymbol symbol)

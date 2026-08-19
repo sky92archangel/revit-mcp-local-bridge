@@ -25,6 +25,11 @@ namespace RevitCommandBridge
                 return Health(uiApplication, request.DocumentTitle);
             }
 
+            if (operation == "list_family_templates")
+            {
+                return RevitFamilyOperations.ListFamilyTemplates(uiApplication, request);
+            }
+
             if (operation == "new_project")
             {
                 return CreateProject(uiApplication, request);
@@ -71,9 +76,13 @@ namespace RevitCommandBridge
                     return CreateRectangleWalls(document, request);
                 case "create_wall":
                     return CreateWall(document, request);
+                case "create_family":
+                    return RevitFamilyOperations.CreateFamily(uiApplication, document, request);
+                case "load_family":
+                    return RevitFamilyOperations.LoadFamily(uiApplication, document, request);
                 default:
                     throw new BridgeCommandException(
-                        "不支持 operation=“" + request.Operation + "”。支持：health、execute_plan，以及兼容操作 list_levels、list_wall_types、create_level、create_grid、create_rectangle_walls、create_wall、new_project。");
+                        "不支持 operation=“" + request.Operation + "”。支持：health、list_family_templates、create_family、load_family、execute_plan，以及兼容操作 list_levels、list_wall_types、create_level、create_grid、create_rectangle_walls、create_wall、new_project。");
             }
         }
 
@@ -87,6 +96,7 @@ namespace RevitCommandBridge
                 { "supported_operations", new[]
                     {
                         "health", "execute_plan", "list_levels", "list_wall_types", "new_project", "create_level", "create_grid", "create_rectangle_walls", "create_wall"
+                        , "list_family_templates", "create_family", "load_family"
                     }
                 }
             };
@@ -131,11 +141,15 @@ namespace RevitCommandBridge
             }
 
             string templatePath = BridgeArguments.GetString(request, null, "template_path", "template");
+            string savePath = BridgeArguments.GetString(request, null, "save_path", "path");
+            bool overwriteFile = BridgeArguments.GetBoolean(request, false, "overwrite_file", "overwrite");
             var plan = new Dictionary<string, object>
             {
                 { "operation", "new_project" },
                 { "template_path", templatePath },
-                { "unit_system", string.IsNullOrWhiteSpace(templatePath) ? "Metric" : null }
+                { "unit_system", string.IsNullOrWhiteSpace(templatePath) ? "Metric" : null },
+                { "save_path", savePath },
+                { "overwrite_file", overwriteFile }
             };
             if (request.Preview)
             {
@@ -164,9 +178,35 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("Revit 未能创建新项目。");
             }
 
+            if (!string.IsNullOrWhiteSpace(savePath))
+            {
+                string normalizedSavePath = Path.GetFullPath(savePath.Trim());
+                if (!string.Equals(Path.GetExtension(normalizedSavePath), ".rvt", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new BridgeCommandException("new_project.save_path 必须以 .rvt 结尾。");
+                }
+                if (File.Exists(normalizedSavePath) && !overwriteFile)
+                {
+                    throw new BridgeCommandException("目标项目文件已存在。设置 overwrite_file=true 才会覆盖：" + normalizedSavePath);
+                }
+                string directory = Path.GetDirectoryName(normalizedSavePath);
+                if (string.IsNullOrWhiteSpace(directory))
+                {
+                    throw new BridgeCommandException("new_project.save_path 必须包含有效目录。");
+                }
+                Directory.CreateDirectory(directory);
+                created.SaveAs(normalizedSavePath, new SaveAsOptions { OverwriteExistingFile = overwriteFile });
+                UIDocument activated = uiApplication.OpenAndActivateDocument(normalizedSavePath);
+                plan["save_path"] = normalizedSavePath;
+                plan["document_title"] = activated == null || activated.Document == null ? created.Title : activated.Document.Title;
+                plan["active"] = activated != null && activated.Document != null;
+                return BridgeResponse.Success("completed", "已创建并打开项目“" + plan["document_title"] + "”。", plan);
+            }
+
             UIDocument active = uiApplication.ActiveUIDocument;
             plan["document_title"] = created.Title;
             plan["active"] = active != null && active.Document != null && active.Document.Equals(created);
+            plan["requires_ui_activation"] = !((bool)plan["active"]);
             return BridgeResponse.Success("completed", "已创建未保存的新项目“" + created.Title + "”。", plan);
         }
 
@@ -588,6 +628,8 @@ namespace RevitCommandBridge
                 case "create_rectangle_walls":
                 case "create_wall":
                 case "new_project":
+                case "create_family":
+                case "load_family":
                     return true;
                 default:
                     return false;
@@ -622,6 +664,15 @@ namespace RevitCommandBridge
                 case "创建墙":
                 case "创建墙体":
                     return "create_wall";
+                case "查询族样板":
+                case "列出族样板":
+                    return "list_family_templates";
+                case "创建族":
+                case "新建族":
+                    return "create_family";
+                case "载入族":
+                case "加载族":
+                    return "load_family";
                 default:
                     return value;
             }

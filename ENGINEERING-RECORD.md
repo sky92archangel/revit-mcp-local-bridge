@@ -19,6 +19,8 @@
 | E9 | Codex、WorkBuddy、DeepSeek、通用 MCP、REST 的连接配置都可生成，JSON 已解析验证 | [scripts/configure-connector.ps1](./scripts/configure-connector.ps1)；`build/connector-profile-test` 生成文件 |
 | E10 | Revit 2024 REST 默认端口可在本机启动并返回协议健康状态 | `node` 导入 [scripts/revit-http-gateway.mjs](./scripts/revit-http-gateway.mjs)，`http://127.0.0.1:8769/health` 返回 `revit-command-bridge/2.0` |
 | E11 | Revit 命令面板增加状态、项目刷新、预览和二次确认执行入口 | [src/CommandPanelForm.cs](./src/CommandPanelForm.cs)、本机 Revit 2020 API 编译成功 |
+| E12 | Revit 2020 真机已完成族创建/载入/放置、楼板、模型线、3D 视图、图纸及视图放图纸回归 | [verification/2026-08-19-regression.md](./verification/2026-08-19-regression.md) |
+| E13 | 常用出图扩展已通过 Revit 2020 API 编译、JSON/schema 解析和 MCP tools/list 回归 | [src/RevitOutputOperations.cs](./src/RevitOutputOperations.cs)、[schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json)、[verification/2026-08-19-regression.md](./verification/2026-08-19-regression.md) |
 
 ## 开源对照
 
@@ -35,10 +37,13 @@
 | [V] | C# 以本机 RevitAPI.dll 编译 | E4 |
 | [V] | CLI/REST/MCP 使用同一 JSON 外层协议 | [scripts/bridge-client.mjs](./scripts/bridge-client.mjs)、E5 |
 | [V] | DirectShape、MEP、族、结构、参数等 API 调用在编译期可解析 | E4 |
+| [V] | 常用出图协议：视图、图纸、注释、明细表、修订、导出和保存操作均已注册并通过 Revit 2020 API 编译 | E13 |
+| [V] | 新操作与 JSON schema 白名单一致，MCP 0.5.0 暴露 `revit_execute_plan` | E13 |
 | [V] | 2020 年份隔离队列、安装预览、连接配置和 Revit 面板代码可编译/解析 | E7、E8、E9、E11 |
 | [V] | 2024 REST 年份端口计算和 HTTP 健康端点 | E10 |
 | [T] | 新 DLL 在已打开 Revit 项目的真实 `preview` | 需保存项目、关闭 Revit、安装新包、重启后执行示例 |
 | [T] | 真机创建 pipe/duct/conduit/cable tray、族和 MEP fitting | 需在含对应类型/系统的项目中逐项预览和执行 |
+| [T] | 新增出图扩展真实 Revit 回归 | 用户本轮要求不做真机测试；需在含图框、标签、文字、修订资源的项目中逐项预览和执行 |
 | [T] | Revit 2021–2024 适配包 | 构建路由已实现；仍需要该年份 Revit API DLL 与独立构建/真机验证 |
 | [T] | Revit 2025–2026 适配包 | 需完成 .NET 8 适配构建和真机验证 |
 
@@ -46,7 +51,7 @@
 
 | 优先级 | 项目 | 下一步 |
 | --- | --- | --- |
-| P0 | 真机升级验证 | 用户保存并关闭 Revit 后运行 `install-revit.ps1 -RevitVersion 2020 -Connector codex`，重启同一项目并提交 `preview-universal-plan.json` |
+| P0 | 新出图功能真机验证 | 在典型项目中预览/执行 `preview-output-documentation-plan.json`，并单独验证 `preview-export-image.json` |
 | P1 | 宿主/面基/工作平面族 | 增加通用 host、face、work-plane 放置原子参数 |
 | P1 | 自动 MEP 路径和避障 | 作为上层规划器能力，生成多个 `create_mep_curve` + `connect_mep` 步骤 |
 | P2 | Revit 2021–2024 适配 | 为每个目标年份提供 Revit API、生成对应 DLL 并建立真机兼容测试矩阵 |

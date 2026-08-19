@@ -2,12 +2,22 @@
 
 The Revit bridge is independent of the AI application. The default installer mode detects known MCP clients and merges a version-specific Revit server into each detected configuration after making a backup. Unknown clients use the generated generic MCP/REST profiles. Changing or adding a client adapter does not require rebuilding the Revit DLL.
 
-## Choose a connector at installation
+## Automatic setup (recommended)
+
+The desktop installer always runs automatic client detection. It writes a
+version-specific generic MCP profile and only merges a profile into a client
+configuration when that client is found. Unknown clients use the Revit
+function ribbon's “复制 MCP” button; no client name needs to be selected.
+
+## Script-level connector options
+
+The following legacy values remain available for developers who invoke the
+PowerShell installer directly. They are not shown in the beginner installer.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 `
   -RevitVersion 2020 `
-  -Connector codex
+  -Connector generic-mcp
 ```
 
 Available values are:

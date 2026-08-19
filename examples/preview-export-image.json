@@ -1,0 +1,19 @@
+{
+  "id": "preview_export_image",
+  "operation": "execute_plan",
+  "preview": true,
+  "source": "example",
+  "args": {
+    "steps": [
+      {
+        "id": "export_image",
+        "operation": "export",
+        "args": {
+          "format": "png",
+          "active_view": true,
+          "output_path": "C:\\RCB-Exports\\current-view"
+        }
+      }
+    ]
+  }
+}

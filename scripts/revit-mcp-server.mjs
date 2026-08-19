@@ -93,9 +93,9 @@ function initialize(params) {
     },
     serverInfo: {
       name: "revit-command-bridge",
-      version: `0.3.0-revit${revitVersion}`,
+      version: `0.5.0-revit${revitVersion}`,
     },
-    instructions: "通过受控 Revit 命令操作当前打开项目。优先使用 revit_execute_plan，把查询、几何、机电、结构、参数等原子步骤组合为一个 all_or_nothing 计划；写入先 preview=true，确认后再提交 preview=false。",
+    instructions: "通过受控 Revit 命令操作当前打开项目。优先使用 revit_execute_plan，把建筑、结构、机电、房间空间、注释、明细表、视图图纸、参数等原子步骤组合为一个 all_or_nothing 计划；族文件使用 revit_create_family / revit_load_family。export/save_document 必须单独执行。写入先 preview=true，确认后再提交 preview=false。",
   };
 }
 
@@ -198,7 +198,16 @@ function toolDefinitions() {
       },
     },
     directTool("revit_health", "health", "读取桥接状态与当前 Revit 项目文档信息。", {}, []),
-    directTool("revit_execute_plan", "execute_plan", "执行通用 Revit 建模计划。每个 steps 项是受控原子操作；支持查询、标高/轴网/墙、DirectShape、管道/风管/线管/桥架、族实例、结构构件、MEP 连接、参数、删除和选中。写步骤作为一个 all_or_nothing Revit 事务执行。先用 preview=true。", {
+    directTool("revit_list_family_templates", "list_family_templates", "列出本机 Revit 族样板；不需要打开项目。未传 template_root 时自动读取 Revit 默认族样板目录。", {
+      template_root: { type: "string", description: "可选 .rft 族样板根目录。" },
+      limit: { type: "integer", minimum: 1, maximum: 1000, default: 200, description: "最多返回的族样板数量。" },
+    }, []),
+    directTool("revit_create_family", "create_family", "从 .rft 样板创建可参数化 .rfa 族；支持参数、类型、box/cylinder/extrusion 实体，保存后可载入并放置到当前项目。", familyProperties(), ["family_name"]),
+    directTool("revit_load_family", "load_family", "将已有 .rfa 族载入当前项目。", {
+      family_path: { type: "string", description: "要载入的 .rfa 文件绝对路径。" },
+      overwrite_parameter_values: { type: "boolean", default: false, description: "同名族已存在时是否覆盖已有类型参数值。" },
+    }, ["family_path"]),
+    directTool("revit_execute_plan", "execute_plan", "执行通用 Revit 建模/出图计划。每个 steps 项是受控原子操作；支持查询、建筑/结构/机电、房间空间、模型线、视图/图纸/明细表、文字标注、族实例、参数、删除和选中。普通写步骤作为一个 all_or_nothing Revit 事务执行；export 或 save_document 必须单独作为一个计划执行。先用 preview=true。", {
       steps: {
         type: "array",
         minItems: 1,
@@ -220,6 +229,8 @@ function toolDefinitions() {
     directTool("revit_list_wall_types", "list_wall_types", "列出当前项目的基本墙类型和厚度。", {}, []),
     directTool("revit_new_project", "new_project", "创建一个未保存的 Revit 项目。可提供 template_path；未提供时创建公制空项目。", {
       template_path: { type: "string", description: "可选 .rte 项目样板的绝对路径。" },
+      save_path: { type: "string", description: "可选 .rvt 输出路径；提供后会保存并激活项目，后续可立刻继续建模。" },
+      overwrite_file: { type: "boolean", default: false, description: "save_path 已存在时是否覆盖。" },
     }, []),
     directTool("revit_create_level", "create_level", "创建标高。先用 preview=true 检查。", {
       elevation_mm: lengthSchema("标高高程；例如 3600 或 '3.6m'。"),
@@ -286,6 +297,34 @@ function rectangleWallProperties() {
     level: { type: "string", description: "可选标高名称；未指定时使用最低标高。" },
     wall_type: { type: "string", description: "可选源基本墙类型名称。" },
     new_wall_type: { type: "string", description: "可选新墙类型名称。" },
+  };
+}
+
+function familyProperties() {
+  return {
+    family_name: { type: "string", description: "族名称；默认保存为同名 .rfa。" },
+    template_path: { type: "string", description: "可选 .rft 样板绝对路径；省略时自动选择公制常规模型/Metric Generic Model。" },
+    save_path: { type: "string", description: "可选输出 .rfa 绝对路径；省略时保存到“文档\\RevitCommandBridge\\Families”。" },
+    category: { type: "string", description: "可选族类别，例如 OST_GenericModel、OST_MechanicalEquipment。" },
+    parameters: {
+      type: "array",
+      description: "族参数数组；项支持 name、type(length/text/number/integer/yesno/area/volume/angle)、instance、group、default、formula。",
+      items: { type: "object", additionalProperties: true },
+    },
+    types: {
+      type: "array",
+      description: "族类型数组；项支持 name 和 values/parameter_values。省略时创建“默认”类型。",
+      items: { type: "object", additionalProperties: true },
+    },
+    geometry: {
+      type: "array",
+      description: "可选族实体；支持 box、cylinder、extrusion，与 create_direct_shape 相同。",
+      items: { type: "object", additionalProperties: true },
+    },
+    load_into_project: { type: "boolean", default: true, description: "保存后是否自动载入当前项目。" },
+    overwrite_file: { type: "boolean", default: false, description: "输出 .rfa 已存在时是否覆盖。" },
+    overwrite_parameter_values: { type: "boolean", default: true, description: "载入同名族时是否覆盖已有类型参数值。" },
+    place: { type: "object", additionalProperties: true, description: "可选：载入后立即放置一实例；传 point、level、type 等放置参数。" },
   };
 }
 

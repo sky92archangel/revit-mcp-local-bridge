@@ -71,6 +71,7 @@ namespace RevitAIHubSetup
     {
         private readonly ComboBox _packageSelector;
         private readonly ComboBox _connectorSelector;
+        private readonly Label _connectorValueLabel;
         private readonly Label _connectorHint;
         private readonly Label _apiSettingsLabel;
         private readonly TableLayoutPanel _apiSettings;
@@ -157,6 +158,14 @@ namespace RevitAIHubSetup
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
             AddConnector("auto", "自动识别并配置本机 AI 客户端（推荐）");
+            _connectorValueLabel = new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = Color.FromArgb(39, 57, 76),
+                Text = "自动识别并配置本机 AI 客户端"
+            };
             _connectorHint = new Label
             {
                 AutoSize = true,
@@ -228,12 +237,12 @@ namespace RevitAIHubSetup
             choiceCard.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var revitLabel = FieldLabel("Revit 版本");
             revitLabel.Margin = new Padding(0, 7, 8, 0);
-            var connectorLabel = FieldLabel("AI 客户端");
+            var connectorLabel = FieldLabel("AI 连接");
             connectorLabel.Margin = new Padding(0, 7, 8, 0);
             choiceCard.Controls.Add(revitLabel, 0, 0);
             choiceCard.Controls.Add(_packageSelector, 1, 0);
             choiceCard.Controls.Add(connectorLabel, 0, 1);
-            choiceCard.Controls.Add(_connectorSelector, 1, 1);
+            choiceCard.Controls.Add(_connectorValueLabel, 1, 1);
             _connectorHint.Margin = new Padding(88, 0, 0, 0);
             _connectorHint.AutoEllipsis = true;
             choiceCard.Controls.Add(_connectorHint, 0, 2);
@@ -578,6 +587,10 @@ namespace RevitAIHubSetup
                     }
                 }
                 Dictionary<string, string> detectedInstallations = DetectAllRevitInstallations();
+                // Registry/standard paths are fast and deterministic. Only scan
+                // shortcuts for versions that were not found there; scanning a
+                // large redirected Desktop before the registry made first launch
+                // look frozen on some machines.
                 for (int year = 2020; year <= 2024; year++)
                 {
                     string version = year.ToString();
@@ -763,8 +776,11 @@ namespace RevitAIHubSetup
                 return;
             }
 
+            string adapterHint = package.RequiresLocalBuild
+                ? "将使用本机 Revit API 自动生成适配插件。"
+                : "将使用已匹配的年份适配插件。";
             _environment.Text = "已找到 Revit " + package.RevitVersion + "，可以安装。";
-            _statusSummary.Text = "准备完成\r\n点击“安装到 Revit " + package.RevitVersion + "”。安装后不需要再打开本安装器。";
+            _statusSummary.Text = "准备完成\r\n" + adapterHint + "\r\n点击“安装到 Revit " + package.RevitVersion + "”。安装后不需要再打开本安装器。";
             _installButton.Text = "安装到 Revit " + package.RevitVersion;
             _installButton.Enabled = true;
             _copyMcpButton.Visible = false;
@@ -826,46 +842,9 @@ namespace RevitAIHubSetup
 
         private void RefreshConnectorHint()
         {
-            ConnectorInfo connector = _connectorSelector.SelectedItem as ConnectorInfo;
-            if (connector == null)
-            {
-                _connectorHint.Text = string.Empty;
-                _apiSettings.Visible = false;
-                _apiSettingsLabel.Visible = false;
-                return;
-            }
-
-            bool showApiSettings = connector.Value == "openai-compatible";
-            _apiSettings.Visible = showApiSettings;
-            _apiSettingsLabel.Visible = showApiSettings;
-
-            switch (connector.Value)
-            {
-                case "codex":
-                    _connectorHint.Text = "安装后生成 Codex MCP .toml 配置；不需要填写 URL。";
-                    break;
-                case "auto":
-                    _connectorHint.Text = "自动扫描本机 MCP 客户端并配置；原配置先备份。未识别的应用可使用同时生成的通用 MCP / REST 配置。";
-                    break;
-                case "workbuddy":
-                    _connectorHint.Text = "安装后生成标准 MCP .json 配置，导入 WorkBuddy；不需要填写 URL。";
-                    break;
-                case "function-api":
-                    _connectorHint.Text = "生成通用 localhost REST 配置，给任意 Function Calling / HTTP Harness 使用；此处不填写模型 API URL。";
-                    break;
-                case "generic-mcp":
-                    _connectorHint.Text = "安装后生成标准 MCP .json 配置，导入支持 MCP 的应用。";
-                    break;
-                case "openai-compatible":
-                    _connectorHint.Text = "适用于 DeepSeek 等任何兼容 OpenAI Chat Completions + Tool Calling 的模型。填写模型 API；Key 会用当前 Windows 用户的 DPAPI 加密保存，不写入连接 JSON。";
-                    break;
-                case "rest":
-                    _connectorHint.Text = "这里不填 URL。安装后按检测到的 Revit 版本生成独立本机 REST 端口。";
-                    break;
-                default:
-                    _connectorHint.Text = string.Empty;
-                    break;
-            }
+            _apiSettings.Visible = false;
+            _apiSettingsLabel.Visible = false;
+            _connectorHint.Text = "自动扫描本机已安装的 MCP 客户端并完成配置；未识别的软件可在 Revit 中点击“复制 MCP”。";
         }
 
         private void RunInstaller(bool preview)
@@ -874,7 +853,7 @@ namespace RevitAIHubSetup
             ConnectorInfo connector = _connectorSelector.SelectedItem as ConnectorInfo;
             if (package == null || connector == null)
             {
-                MessageBox.Show(this, "请选择 Revit 适配包和连接应用。", "Revit AI Hub", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择 Revit 适配包。", "Revit 命令桥", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -909,7 +888,7 @@ namespace RevitAIHubSetup
                 UpdateStage(preview ? "第 3/4 步：校验安装目标…" : "第 3/4 步：安装命令桥…", 55);
                 Application.DoEvents();
                 string installer = Path.Combine(packageDirectory, "install-revit.ps1");
-                string installConnector = connector.Value == "auto" ? "none" : connector.Value;
+                const string installConnector = "none";
                 string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(installer) +
                                    " -RevitVersion " + Quote(package.RevitVersion) +
                                    " -RevitInstallDirectory " + Quote(revitDirectory) +
@@ -917,8 +896,8 @@ namespace RevitAIHubSetup
                                    " -Connector " + Quote(installConnector) +
                                    (preview ? " -WhatIf" : string.Empty);
                 Append((preview ? "预览安装：" : "开始安装：") + "Revit " + package.RevitVersion + " / " + connector.Display);
-                installed = RunPowerShell(arguments, preview ? "第 3/4 步：校验安装目标" : "第 3/4 步：安装命令桥", 55, 75, 300);
-                if (installed && !preview && (connector.Value == "auto" || connector.Value == "codex" || connector.Value == "workbuddy"))
+                installed = RunPowerShell(arguments, preview ? "第 3/4 步：校验安装目标" : "第 3/4 步：安装命令桥", 55, 75, 300, 180);
+                if (installed && !preview)
                 {
                     ConfigureDetectedClients(package);
                 }
@@ -994,7 +973,7 @@ namespace RevitAIHubSetup
                 string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(script) +
                                    " -RevitVersion " + Quote(package.RevitVersion) +
                                    " -Confirm:$false";
-                if (RunPowerShell(arguments, "正在卸载命令桥", 10, 95, 180))
+                if (RunPowerShell(arguments, "正在卸载命令桥", 10, 95, 180, 120))
                 {
                     _installed = false;
                     _installedVersion = null;
@@ -1151,7 +1130,7 @@ namespace RevitAIHubSetup
             }
         }
 
-        private bool RunPowerShell(string arguments, string stageText = null, int progressStart = 0, int progressEnd = 100, int timeoutSeconds = 600, int silenceTimeoutSeconds = 20, string statusFile = null)
+        private bool RunPowerShell(string arguments, string stageText = null, int progressStart = 0, int progressEnd = 100, int timeoutSeconds = 600, int silenceTimeoutSeconds = 120, string statusFile = null)
         {
             string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
             if (!File.Exists(powershell))
@@ -1280,6 +1259,20 @@ namespace RevitAIHubSetup
         private void ApplyScriptProgress(string output, string stageText, int progressStart, int progressEnd)
         {
             if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(stageText)) return;
+
+            // The installer script emits explicit copy/manifest markers. They
+            // are more useful than a single static 55% bar while a bundled
+            // Node runtime is being copied from the self-contained EXE.
+            string[] installMarkers = { "copy-files", "copy-complete", "write-manifest", "write-inventory", "complete" };
+            string[] installNames = { "复制插件文件", "文件复制完成", "写入 Revit 加载项清单", "更新文件清单", "安装文件校验完成" };
+            for (int markerIndex = installMarkers.Length - 1; markerIndex >= 0; markerIndex--)
+            {
+                string marker = "RCB_INSTALL_STAGE=" + installMarkers[markerIndex];
+                if (output.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                int installProgress = progressStart + ((progressEnd - progressStart) * (markerIndex + 1) / installMarkers.Length);
+                UpdateStage(stageText + " · " + installNames[markerIndex], installProgress, false);
+                return;
+            }
             for (int step = 5; step >= 1; step--)
             {
                 string marker = "RCB_STAGE=" + step;
@@ -1353,7 +1346,7 @@ namespace RevitAIHubSetup
             string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(configurator) +
                                " -RevitVersion " + Quote(package.RevitVersion) +
                                " -RootDirectory " + Quote(installedRoot);
-            if (!RunPowerShell(arguments, "第 4/4 步：识别并连接本机 AI 应用", 75, 100, 300))
+            if (!RunPowerShell(arguments, "第 4/4 步：识别并连接本机 AI 应用", 75, 100, 300, 120))
             {
                 Append("Revit 插件已安装；部分 AI 客户端可能需要使用 connections 目录中的通用 MCP 配置。");
             }
@@ -1805,13 +1798,15 @@ namespace RevitAIHubSetup
         private static Dictionary<string, string> DetectAllRevitInstallations()
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            AddShortcutRevitDirectories(result);
             for (int year = 2020; year <= 2024; year++)
             {
                 string version = year.ToString();
                 string directory = FindRevitDirectory(version);
                 if (IsRevitDirectory(directory)) result[version] = directory;
             }
+            // Shortcut lookup is a fallback only. Registry and standard paths
+            // cover normal installs without walking a redirected Desktop.
+            if (result.Count < 5) AddShortcutRevitDirectories(result);
             return result;
         }
 
@@ -1922,19 +1917,12 @@ namespace RevitAIHubSetup
 
         private static bool CanUseBundledCompiler(string directory)
         {
+            // Keep this helper compatible with PowerShell 7/.NET Core hosts.
+            // ReflectionOnlyLoadFrom was removed there; the installer only needs
+            // to confirm that the API assembly is readable before compiling.
             try
             {
-                Assembly assembly = Assembly.ReflectionOnlyLoadFrom(Path.Combine(directory, "RevitAPI.dll"));
-                foreach (CustomAttributeData attribute in CustomAttributeData.GetCustomAttributes(assembly))
-                {
-                    if (attribute.Constructor.DeclaringType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute" &&
-                        attribute.ConstructorArguments.Count > 0)
-                    {
-                        string framework = Convert.ToString(attribute.ConstructorArguments[0].Value);
-                        return framework.IndexOf(".NETFramework", StringComparison.OrdinalIgnoreCase) >= 0;
-                    }
-                }
-                return assembly.ImageRuntimeVersion.StartsWith("v4.", StringComparison.OrdinalIgnoreCase);
+                return AssemblyName.GetAssemblyName(Path.Combine(directory, "RevitAPI.dll")) != null;
             }
             catch
             {

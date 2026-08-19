@@ -38,6 +38,21 @@ namespace RevitCommandBridge
                     return QueryCategories(context.Document, limit);
                 case "views":
                     return QueryViews(context.Document, limit);
+                case "sheets":
+                    return QuerySheets(context.Document, limit);
+                case "schedules":
+                    return QuerySchedules(context.Document, limit);
+                case "view_types":
+                    return QueryViewTypes(context.Document, limit);
+                case "title_blocks":
+                case "titleblocks":
+                    return QueryFamilySymbolsByCategory(context.Document, BuiltInCategory.OST_TitleBlocks, "title_blocks", limit);
+                case "text_types":
+                    return QueryTextTypes(context.Document, limit);
+                case "filled_region_types":
+                    return QueryFilledRegionTypes(context.Document, limit);
+                case "revisions":
+                    return QueryRevisions(context.Document, limit);
                 case "families":
                     return QueryFamilies(context.Document, step.Arguments, limit);
                 case "types":
@@ -45,7 +60,7 @@ namespace RevitCommandBridge
                 case "mep_types":
                     return QueryTypes(context.Document, step.Arguments, limit, true);
                 default:
-                    throw new BridgeCommandException("query_catalog.kind 仅支持 levels、categories、views、families、types、mep_types。");
+                    throw new BridgeCommandException("query_catalog.kind 仅支持 levels、categories、views、sheets、schedules、view_types、title_blocks、text_types、filled_region_types、revisions、families、types、mep_types。");
             }
         }
 
@@ -118,6 +133,54 @@ namespace RevitCommandBridge
             };
         }
 
+        public static Dictionary<string, object> QueryReferences(PlanStep step, PlanExecutionContext context)
+        {
+            IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "ids", "targets");
+            int limit = ReadLimit(step.Arguments);
+            string kind = PlanValues.String(step.Arguments, "all", "kind", "reference_kind")
+                .Trim().ToLowerInvariant();
+            if (kind != "all" && kind != "faces" && kind != "edges")
+            {
+                throw new BridgeCommandException("query_references.kind 仅支持 all、faces、edges。");
+            }
+            var options = new Options
+            {
+                ComputeReferences = true,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            int remaining = limit;
+            var items = new List<Dictionary<string, object>>();
+            foreach (ElementId id in ids)
+            {
+                if (remaining <= 0) break;
+                Element element = context.Document.GetElement(id);
+                if (element == null)
+                {
+                    throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + " 对应元素。");
+                }
+                var references = new List<Dictionary<string, object>>();
+                CollectStableReferences(
+                    context.Document,
+                    element.get_Geometry(options),
+                    kind,
+                    references,
+                    ref remaining);
+                items.Add(new Dictionary<string, object>
+                {
+                    { "element_id", id.IntegerValue },
+                    { "references", references }
+                });
+            }
+            return new Dictionary<string, object>
+            {
+                { "kind", kind },
+                { "count", items.Sum(item => ((List<Dictionary<string, object>>)item["references"]).Count) },
+                { "truncated", remaining <= 0 },
+                { "items", items }
+            };
+        }
+
         private static Dictionary<string, object> QueryLevels(Document document, int limit)
         {
             List<Level> levels = new FilteredElementCollector(document)
@@ -172,6 +235,199 @@ namespace RevitCommandBridge
                 });
             }
             return new Dictionary<string, object> { { "kind", "views" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QuerySheets(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (ViewSheet sheet in new FilteredElementCollector(document)
+                .OfClass(typeof(ViewSheet)).Cast<ViewSheet>()
+                .OrderBy(sheet => sheet.SheetNumber).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", sheet.Id.IntegerValue },
+                    { "sheet_number", sheet.SheetNumber },
+                    { "name", sheet.Name }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "sheets" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QuerySchedules(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (ViewSchedule schedule in new FilteredElementCollector(document)
+                .OfClass(typeof(ViewSchedule)).Cast<ViewSchedule>()
+                .Where(schedule => !schedule.IsTemplate)
+                .OrderBy(schedule => schedule.Name).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", schedule.Id.IntegerValue },
+                    { "name", schedule.Name },
+                    { "category_id", schedule.Definition == null ? (object)null : schedule.Definition.CategoryId.IntegerValue },
+                    { "field_count", schedule.Definition == null ? 0 : schedule.Definition.GetFieldCount() }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "schedules" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QueryViewTypes(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (ViewFamilyType type in new FilteredElementCollector(document)
+                .OfClass(typeof(ViewFamilyType)).Cast<ViewFamilyType>()
+                .OrderBy(type => type.ViewFamily.ToString()).ThenBy(type => type.Name).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", type.Id.IntegerValue },
+                    { "name", type.Name },
+                    { "view_family", type.ViewFamily.ToString() }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "view_types" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QueryTextTypes(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (TextNoteType type in new FilteredElementCollector(document)
+                .OfClass(typeof(TextNoteType)).Cast<TextNoteType>()
+                .OrderBy(type => type.Name).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", type.Id.IntegerValue },
+                    { "name", type.Name }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "text_types" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QueryFilledRegionTypes(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (FilledRegionType type in new FilteredElementCollector(document)
+                .OfClass(typeof(FilledRegionType)).Cast<FilledRegionType>()
+                .OrderBy(type => type.Name).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", type.Id.IntegerValue },
+                    { "name", type.Name }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "filled_region_types" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QueryRevisions(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (Revision revision in new FilteredElementCollector(document)
+                .OfClass(typeof(Revision)).Cast<Revision>()
+                .OrderBy(revision => revision.SequenceNumber).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", revision.Id.IntegerValue },
+                    { "number", revision.RevisionNumber },
+                    { "description", revision.Description },
+                    { "date", revision.RevisionDate },
+                    { "issued", revision.Issued },
+                    { "visibility", revision.Visibility.ToString() }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "revisions" }, { "items", items } };
+        }
+
+        private static Dictionary<string, object> QueryFamilySymbolsByCategory(
+            Document document,
+            BuiltInCategory category,
+            string kind,
+            int limit)
+        {
+            ElementId categoryId = new ElementId(category);
+            var items = new List<Dictionary<string, object>>();
+            foreach (FamilySymbol type in new FilteredElementCollector(document)
+                .OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>()
+                .Where(type => type.Category != null && type.Category.Id.IntegerValue == categoryId.IntegerValue)
+                .OrderBy(type => RevitLookups.FamilyName(type)).ThenBy(type => type.Name).Take(limit))
+            {
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", type.Id.IntegerValue },
+                    { "family", RevitLookups.FamilyName(type) },
+                    { "name", type.Name }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", kind }, { "items", items } };
+        }
+
+        private static void CollectStableReferences(
+            Document document,
+            GeometryElement geometry,
+            string kind,
+            ICollection<Dictionary<string, object>> target,
+            ref int remaining)
+        {
+            if (geometry == null || remaining <= 0) return;
+            foreach (GeometryObject item in geometry)
+            {
+                if (remaining <= 0) return;
+                Solid solid = item as Solid;
+                if (solid != null && solid.Volume > 1e-12)
+                {
+                    if (kind == "all" || kind == "faces")
+                    {
+                        foreach (Face face in solid.Faces)
+                        {
+                            AddStableReference(document, face.Reference, "face", target, ref remaining);
+                            if (remaining <= 0) return;
+                        }
+                    }
+                    if (kind == "all" || kind == "edges")
+                    {
+                        foreach (Edge edge in solid.Edges)
+                        {
+                            AddStableReference(document, edge.Reference, "edge", target, ref remaining);
+                            if (remaining <= 0) return;
+                        }
+                    }
+                    continue;
+                }
+                GeometryInstance instance = item as GeometryInstance;
+                if (instance != null)
+                {
+                    CollectStableReferences(document, instance.GetInstanceGeometry(), kind, target, ref remaining);
+                }
+            }
+        }
+
+        private static void AddStableReference(
+            Document document,
+            Reference reference,
+            string kind,
+            ICollection<Dictionary<string, object>> target,
+            ref int remaining)
+        {
+            if (reference == null || remaining <= 0) return;
+            try
+            {
+                string stable = reference.ConvertToStableRepresentation(document);
+                if (string.IsNullOrWhiteSpace(stable)) return;
+                target.Add(new Dictionary<string, object>
+                {
+                    { "kind", kind },
+                    { "stable_reference", stable }
+                });
+                remaining--;
+            }
+            catch
+            {
+                // 有些导入或链接几何不提供可持久化引用；跳过即可。
+            }
         }
 
         private static Dictionary<string, object> QueryFamilies(

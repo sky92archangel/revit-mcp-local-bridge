@@ -49,7 +49,7 @@
 }
 ```
 
-确认响应中的计划正确后，将同一 JSON 的 `preview` 改为 `false` 提交。计划中的写步骤会在一个 Revit Transaction 中执行：任一步失败会回滚前面的写入；成功时可在 Revit 中一次 `Ctrl+Z` 撤回。
+确认响应中的计划正确后，将同一 JSON 的 `preview` 改为 `false` 提交。普通计划中的写步骤会在一个 Revit Transaction 中执行：任一步失败会回滚前面的写入；成功时可在 Revit 中一次 `Ctrl+Z` 撤回。`export` 和 `save_document` 会写出外部文件，必须作为只含该步骤的独立计划执行。
 
 | 顶层字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -61,6 +61,8 @@
 | `source` | string | 否 | 调用方标识，用于日志审计 |
 
 长度数值默认单位为毫米；也可传 `"3600mm"`、`"3.6m"`、`"3600毫米"` 或 `"3.6米"`。点统一写为 `{ "x": 0, "y": 0, "z": 0 }`，默认也是毫米，坐标属于当前项目内部坐标系。
+
+顶层 `new_project` 可传 `save_path: "C:\\...\\项目.rvt"` 与 `overwrite_file: true/false`。提供 `save_path` 时，桥接会创建、保存并激活项目，下一条命令即可继续建模；未传时 Revit 只创建未保存文档，用户可在界面中激活它。
 
 ## 计划步骤
 
@@ -79,21 +81,152 @@
 | operation | 写模型 | 关键 args | 说明 |
 | --- | --- | --- | --- |
 | `query_document` | 否 | 无 | 当前项目、活动视图、只读状态 |
-| `query_catalog` | 否 | `kind` | `levels`、`categories`、`views`、`families`、`types`、`mep_types` |
+| `query_catalog` | 否 | `kind` | `levels`、`categories`、`views`、`sheets`、`schedules`、`view_types`、`title_blocks`、`text_types`、`filled_region_types`、`revisions`、`families`、`types`、`mep_types` |
 | `query_elements` | 否 | 可选 `category`、`element_ids`、`name_contains` | 查询元素与指定参数；`limit` 1–500 |
+| `query_references` | 否 | `element_ids` 或 `targets` | 查询元素面/边的稳定引用，供 `create_dimension`、`create_tag` 使用 |
 | `create_level` | 是 | `elevation_mm` | 可选 `name` |
 | `create_grid` | 是 | `start`、`end` | 直线轴网；两点 Z 必须相同 |
 | `create_wall` | 是 | `start`、`end` | `level`、`type` / `type_id`、`height_mm`、`thickness_mm` 可选 |
+| `create_floor` | 是 | `boundary` | 原生楼板；`level`、`type` / `type_id`、`offset_mm`、`structural` 可选 |
+| `create_room` | 是 | `point` | 在 `level` 放置房间；可选 `name`、`number` |
+| `create_space` | 是 | `point` | 在 `level` 放置 MEP 空间；可选 `name`、`number` |
+| `create_model_curve` | 是 | `start`、`end` | 创建直线模型线和所需工作平面 |
 | `create_direct_shape` | 是 | `geometry` | 通用实体：`box`、`cylinder`、`extrusion` |
 | `create_mep_curve` | 是 | `kind`、`start`、`end` | `pipe`、`duct`、`conduit`、`cable_tray` |
 | `connect_mep` | 是 | `element_a`、`element_b` | `fitting`: `auto`、`direct`、`elbow`、`union`、`tee` |
-| `place_family_instance` | 是 | `family`、`type`、`point` | 当前支持非宿主的 OneLevelBased / TwoLevelsBased 族 |
+| `place_family_instance` | 是 | `family`、`type` | 支持非宿主、宿主、面宿主、工作平面、视图、线基和自适应族；按放置类型填写 `point`、`level`、`host_id`、`view_id`、`start/end` 或 `adaptive_points` |
 | `create_structural_member` | 是 | `kind`、`family`、`type` | `beam`、`brace` 用 `start/end`；`column` 用 `point` |
+| `create_view` | 是 | `kind` | `3d`、`floor_plan`、`ceiling_plan`、`structural_plan`；平面类需要 `level` |
+| `create_drafting_view` | 是 | 可选 `type_id`、`name` | 创建绘图视图 |
+| `create_section_view` | 是 | `origin`、可选 `direction`、`up`、`width_mm`、`height_mm`、`depth_mm` | 创建剖面或详图视图 |
+| `create_elevation_view` | 是 | `plan_view_id`、`origin` | 在平面视图中创建立面；`index` 0–3 |
+| `create_callout` | 是 | `parent_view_id`、`start`、`end` | 创建详图索引 |
+| `duplicate_view` | 是 | `view_id` | `option`: `duplicate`、`as_dependent`、`with_detailing` |
+| `create_view_template` | 是 | `view_id` | 从视图创建样板 |
+| `create_sheet` | 是 | 无 | 可选 `title_block_family`、`title_block_type`、`sheet_number`、`name` |
+| `place_view_on_sheet` | 是 | `sheet_id`、`view_id`、`point` | 图纸和视图可使用 `"$步骤ID"` 引用 |
+| `create_detail_curve` | 是 | `view_id`、`start`、`end` | 在视图中创建详图线 |
+| `create_text_note` | 是 | `view_id`、`point`、`text` | 在视图中创建文字注释 |
+| `create_dimension` | 是 | `view_id`、`start`、`end`、`references` | 使用 `query_references` 返回的稳定引用创建尺寸 |
+| `create_tag` | 是 | `view_id`、`reference`、`point` | 按类别/指定标签类型放置标签 |
+| `create_filled_region` | 是 | `view_id`、`filled_region_type_id`、`boundary` | 创建填充区域 |
+| `create_revision` | 是 | 可选 `description`、`revision_date`、`issued` | 创建修订记录 |
+| `create_revision_cloud` | 是 | `view_id`、`revision_id`、`boundary` | 创建修订云线 |
+| `create_schedule` | 是 | `kind` | 普通、材质、关键、视图/图纸/修订明细表；可传 `fields` |
+| `place_schedule_on_sheet` | 是 | `sheet_id`、`schedule_id`、`point` | 图纸放置明细表 |
+| `set_view_properties` | 是 | `view_id` | 设置比例、裁剪、视图样板、细节级别和显示样式 |
+| `create_opening` | 是 | `host_id`、`start`、`end` | 在墙体上创建矩形洞口 |
 | `set_parameters` | 是 | `targets`、`parameters` | 批量设置实例/类型参数 |
 | `delete_elements` | 是 | `targets` | 删除指定元素 |
 | `select_elements` | 否 | `targets` | 可选 `show=true` 定位到视图 |
+| `export` | 否* | `format`、`output_path` | 单独执行；支持 image/png/jpg、dwg、dxf、ifc、schedule_csv |
+| `save_document` | 否* | 可选 `path`、`overwrite_file` | 单独执行；保存当前 `.rvt` |
 
 `query_catalog` 与 `query_elements` 是计划生成前最重要的两步：先查到真实的族、类型、标高和元素 ID，再写创建或修改步骤，避免猜测项目里有什么。
+
+## 出图、注释与交付
+
+推荐顺序：先 `query_catalog(kind=view_types|title_blocks|text_types|filled_region_types|revisions)`，再创建视图/图纸；尺寸与标签先用 `query_references` 读取目标元素的 `stable_reference`。`create_dimension.references` 至少传两个稳定引用；`create_tag.reference` 传一个稳定引用，`tag_type_id` 可选，不传时由 Revit 按类别选择可用标签。
+
+`create_section_view` 的 `origin` 是剖面框中心，`direction` 是视线方向，`up` 是纸面向上方向，长度参数控制框宽、高、深。`create_elevation_view` 的 `plan_view_id` 是承载立面符号的平面视图。`set_view_properties` 支持：
+
+```json
+{
+  "operation": "set_view_properties",
+  "args": {
+    "view_id": 12345,
+    "scale": 100,
+    "detail_level": "Fine",
+    "display_style": "HLR",
+    "crop_active": true,
+    "crop_visible": false,
+    "crop_box": {
+      "min": { "x": -5000, "y": -5000, "z": -1000 },
+      "max": { "x": 5000, "y": 5000, "z": 5000 }
+    },
+    "view_template_id": 23456
+  }
+}
+```
+
+设置 `clear_view_template=true` 可清除当前视图样板，且不能与 `view_template_id` 同时传入。
+
+`create_schedule.kind` 支持 `regular`、`material_takeoff`、`key`、`view_list`、`sheet_list`、`revision`。普通/材质/关键明细表需要 `category`，`fields` 是项目中可用的字段显示名；先预览，再按实际项目语言和样板微调字段名。
+
+导出示例必须单独提交：
+
+```json
+{
+  "operation": "execute_plan",
+  "preview": false,
+  "args": {
+    "steps": [
+      {
+        "operation": "export",
+        "args": {
+          "format": "png",
+          "active_view": true,
+          "output_path": "C:\\RCB-Exports\\current-view"
+        }
+      }
+    ]
+  }
+}
+```
+
+`image/png/jpg` 可传 `view_ids` 或 `active_view=true`；`dwg/dxf` 需要 `view_ids` 或 `active_view=true`；`ifc` 可选 `filter_view_id`；`schedule_csv` 需要 `schedule_id`，可选 `delimiter` 与 `title`。插件仅写调用方指定的输出目录，不上传文件。
+
+## 族文件工作流
+
+族文件是独立 Revit 文档，不能与项目建模计划混在一个项目 Transaction 内。因此使用顶层操作：
+
+1. `list_family_templates` 查询本机 `.rft` 样板；不需要打开项目。
+2. `create_family` 创建 `.rfa`，写入参数、类型和实体，保存后可自动载入当前项目并放置。
+3. `load_family` 载入已有 `.rfa`。
+
+`create_family` 的高频参数：
+
+| args 字段 | 说明 |
+| --- | --- |
+| `family_name` | 必填；族名称和默认文件名 |
+| `template_path` | 可选 `.rft` 绝对路径；缺省自动选择本机“公制常规模型 / Metric Generic Model” |
+| `save_path` | 可选 `.rfa` 输出路径；缺省保存到文档目录 `RevitCommandBridge\\Families` |
+| `category` | 可选 `OST_GenericModel`、`OST_MechanicalEquipment` 等可由样板支持的类别 |
+| `parameters` | 参数项：`name`、`type`、`instance`、`group`、`default`、`formula` |
+| `types` | 类型项：`name`、`values`；未传时创建“默认”类型 |
+| `geometry` | `box`、`cylinder`、`extrusion` 原语数组 |
+| `load_into_project` | 默认 `true`；保存后自动载入当前项目 |
+| `place` | 可选放置参数，例如 `{ "point": {"x":0,"y":0,"z":0}, "level":"标高 1" }` |
+
+创建族前请先保存当前 `.rvt` 项目；Revit 新建族时会临时打开族文档，桥接在完成后自动切回原项目。
+
+支持的普通参数类型：`length`、`area`、`volume`、`angle`、`number`、`text`、`multiline_text`、`integer`、`yesno`、`material`、`url`。族参数长度裸数按 mm，面积裸数按 mm²，体积裸数按 mm³，角度裸数按度。
+
+预览示例：
+
+```json
+{
+  "operation": "create_family",
+  "preview": true,
+  "args": {
+    "family_name": "RCB_设备基础",
+    "category": "OST_GenericModel",
+    "parameters": [
+      { "name": "宽度", "type": "length", "default": "1200mm" },
+      { "name": "说明", "type": "text", "instance": true, "default": "设备基础" }
+    ],
+    "types": [
+      { "name": "默认", "values": { "宽度": "1200mm" } }
+    ],
+    "geometry": [
+      { "kind": "box", "min": {"x": -600, "y": -400, "z": 0}, "max": {"x": 600, "y": 400, "z": 300} }
+    ],
+    "load_into_project": true
+  }
+}
+```
+
+完成预览后将 `preview` 改为 `false`。若目标 `.rfa` 已存在，显式传 `overwrite_file=true` 才会覆盖。
 
 ## 通用实体几何
 
@@ -208,4 +341,4 @@ status.json  Revit 插件状态与心跳
 
 ## 兼容操作
 
-下列 1.x 操作继续可用：`health`、`list_levels`、`list_wall_types`、`new_project`、`create_level`、`create_grid`、`create_wall`、`create_rectangle_walls`。它们适合已有脚本；新增专业能力应进入 `execute_plan`，不要继续增长单用途顶层命令。
+下列 1.x 操作继续可用：`health`、`list_levels`、`list_wall_types`、`new_project`、`create_level`、`create_grid`、`create_wall`、`create_rectangle_walls`。族文档使用专用顶层操作：`list_family_templates`、`create_family`、`load_family`；其余新增专业能力进入 `execute_plan`，不要继续增长单用途顶层命令。

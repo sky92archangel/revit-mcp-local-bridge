@@ -14,6 +14,13 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
 $script:CurrentStage = 0
 
 trap {

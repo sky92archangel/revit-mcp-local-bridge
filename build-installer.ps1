@@ -3,7 +3,7 @@ param(
     [string]$DistDirectory,
     [string]$OutputPath,
     [string]$NodeExecutable,
-    [ValidatePattern('^20(2[0-6])$')]
+    [ValidatePattern('^20(2[0-4])$')]
     [string[]]$RevitVersion
 )
 
@@ -25,7 +25,8 @@ if ([string]::IsNullOrWhiteSpace($NodeExecutable)) {
 
 $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $setupSource = Join-Path $PSScriptRoot 'setup\RevitAIHubSetup.cs'
-foreach ($requiredPath in @($csc, $setupSource, $DistDirectory)) {
+$setupIcon = Join-Path $PSScriptRoot 'setup\RevitCommandBridge.ico'
+foreach ($requiredPath in @($csc, $setupSource, $setupIcon, $DistDirectory)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Missing installer build dependency: $requiredPath"
     }
@@ -67,10 +68,10 @@ try {
     foreach ($package in $packageDirectories) {
         $stagedPackage = Join-Path $payloadDirectory $package.Name
         Copy-Item -LiteralPath $package.FullName -Destination $stagedPackage -Recurse -Force
-        # PDBs may contain the builder's absolute source paths. They are not
-        # required by end users and stay out of the self-contained installer.
-        Get-ChildItem -LiteralPath $stagedPackage -Filter '*.pdb' -File -Recurse -ErrorAction SilentlyContinue |
-            ForEach-Object { [IO.File]::Delete($_.FullName) }
+        $stagedSymbols = Join-Path $stagedPackage 'RevitCommandBridge.pdb'
+        if (Test-Path -LiteralPath $stagedSymbols) {
+            Remove-Item -LiteralPath $stagedSymbols -Force
+        }
         $runtimeDirectory = Join-Path $stagedPackage 'runtime'
         New-Item -ItemType Directory -Force -Path $runtimeDirectory | Out-Null
         Copy-Item -LiteralPath $NodeExecutable -Destination (Join-Path $runtimeDirectory 'node.exe') -Force
@@ -89,7 +90,7 @@ try {
         '/target:winexe',
         '/platform:anycpu',
         '/optimize+',
-        '/debug-',
+        '/debug:pdbonly',
         ('/out:' + $OutputPath),
         '/reference:System.Web.Extensions.dll',
         '/reference:System.Security.dll',
@@ -97,6 +98,7 @@ try {
         '/reference:System.Drawing.dll',
         '/reference:System.IO.Compression.dll',
         '/reference:System.IO.Compression.FileSystem.dll',
+        ('/win32icon:' + $setupIcon),
         ('/resource:' + $payloadZip + ',RevitAIHub.payload.zip'),
         $setupSource
     )

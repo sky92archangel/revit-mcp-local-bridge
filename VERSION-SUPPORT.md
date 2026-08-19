@@ -14,13 +14,13 @@ Each installed version also has an isolated command queue:
 
 This prevents an agent connected to one Revit version from sending a command to another version's open project.
 
-MCP profiles are independent per version. REST keeps `2020 = 8765` for compatibility and assigns `2021 = 8766` through `2026 = 8771`; `REVIT_BRIDGE_PORT` can override the selected port.
+MCP profiles are independent per version. REST keeps `2020 = 8765` for compatibility and assigns `2021 = 8766` through `2024 = 8769`; `REVIT_BRIDGE_PORT` can override the selected port.
 
 ## Current support matrix
 
 | Revit version | Build route | Validation state | Notes |
 | --- | --- | --- | --- |
-| 2020 | Bundled adapter or automatic local API build | [V] compiled both ways on this machine | Setup detects the installed version automatically; installation/live-model regression remains a separate step. |
+| 2020 | Bundled adapter or automatic local API build | [V] core workflow live-regressed; 0.5.0 output expansion API-compiled | Family/model/view/sheet core workflows ran in Revit 2020; newly added annotations/schedules/export require their own template-specific live regression. |
 | 2021–2024 | Automatic local API build | [T] implemented, corresponding Revit APIs not present locally | Setup detects each installed version and compiles a year-matched DLL from its local `RevitAPI.dll` / `RevitAPIUI.dll`; each year still needs a real-machine load and modelling test. |
 | 2025–2026 | Reserved version identifier | [T] not implemented | These releases require a .NET 8 add-in adapter; the current build script intentionally stops rather than emitting an invalid DLL. |
 
@@ -82,8 +82,9 @@ The installer writes its DLL and client scripts to `%LOCALAPPDATA%\RevitCommandB
 
 - **E1 [V]** `build.ps1` now compiles with `REVIT_<year>` and produces a year-specific package.
 - **E2 [V]** `BridgeBuildInfo.cs` and `BridgeFileQueue.cs` derive the local queue path from the compiled Revit year.
-- **E3 [V]** `install-revit.ps1 -ListDetected` located a local Revit 2020 installation through the configured scan roots and registry.
+- **E3 [V]** `install-revit.ps1 -ListDetected` located a Revit 2020 installation through the standard/registry discovery path during verification.
 - **E4 [V]** `build-revit-adapter.ps1` generated a Revit 2020 adapter from the locally installed Revit 2020 API and emitted `build_mode=local-api-adapter`.
 - **E5 [V]** The setup payload contains the C# adapter sources and local adapter build script; Revit 2020 `-WhatIf` installation remains non-mutating.
 - **E6 [T]** No Revit 2021–2024 installation was available locally, so those four API-specific compilations and live-model tests remain pending.
 - **E7 [T]** Revit 2025–2026 require the separate .NET 8 adapter and are outside this package version.
+- **E8 [V/T]** Revit 2020 output expansion (`RevitOutputOperations.cs`) compiled with the local 20.0 API, schema/MCP regression passed; its live output execution was deliberately deferred for this release pass. See [verification/2026-08-19-regression.md](./verification/2026-08-19-regression.md).

@@ -15,6 +15,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
+
 function Test-FileSystemPath {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -238,12 +245,56 @@ function Copy-PackageToInstallDirectory {
     )
 
     $existingNode = Join-Path (Join-Path $DestinationDirectory 'runtime') 'node.exe'
+    Write-Output 'RCB_INSTALL_STAGE=copy-files'
     foreach ($packageItem in @(Get-ChildItem -LiteralPath $SourceDirectory -Force)) {
         if ($packageItem.Name -ieq 'runtime' -and (Test-FileSystemPath $existingNode)) {
             Write-Output ('复用已安装的 Node 运行时：' + $existingNode)
             continue
         }
+        Write-Output ('安装文件：' + $packageItem.Name)
         Copy-Item -LiteralPath $packageItem.FullName -Destination $DestinationDirectory -Recurse -Force
+    }
+    Write-Output 'RCB_INSTALL_STAGE=copy-complete'
+}
+
+function Get-PackageRelativeFiles {
+    param([Parameter(Mandatory = $true)][string]$SourceDirectory)
+    $root = [System.IO.Path]::GetFullPath($SourceDirectory).TrimEnd('\') + '\'
+    return @(Get-ChildItem -LiteralPath $SourceDirectory -File -Recurse -Force | ForEach-Object {
+        $_.FullName.Substring($root.Length)
+    })
+}
+
+function Remove-StaleBridgeFiles {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceDirectory,
+        [Parameter(Mandatory = $true)][string]$DestinationDirectory
+    )
+    $manifestPath = Join-Path $DestinationDirectory 'install-manifest.json'
+    if (-not (Test-FileSystemPath $manifestPath)) { return }
+    try {
+        $oldManifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $newFiles = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+        foreach ($relative in @(Get-PackageRelativeFiles -SourceDirectory $SourceDirectory)) {
+            [void]$newFiles.Add($relative.Replace('/', '\'))
+        }
+        foreach ($relative in @($oldManifest.files)) {
+            $normalized = [string]$relative
+            if ([string]::IsNullOrWhiteSpace($normalized) -or $newFiles.Contains($normalized.Replace('/', '\'))) { continue }
+            # Keep the runtime currently used by an AI client and user-created
+            # connection files even when an older package listed them.
+            if ($normalized -match '^runtime[\\/]node\.exe$' -or $normalized -match '^connections[\\/]') { continue }
+            $target = [System.IO.Path]::GetFullPath((Join-Path $DestinationDirectory $normalized))
+            $destinationRoot = [System.IO.Path]::GetFullPath($DestinationDirectory).TrimEnd('\') + '\'
+            if (-not $target.StartsWith($destinationRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                try { Remove-Item -LiteralPath $target -Force; Write-Output ('清理旧文件：' + $normalized) }
+                catch { Write-Warning ('旧文件仍被占用，保留：' + $normalized) }
+            }
+        }
+    }
+    catch {
+        Write-Warning ('读取旧版文件清单失败，保留旧文件：' + $_.Exception.Message)
     }
 }
 
@@ -251,10 +302,12 @@ New-Item -ItemType Directory -Force -Path $InstallDirectory | Out-Null
 $packagePathForCopy = [System.IO.Path]::GetFullPath($PackageDirectory).TrimEnd('\')
 $installPathForCopy = [System.IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\')
 if (-not [string]::Equals($packagePathForCopy, $installPathForCopy, [StringComparison]::OrdinalIgnoreCase)) {
+    Remove-StaleBridgeFiles -SourceDirectory $PackageDirectory -DestinationDirectory $InstallDirectory
     Copy-PackageToInstallDirectory -SourceDirectory $PackageDirectory -DestinationDirectory $InstallDirectory
 }
 
 $installedAssembly = Join-Path $InstallDirectory 'RevitCommandBridge.dll'
+Write-Output 'RCB_INSTALL_STAGE=write-manifest'
 $manifestTemplate = Get-Content -LiteralPath (Join-Path $PackageDirectory 'deploy\RevitCommandBridge.addin.template') -Raw -Encoding UTF8
 $manifest = $manifestTemplate.Replace('__ASSEMBLY_PATH__', [System.Security.SecurityElement]::Escape($installedAssembly))
 New-Item -ItemType Directory -Force -Path $AddinsDirectory | Out-Null
@@ -270,6 +323,17 @@ $installedMetadata = [ordered]@{
     revit_install_directory = $RevitInstallDirectory
 }
 $installedMetadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $InstallDirectory 'bridge.config.json') -Encoding UTF8
+$ownedFiles = @(Get-PackageRelativeFiles -SourceDirectory $PackageDirectory)
+$ownedFiles += 'bridge.config.json'
+$ownedFiles += 'install-manifest.json'
+[ordered]@{
+    schema_version = 1
+    product = 'RevitCommandBridge'
+    revit_version = $RevitVersion
+    files = $ownedFiles
+} | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $InstallDirectory 'install-manifest.json') -Encoding UTF8
+Write-Output 'RCB_INSTALL_STAGE=write-inventory'
+Write-Output 'RCB_INSTALL_STAGE=complete'
 
 if ($Connector -ne 'none') {
     $connectorScript = Join-Path $InstallDirectory 'scripts\configure-connector.ps1'

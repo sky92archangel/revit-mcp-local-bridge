@@ -5,6 +5,13 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
 function Backup-Config([string]$Path) {
   if (Test-Path -LiteralPath $Path -PathType Leaf) {
     $backupPath = $Path + '.revitaibhub-backup-' + (Get-Date -Format 'yyyyMMddHHmmss')

@@ -35,9 +35,10 @@ foreach ($requiredPath in @($csc, $revitApi, $revitApiUi)) {
     }
 }
 
-$apiAssembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom($revitApi)
-if ($apiAssembly.ImageRuntimeVersion -notlike 'v4.*') {
-    throw "Revit $RevitVersion API runtime is $($apiAssembly.ImageRuntimeVersion); use the matching runtime adapter build."
+$apiAssemblyName = [Reflection.AssemblyName]::GetAssemblyName($revitApi)
+$apiVersion = $apiAssemblyName.Version
+if ($null -eq $apiVersion) {
+    throw "Unable to read the Revit $RevitVersion API version from $revitApi."
 }
 
 $sourceDirectory = Join-Path $PSScriptRoot 'src'
@@ -49,8 +50,7 @@ if ($sourceFiles.Count -eq 0) {
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $assemblyPath = Join-Path $OutputDirectory 'RevitCommandBridge.dll'
 $symbols = @()
-$parameterType = $apiAssembly.GetType('Autodesk.Revit.DB.Parameter', $false)
-if ($null -ne $parameterType -and $null -ne $parameterType.GetMethod('GetUnitTypeId', [Type[]]@())) {
+if ($apiVersion.Major -ge 21) {
     $symbols += 'REVIT_FORGE_UNITS'
 }
 $compilerArguments = @(
@@ -75,7 +75,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "RevitCommandBridge compilation failed with exit code: $LASTEXITCODE"
 }
 
-foreach ($directoryName in @('scripts', 'examples', 'deploy', 'schemas', 'src')) {
+foreach ($directoryName in @('scripts', 'examples', 'deploy', 'schemas', 'src', 'verification')) {
     $source = Join-Path $PSScriptRoot $directoryName
     if (Test-Path -LiteralPath $source) {
         $destination = Join-Path $OutputDirectory $directoryName

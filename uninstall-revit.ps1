@@ -10,6 +10,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
+
 if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
     throw '请先关闭所有 Revit 窗口，再卸载命令桥。'
 }

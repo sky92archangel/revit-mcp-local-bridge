@@ -1,0 +1,57 @@
+{
+  "operation": "execute_plan",
+  "preview": true,
+  "source": "example",
+  "args": {
+    "steps": [
+      {
+        "id": "floor",
+        "operation": "create_floor",
+        "args": {
+          "level": "标高 1",
+          "boundary": [
+            { "x": 0, "y": 0 },
+            { "x": 6000, "y": 0 },
+            { "x": 6000, "y": 4000 },
+            { "x": 0, "y": 4000 }
+          ]
+        }
+      },
+      {
+        "id": "room",
+        "operation": "create_room",
+        "args": {
+          "level": "标高 1",
+          "point": { "x": 3000, "y": 2000, "z": 0 },
+          "name": "设备间",
+          "number": "101"
+        }
+      },
+      {
+        "id": "view",
+        "operation": "create_view",
+        "args": {
+          "kind": "3d",
+          "name": "RCB_三维总览"
+        }
+      },
+      {
+        "id": "sheet",
+        "operation": "create_sheet",
+        "args": {
+          "sheet_number": "A-001",
+          "name": "RCB 总览图纸"
+        }
+      },
+      {
+        "id": "place_view",
+        "operation": "place_view_on_sheet",
+        "args": {
+          "sheet_id": "$sheet",
+          "view_id": "$view",
+          "point": { "x": 250, "y": 180, "z": 0 }
+        }
+      }
+    ]
+  }
+}

@@ -195,6 +195,9 @@ export function isBridgeRunning(status, maxAgeMilliseconds = 5000) {
 export function supportedOperations() {
   return [
     "health",
+    "list_family_templates",
+    "create_family",
+    "load_family",
     "execute_plan",
     "list_levels",
     "list_wall_types",

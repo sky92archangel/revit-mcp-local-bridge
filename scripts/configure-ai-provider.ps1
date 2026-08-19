@@ -19,6 +19,13 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
 Add-Type -AssemblyName System.Security
 
 function Get-ProfileDirectory {

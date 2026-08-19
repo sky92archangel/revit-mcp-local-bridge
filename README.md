@@ -1,15 +1,8 @@
 # Revit Command Bridge
 
-面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、参数和选中显示，而不是为每一种构件增加一个插件命令。
+面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、空间、出图、参数和选中显示，而不是为每一种构件增加一个插件命令。
 
-> 独立第三方项目，未获 Autodesk/Revit 认可或关联；仓库不分发 Revit 软件、Revit API DLL 或模型文件。使用者应自行安装并按许可使用 Revit。
-
-## 交流
-
-- QQ 交流群：`1102212354`
-- 问题与功能建议：请提交仓库 Issue。
-
-> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。当前机器只安装了 Revit 2020；2020 包已构建，安装和真机回归仍待执行。版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
+> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。本交付包支持 Revit 2020–2024；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
 单文件安装器会自动扫描本机 Revit 2020–2024。检测到内置适配包时直接使用；没有对应预编译包时，安装器使用该电脑对应年份的 Revit API 自动生成匹配 DLL。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。2021–2024 的自动适配路线已实现，但仍需分别在装有对应 Revit 的机器上完成加载和建模回归。
 
@@ -21,17 +14,17 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -ListDetected
 ~~~
 
-关闭目标 Revit，然后构建并安装指定版本：
+普通用户直接运行成品包中的 `RevitCommandBridgeSetup.exe`。开发者关闭目标 Revit 后，可构建并安装指定版本：
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -RevitVersion 2020
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -RevitVersion 2020 -Connector codex
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -RevitVersion 2020
 ~~~
 
 启动中文 Revit 2020：
 
 ~~~powershell
-& '<REVIT_INSTALL_DIRECTORY>\Revit.exe' /language CHS
+& 'C:\Program Files\Autodesk\Revit 2020\Revit.exe' /language CHS
 ~~~
 
 打开 Revit 后，桥接会自动启动；功能区“Revit 命令桥”的“启动桥接”按钮可用于确认连接信息。随后执行一次只读健康检查：
@@ -70,15 +63,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -RevitVe
 
 ### Codex MCP
 
-本机 Codex 的 config.toml 可加入：
+优先在 Revit 功能区点击“复制 MCP”，再粘贴到客户端的 MCP 配置页。手工配置时，使用安装器内置的年份 Node 运行时（不要求另装 Node.js）：
 
 ~~~toml
 [mcp_servers.revit]
-command = "C:\\Program Files\\nodejs\\node.exe"
-args = ["<USER_LOCALAPPDATA>\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"]
+command = "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\runtime\\node.exe"
+args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"]
 ~~~
 
 重新启动 Codex 任务后，客户端可发现 `revit_execute_plan`。这是长期主入口；旧的 `revit_create_wall` 等工具仅为兼容已有脚本保留。
+
+### 当前能力范围
+
+| 模块 | 已实现的高频操作 |
+| --- | --- |
+| 查询与编辑 | 文档、目录、元素、参数、删除、选择与定位 |
+| 建筑 | 标高、轴网、墙、楼板、墙洞口、模型线、房间、空间、DirectShape |
+| 结构 | 梁、柱、斜撑，以及已载入结构族的实例放置 |
+| MEP | 管道、风管、线管、桥架、直连/弯头/三通/活接连接 |
+| 族 | 样板查询、新建 `.rfa`、参数、类型、box/cylinder/extrusion 几何、保存、载入、放置 |
+| 放置方式 | 非宿主、宿主、面宿主、工作平面、视图、线基和自适应族 |
+| 出图与注释 | 3D / 平面 / 天花 / 结构平面 / 绘图 / 剖面 / 立面 / 详图索引视图、复制与样板、图纸、视图/明细表放图纸、详图线、文字、尺寸、标签、填充区域、修订及修订云线 |
+| 导出与交付 | PNG/JPG/TIFF/BMP 图像、DWG/DXF、IFC、明细表 CSV/TXT、保存 `.rvt`；导出/保存须作为独立计划执行 |
+
+用于出图时，先以 `query_catalog(kind=view_types|title_blocks|text_types|filled_region_types|revisions)` 查询项目资源；需要尺寸或标签时，以 `query_references` 读取元素稳定引用，再提交 `create_dimension` 或 `create_tag`。`export` 和 `save_document` 有外部文件副作用，须分别放在只含一个步骤的 `execute_plan` 中。完整参数和覆盖边界见 [PROTOCOL.md](./PROTOCOL.md)。
+
+“Revit 的所有功能”包含数千个 API 对象，桥接不会开放任意 C# 执行；新增能力统一以受控原子步骤加入 `execute_plan`。完整参数和覆盖边界见 [PROTOCOL.md](./PROTOCOL.md)。
 
 ### 通用 MCP JSON
 
@@ -88,9 +98,9 @@ args = ["<USER_LOCALAPPDATA>\\RevitCommandBridge\\2020\\scripts\\revit-mcp-serve
 {
   "mcpServers": {
     "revit": {
-      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "command": "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\runtime\\node.exe",
       "args": [
-        "<USER_LOCALAPPDATA>\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"
+        "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"
       ]
     }
   }
@@ -131,7 +141,7 @@ $body = @{
 Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8765/commands?wait_seconds=60' -ContentType 'application/json; charset=utf-8' -Body $body
 ~~~
 
-远程模型 API 本身不直接访问本机 Revit；本机 Harness 把 Function Calling 参数转发到这个 REST 端点，或直接启动 MCP Server。自动识别未覆盖的 OpenAI 兼容客户端可直接使用随安装包提供的本机 Harness；API Key 使用 Windows DPAPI 按当前用户加密保存，不写入 MCP/REST 配置文件。
+远程模型 API 本身不直接访问本机 Revit；本机 Harness 把 Function Calling 参数转发到这个 REST 端点，或直接启动 MCP Server。需要使用模型 API 时，运行 `scripts/configure-ai-provider.ps1` 保存配置，再启动本机助手；API Key 使用 Windows DPAPI 按当前用户加密保存，不写入 MCP/REST 配置文件。
 
 ## 工作方式
 

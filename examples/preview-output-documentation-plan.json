@@ -1,0 +1,69 @@
+{
+  "id": "preview_output_documentation",
+  "operation": "execute_plan",
+  "preview": true,
+  "source": "example",
+  "args": {
+    "steps": [
+      {
+        "id": "output_catalog",
+        "operation": "query_catalog",
+        "args": { "kind": "view_types", "limit": 100 }
+      },
+      {
+        "id": "drafting",
+        "operation": "create_drafting_view",
+        "args": { "name": "RCB-节点详图" }
+      },
+      {
+        "id": "note",
+        "operation": "create_text_note",
+        "args": {
+          "view_id": "$drafting",
+          "point": { "x": 0, "y": 0, "z": 0 },
+          "text": "详图说明：尺寸单位为 mm"
+        }
+      },
+      {
+        "id": "detail_line",
+        "operation": "create_detail_curve",
+        "args": {
+          "view_id": "$drafting",
+          "start": { "x": 0, "y": 0, "z": 0 },
+          "end": { "x": 3000, "y": 0, "z": 0 }
+        }
+      },
+      {
+        "id": "wall_schedule",
+        "operation": "create_schedule",
+        "args": {
+          "kind": "regular",
+          "category": "OST_Walls",
+          "name": "RCB-墙体明细表",
+          "fields": ["Family and Type", "Length"],
+          "show_title": true,
+          "show_headers": true
+        }
+      },
+      {
+        "id": "issue",
+        "operation": "create_revision",
+        "args": { "description": "初版出图", "revision_date": "2026-08-19" }
+      },
+      {
+        "id": "sheet",
+        "operation": "create_sheet",
+        "args": { "sheet_number": "A-001", "name": "总说明" }
+      },
+      {
+        "id": "schedule_on_sheet",
+        "operation": "place_schedule_on_sheet",
+        "args": {
+          "sheet_id": "$sheet",
+          "schedule_id": "$wall_schedule",
+          "point": { "x": 100, "y": 100, "z": 0 }
+        }
+      }
+    ]
+  }
+}

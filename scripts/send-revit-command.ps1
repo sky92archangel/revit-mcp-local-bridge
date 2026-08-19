@@ -20,6 +20,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+try {
+    $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8OutputEncoding
+    $OutputEncoding = $utf8OutputEncoding
+}
+catch { }
+
 if ([string]::IsNullOrWhiteSpace($RevitVersion)) {
     $packageDirectory = Split-Path -Parent $PSScriptRoot
     $candidateVersion = Split-Path -Leaf $packageDirectory

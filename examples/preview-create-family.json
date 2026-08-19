@@ -1,0 +1,37 @@
+{
+  "operation": "create_family",
+  "preview": true,
+  "source": "example",
+  "args": {
+    "family_name": "RCB_设备基础",
+    "category": "OST_GenericModel",
+    "parameters": [
+      { "name": "宽度", "type": "length", "default": "1200mm" },
+      { "name": "深度", "type": "length", "default": "800mm" },
+      { "name": "高度", "type": "length", "default": "300mm" },
+      { "name": "说明", "type": "text", "instance": true, "default": "设备基础" }
+    ],
+    "types": [
+      {
+        "name": "默认",
+        "values": {
+          "宽度": "1200mm",
+          "深度": "800mm",
+          "高度": "300mm"
+        }
+      }
+    ],
+    "geometry": [
+      {
+        "kind": "box",
+        "min": { "x": -600, "y": -400, "z": 0 },
+        "max": { "x": 600, "y": 400, "z": 300 }
+      }
+    ],
+    "load_into_project": true,
+    "place": {
+      "point": { "x": 0, "y": 0, "z": 0 },
+      "level": "标高 1"
+    }
+  }
+}
