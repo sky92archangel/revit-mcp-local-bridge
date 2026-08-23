@@ -81,9 +81,13 @@
 | operation | 写模型 | 关键 args | 说明 |
 | --- | --- | --- | --- |
 | `query_document` | 否 | 无 | 当前项目、活动视图、只读状态 |
-| `query_catalog` | 否 | `kind` | `levels`、`categories`、`views`、`sheets`、`schedules`、`view_types`、`title_blocks`、`text_types`、`filled_region_types`、`revisions`、`families`、`types`、`mep_types` |
+| `query_catalog` | 否 | `kind` | `levels`、`categories`、`views`、`sheets`、`schedules`、`view_types`、`title_blocks`、`text_types`、`filled_region_types`、`revisions`、`families`、`types`、`mep_types`、`links`（链接模型清单） |
 | `query_elements` | 否 | 可选 `category`、`element_ids`、`name_contains` | 查询元素与指定参数；`limit` 1–500 |
 | `query_references` | 否 | `element_ids` 或 `targets` | 查询元素面/边的稳定引用，供 `create_dimension`、`create_tag` 使用 |
+| `query_parameters` | 否 | `element_id` | 枚举元素全部参数（名称 / 值 / 单位 / 只读 / BIP）；可选 `name_contains`、`include_read_only` |
+| `query_geometry` | 否 | `element_id` | 几何感知：`detail` = `bbox`、`solid_summary`、`faces` |
+| `query_room` | 否 | 可选 `point` / `level` | `point` 点找房间；缺省列出房间（含边界顶点） |
+| `check_interferences` | 否 | `element_ids` | 碰撞检查；可选 `against_ids`、`include_links`；候选 >500 需显式 `against_ids` |
 | `create_level` | 是 | `elevation_mm` | 可选 `name` |
 | `create_grid` | 是 | `start`、`end` | 直线轴网；两点 Z 必须相同 |
 | `create_wall` | 是 | `start`、`end` | `level`、`type` / `type_id`、`height_mm`、`thickness_mm` 可选 |
@@ -92,16 +96,18 @@
 | `create_space` | 是 | `point` | 在 `level` 放置 MEP 空间；可选 `name`、`number` |
 | `create_model_curve` | 是 | `start`、`end` | 创建直线模型线和所需工作平面 |
 | `create_direct_shape` | 是 | `geometry` | 通用实体：`box`、`cylinder`、`extrusion` |
-| `create_mep_curve` | 是 | `kind`、`start`、`end` | `pipe`、`duct`、`conduit`、`cable_tray` |
-| `connect_mep` | 是 | `element_a`、`element_b` | `fitting`: `auto`、`direct`、`elbow`、`union`、`tee` |
+| `create_mep_curve` | 是 | `kind`、`start`、`end` | `pipe`、`duct`、`conduit`、`cable_tray`；可选 `slope`（百分比，`slope_unit` 支持 permille） |
+| `connect_mep` | 是 | `element_a`、`element_b` | `fitting`: `auto`、`direct`、`elbow`、`union`、`tee`、`reducer`、`cross`（四通用 `element_c`/`element_d`）；可选 `extend_to_intersection=true` 延伸两管到交点再接配件 |
+| `create_mep_system` | 是 | `domain`、`name` | `piping` / `mechanical`；可选 `system_type`、`members`（逐个指派成员） |
 | `place_family_instance` | 是 | `family`、`type` | 支持非宿主、宿主、面宿主、工作平面、视图、线基和自适应族；按放置类型填写 `point`、`level`、`host_id`、`view_id`、`start/end` 或 `adaptive_points` |
+| `load_family` | 是 | `path` | 从 .rfa 加载族（静默覆盖）；可选 `symbol` 激活指定类型；返回全部 `symbol_names` |
 | `create_structural_member` | 是 | `kind`、`family`、`type` | `beam`、`brace` 用 `start/end`；`column` 用 `point` |
 | `create_view` | 是 | `kind` | `3d`、`floor_plan`、`ceiling_plan`、`structural_plan`；平面类需要 `level` |
 | `create_drafting_view` | 是 | 可选 `type_id`、`name` | 创建绘图视图 |
 | `create_section_view` | 是 | `origin`、可选 `direction`、`up`、`width_mm`、`height_mm`、`depth_mm` | 创建剖面或详图视图 |
 | `create_elevation_view` | 是 | `plan_view_id`、`origin` | 在平面视图中创建立面；`index` 0–3 |
 | `create_callout` | 是 | `parent_view_id`、`start`、`end` | 创建详图索引 |
-| `duplicate_view` | 是 | `view_id` | `option`: `duplicate`、`as_dependent`、`with_detailing` |
+| `duplicate_view` | 是 | `view_id` | `option`: `duplicate`、`as_duplicate`、`without_detailing`、`as_dependent`、`with_detailing`；可选 `view_template` 复制后套样板 |
 | `create_view_template` | 是 | `view_id` | 从视图创建样板 |
 | `create_sheet` | 是 | 无 | 可选 `title_block_family`、`title_block_type`、`sheet_number`、`name` |
 | `place_view_on_sheet` | 是 | `sheet_id`、`view_id`、`point` | 图纸和视图可使用 `"$步骤ID"` 引用 |
@@ -115,8 +121,11 @@
 | `create_schedule` | 是 | `kind` | 普通、材质、关键、视图/图纸/修订明细表；可传 `fields` |
 | `place_schedule_on_sheet` | 是 | `sheet_id`、`schedule_id`、`point` | 图纸放置明细表 |
 | `set_view_properties` | 是 | `view_id` | 设置比例、裁剪、视图样板、细节级别和显示样式 |
-| `create_opening` | 是 | `host_id`、`start`、`end` | 在墙体上创建矩形洞口 |
+| `create_opening` | 是 | `host_id`、`start`、`end` | `kind=wall`（默认，两点矩形墙洞）；`vertical`（楼板竖直洞口，`corner_1`/`corner_2`）；`shaft`（竖井，`bottom_level`/`top_level`/`boundary`） |
 | `set_parameters` | 是 | `targets`、`parameters` | 批量设置实例/类型参数 |
+| `transform_elements` | 是 | `element_ids`、`mode` | `move`（`translation`）、`copy`（`translation`，返回新元素）、`rotate`（`axis_origin`/`axis_direction`/`angle` 度）、`mirror`（`plane_point`/`plane_normal`，返回镜像副本） |
+| `rename_element` | 是 | `element_ids` | 单目标用 `name`；批量用 `prefix`（可选 `id_suffix=true` 变为 前缀+ID） |
+| `set_element_curve` | 是 | `element_id`、`start`、`end` | 修改线状图元（墙 / 管 / 模型线）走向 |
 | `delete_elements` | 是 | `targets` | 删除指定元素 |
 | `select_elements` | 否 | `targets` | 可选 `show=true` 定位到视图 |
 | `export` | 否* | `format`、`output_path` | 单独执行；支持 image/png/jpg、dwg、dxf、ifc、schedule_csv |

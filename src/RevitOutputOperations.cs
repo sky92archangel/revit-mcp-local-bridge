@@ -188,20 +188,30 @@ namespace RevitCommandBridge
             ViewDuplicateOption option;
             switch (optionText)
             {
-                case "duplicate": option = ViewDuplicateOption.Duplicate; break;
+                case "duplicate":
+                case "as_duplicate":
+                case "without_detailing":
+                    option = ViewDuplicateOption.Duplicate; break;
                 case "dependent":
                 case "as_dependent": option = ViewDuplicateOption.AsDependent; break;
                 case "with_detailing":
                 case "detail": option = ViewDuplicateOption.WithDetailing; break;
-                default: throw new BridgeCommandException("duplicate_view.option 仅支持 duplicate、as_dependent、with_detailing。");
+                default: throw new BridgeCommandException("duplicate_view.option 仅支持 duplicate、as_duplicate、without_detailing、as_dependent、with_detailing。");
             }
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
+            object rawTemplateId = PlanValues.Get(step.Arguments, "view_template_id", "template_id");
+            string templateName = PlanValues.String(step.Arguments, null, "view_template", "template");
             var data = new Dictionary<string, object>
             {
                 { "source_view_id", source == null ? (object)null : source.Id.IntegerValue },
                 { "option", option.ToString() },
-                { "name", name }
+                { "name", name },
+                { "view_template", string.IsNullOrWhiteSpace(templateName) ? (object)null : templateName }
             };
+            if (rawTemplateId != null)
+            {
+                data["view_template_id"] = rawTemplateId;
+            }
             if (source == null || context.Preview)
             {
                 return data;
@@ -217,6 +227,7 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("Revit 未返回复制后的视图。");
             }
             SetOptionalViewName(duplicate, name);
+            ApplyOptionalViewTemplate(context, duplicate, rawTemplateId, templateName);
             data["element_id"] = duplicate.Id.IntegerValue;
             data["element_ids"] = new[] { duplicate.Id.IntegerValue };
             data["name"] = duplicate.Name;
@@ -1025,6 +1036,38 @@ namespace RevitCommandBridge
         private static void SetOptionalViewName(View view, string name)
         {
             if (!string.IsNullOrWhiteSpace(name)) view.Name = name.Trim();
+        }
+
+        private static void ApplyOptionalViewTemplate(PlanExecutionContext context, View view, object rawTemplateId, string templateName)
+        {
+            ElementId templateId = ElementId.InvalidElementId;
+            if (rawTemplateId != null)
+            {
+                templateId = new ElementId(RevitLookups.ParsePositiveId(rawTemplateId, "view_template_id"));
+            }
+            else if (!string.IsNullOrWhiteSpace(templateName))
+            {
+                View template = new FilteredElementCollector(context.Document)
+                    .OfClass(typeof(View))
+                    .Cast<View>()
+                    .FirstOrDefault(candidate => candidate.IsTemplate &&
+                        string.Equals(candidate.Name, templateName, StringComparison.OrdinalIgnoreCase));
+                if (template == null)
+                {
+                    throw new BridgeCommandException("找不到视图样板：“" + templateName + "”。");
+                }
+                templateId = template.Id;
+            }
+            if (templateId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return;
+            }
+            View templateElement = context.Document.GetElement(templateId) as View;
+            if (templateElement == null || !templateElement.IsTemplate)
+            {
+                throw new BridgeCommandException("view_template_id 必须指向视图样板。");
+            }
+            view.ViewTemplateId = templateId;
         }
 
         private static void EnsureOutputDirectory(string directory)

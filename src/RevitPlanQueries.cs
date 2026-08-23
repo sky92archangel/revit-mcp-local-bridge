@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.DB.Plumbing;
@@ -55,12 +56,14 @@ namespace RevitCommandBridge
                     return QueryRevisions(context.Document, limit);
                 case "families":
                     return QueryFamilies(context.Document, step.Arguments, limit);
+                case "links":
+                    return QueryLinks(context.Document, limit);
                 case "types":
                     return QueryTypes(context.Document, step.Arguments, limit, false);
                 case "mep_types":
                     return QueryTypes(context.Document, step.Arguments, limit, true);
                 default:
-                    throw new BridgeCommandException("query_catalog.kind 仅支持 levels、categories、views、sheets、schedules、view_types、title_blocks、text_types、filled_region_types、revisions、families、types、mep_types。");
+                    throw new BridgeCommandException("query_catalog.kind 仅支持 levels、categories、views、sheets、schedules、view_types、title_blocks、text_types、filled_region_types、revisions、families、types、mep_types、links。");
             }
         }
 
@@ -179,6 +182,490 @@ namespace RevitCommandBridge
                 { "truncated", remaining <= 0 },
                 { "items", items }
             };
+        }
+
+        public static Dictionary<string, object> QueryParameters(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
+            if (targetId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            Element element = context.Document.GetElement(targetId);
+            if (element == null)
+            {
+                throw new BridgeCommandException("query_parameters 找不到 element_id=" + targetId.IntegerValue + "。");
+            }
+            string nameContains = PlanValues.String(step.Arguments, null, "name_contains", "name_like");
+            bool includeReadOnly = PlanValues.Boolean(step.Arguments, true, "include_read_only");
+
+            var parameters = new List<Dictionary<string, object>>();
+            foreach (Parameter parameter in element.Parameters)
+            {
+                if (parameter.Definition == null)
+                {
+                    continue;
+                }
+                string parameterName = parameter.Definition.Name ?? string.Empty;
+                if (!includeReadOnly && parameter.IsReadOnly)
+                {
+                    continue;
+                }
+                if (!string.IsNullOrWhiteSpace(nameContains) &&
+                    parameterName.IndexOf(nameContains, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                var item = new Dictionary<string, object>
+                {
+                    { "name", parameterName },
+                    { "group", parameter.Definition.ParameterGroup.ToString() }
+                };
+                InternalDefinition internalDefinition = parameter.Definition as InternalDefinition;
+                if (internalDefinition != null && internalDefinition.BuiltInParameter != BuiltInParameter.INVALID)
+                {
+                    item["built_in_id"] = internalDefinition.BuiltInParameter.ToString();
+                }
+                foreach (KeyValuePair<string, object> pair in RevitLookups.ParameterData(parameter))
+                {
+                    item[pair.Key] = pair.Value;
+                }
+                parameters.Add(item);
+            }
+            return new Dictionary<string, object>
+            {
+                { "element_id", targetId.IntegerValue },
+                { "count", parameters.Count },
+                { "parameters", parameters }
+            };
+        }
+
+        public static Dictionary<string, object> QueryGeometry(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
+            if (targetId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            Element element = context.Document.GetElement(targetId);
+            if (element == null)
+            {
+                throw new BridgeCommandException("query_geometry 找不到 element_id=" + targetId.IntegerValue + "。");
+            }
+            string detail = PlanValues.String(step.Arguments, "bbox", "detail", "level").Trim().ToLowerInvariant();
+            if (detail != "bbox" && detail != "solid_summary" && detail != "faces")
+            {
+                throw new BridgeCommandException("query_geometry.detail 仅支持 bbox、solid_summary、faces。");
+            }
+            int limit = ReadLimit(step.Arguments);
+
+            var data = new Dictionary<string, object>
+            {
+                { "element_id", targetId.IntegerValue },
+                { "detail", detail }
+            };
+            BoundingBoxXYZ box = element.get_BoundingBox(null);
+            if (box != null)
+            {
+                data["bounding_box"] = new Dictionary<string, object>
+                {
+                    { "min", PlanValues.PointData(box.Min) },
+                    { "max", PlanValues.PointData(box.Max) },
+                    { "center", PlanValues.PointData(box.Min.Add(box.Max).Multiply(0.5)) },
+                    { "size", PlanValues.PointData(box.Max.Subtract(box.Min)) }
+                };
+            }
+            if (detail == "bbox")
+            {
+                return data;
+            }
+
+            var options = new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            List<Solid> solids = new List<Solid>();
+            CollectSolids(element.get_Geometry(options), solids);
+            double volume = solids.Sum(solid => solid.Volume);
+            double area = solids.Sum(solid => solid.SurfaceArea);
+            double volumeMm3 = volume * 1000.0 * 1000.0 * 1000.0 / (304.8 * 304.8 * 304.8);
+            double areaMm2 = area * 1000.0 * 1000.0 / (304.8 * 304.8);
+            data["solid_count"] = solids.Count;
+            data["volume_mm3"] = Math.Round(volumeMm3, 3, MidpointRounding.AwayFromZero);
+            data["surface_area_mm2"] = Math.Round(areaMm2, 3, MidpointRounding.AwayFromZero);
+            data["face_count"] = solids.Sum(solid => solid.Faces.Size);
+            if (detail == "solid_summary")
+            {
+                return data;
+            }
+
+            var faces = new List<Dictionary<string, object>>();
+            bool truncated = false;
+            foreach (Solid solid in solids)
+            {
+                foreach (Face face in solid.Faces)
+                {
+                    if (faces.Count >= limit)
+                    {
+                        truncated = true;
+                        break;
+                    }
+                    var faceData = new Dictionary<string, object>
+                    {
+                        { "kind", face.GetType().Name },
+                        { "area_mm2", Math.Round(face.Area * 1000.0 * 1000.0 / (304.8 * 304.8), 3, MidpointRounding.AwayFromZero) }
+                    };
+                    PlanarFace planarFace = face as PlanarFace;
+                    if (planarFace != null)
+                    {
+                        faceData["normal"] = PlanValues.PointData(planarFace.FaceNormal);
+                        faceData["origin"] = PlanValues.PointData(planarFace.Origin);
+                    }
+                    faces.Add(faceData);
+                }
+                if (truncated)
+                {
+                    break;
+                }
+            }
+            data["faces"] = faces;
+            data["truncated"] = truncated;
+            return data;
+        }
+
+        public static Dictionary<string, object> QueryRoom(PlanStep step, PlanExecutionContext context)
+        {
+            Document document = context.Document;
+            int limit = ReadLimit(step.Arguments);
+            object rawPoint = PlanValues.Get(step.Arguments, "point");
+            if (rawPoint != null)
+            {
+                XYZ point = PlanValues.Point(step.Arguments, "point");
+                Room roomAtPoint = document.GetRoomAtPoint(point);
+                var pointData = new Dictionary<string, object>
+                {
+                    { "mode", "at_point" },
+                    { "point", PlanValues.PointData(point) },
+                    { "room", roomAtPoint == null ? null : RoomData(roomAtPoint) }
+                };
+                return pointData;
+            }
+
+            var rooms = new FilteredElementCollector(document)
+                .OfClass(typeof(Room))
+                .Cast<Room>()
+                .Where(room => room.IsValidObject)
+                .OrderBy(room => room.Number)
+                .Take(limit)
+                .ToList();
+            var items = new List<Dictionary<string, object>>();
+            foreach (Room room in rooms)
+            {
+                items.Add(RoomData(room));
+            }
+            return new Dictionary<string, object>
+            {
+                { "mode", "list" },
+                { "count", items.Count },
+                { "rooms", items }
+            };
+        }
+
+        public static Dictionary<string, object> CheckInterferences(PlanStep step, PlanExecutionContext context)
+        {
+            Document document = context.Document;
+            IList<ElementId> candidates = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
+            if (candidates.Count == 0)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            bool includeLinks = PlanValues.Boolean(step.Arguments, false, "include_links", "links");
+            int limit = ReadLimit(step.Arguments);
+            List<ElementId> against = null;
+            object rawAgainst = PlanValues.Get(step.Arguments, "against_ids", "against");
+            if (rawAgainst != null)
+            {
+                against = context.ResolveElementIds(step.Arguments, "against_ids", "against").ToList();
+            }
+            if (against == null && candidates.Count > 500)
+            {
+                throw new BridgeCommandException("候选元素超过 500 个；请提供 against_ids 缩小对照集。");
+            }
+
+            var interferences = new List<Dictionary<string, object>>();
+            bool truncated = false;
+
+            if (against == null)
+            {
+                for (int i = 0; i < candidates.Count && !truncated; i++)
+                {
+                    for (int j = i + 1; j < candidates.Count; j++)
+                    {
+                        if (AddInterference(document, candidates[i], candidates[j], "current", "current", interferences))
+                        {
+                            if (interferences.Count >= limit)
+                            {
+                                truncated = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (ElementId candidateId in candidates)
+                {
+                    foreach (ElementId againstId in against)
+                    {
+                        if (candidateId.IntegerValue == againstId.IntegerValue)
+                        {
+                            continue;
+                        }
+                        if (AddInterference(document, candidateId, againstId, "current", "current", interferences))
+                        {
+                            if (interferences.Count >= limit)
+                            {
+                                truncated = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (truncated)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var linkDocuments = new List<Dictionary<string, object>>();
+            if (includeLinks)
+            {
+                foreach (RevitLinkInstance link in new FilteredElementCollector(document)
+                    .OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>())
+                {
+                    Document linkDocument = link.GetLinkDocument();
+                    if (linkDocument == null)
+                    {
+                        continue;
+                    }
+                    string linkName = link.Name;
+                    Transform totalTransform = link.GetTotalTransform();
+                    foreach (ElementId candidateId in candidates)
+                    {
+                        Element candidate = document.GetElement(candidateId);
+                        if (candidate == null)
+                        {
+                            continue;
+                        }
+                        List<Solid> candidateSolids = new List<Solid>();
+                        var geometryOptions = new Options
+                        {
+                            ComputeReferences = false,
+                            IncludeNonVisibleObjects = false,
+                            DetailLevel = ViewDetailLevel.Fine
+                        };
+                        CollectSolids(candidate.get_Geometry(geometryOptions), candidateSolids);
+                        if (candidateSolids.Count == 0)
+                        {
+                            continue;
+                        }
+                        foreach (Solid solid in candidateSolids)
+                        {
+                            Solid linkSpaceSolid = SolidUtils.CreateTransformed(solid, totalTransform.Inverse);
+                            foreach (Element linkElement in new FilteredElementCollector(linkDocument)
+                                .WhereElementIsNotElementType()
+                                .WherePasses(new ElementIntersectsSolidFilter(linkSpaceSolid)))
+                            {
+                                interferences.Add(new Dictionary<string, object>
+                                {
+                                    { "element_a", candidateId.IntegerValue },
+                                    { "element_b", linkElement.Id.IntegerValue },
+                                    { "document_a", "current" },
+                                    { "document_b", "link:" + linkName },
+                                    { "category_a", CategoryName(candidate) },
+                                    { "category_b", CategoryName(linkElement) }
+                                });
+                                if (interferences.Count >= limit)
+                                {
+                                    truncated = true;
+                                    break;
+                                }
+                            }
+                            if (truncated)
+                            {
+                                break;
+                            }
+                        }
+                        if (truncated)
+                        {
+                            break;
+                        }
+                    }
+                    linkDocuments.Add(new Dictionary<string, object>
+                    {
+                        { "name", linkName },
+                        { "checked", true }
+                    });
+                    if (truncated)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return new Dictionary<string, object>
+            {
+                { "count", interferences.Count },
+                { "truncated", truncated },
+                { "include_links", includeLinks },
+                { "links_checked", linkDocuments },
+                { "interferences", interferences }
+            };
+        }
+
+        private static bool AddInterference(
+            Document document,
+            ElementId firstId,
+            ElementId secondId,
+            string firstDocument,
+            string secondDocument,
+            List<Dictionary<string, object>> interferences)
+        {
+            Element first = document.GetElement(firstId);
+            Element second = document.GetElement(secondId);
+            if (first == null || second == null || firstId.IntegerValue == secondId.IntegerValue)
+            {
+                return false;
+            }
+            ElementIntersectsElementFilter filter = new ElementIntersectsElementFilter(first);
+            if (!filter.PassesFilter(second))
+            {
+                return false;
+            }
+            var item = new Dictionary<string, object>
+            {
+                { "element_a", firstId.IntegerValue },
+                { "element_b", secondId.IntegerValue },
+                { "document_a", firstDocument },
+                { "document_b", secondDocument },
+                { "category_a", CategoryName(first) },
+                { "category_b", CategoryName(second) }
+            };
+            try
+            {
+                Solid firstSolid = FindPrimarySolid(first);
+                Solid secondSolid = FindPrimarySolid(second);
+                if (firstSolid != null && secondSolid != null)
+                {
+                    Solid overlap = BooleanOperationsUtils.ExecuteBooleanOperation(
+                        firstSolid, secondSolid, BooleanOperationsType.Intersect);
+                    if (overlap != null && overlap.Volume > 1e-12)
+                    {
+                        item["overlap_volume_mm3"] = Math.Round(
+                            overlap.Volume * 1000.0 * 1000.0 * 1000.0 / (304.8 * 304.8 * 304.8),
+                            3, MidpointRounding.AwayFromZero);
+                    }
+                }
+            }
+            catch
+            {
+                // 布尔求交失败不影响"存在碰撞"的结论，仅省略体积。
+            }
+            interferences.Add(item);
+            return true;
+        }
+
+        private static Solid FindPrimarySolid(Element element)
+        {
+            var options = new Options
+            {
+                ComputeReferences = false,
+                IncludeNonVisibleObjects = false,
+                DetailLevel = ViewDetailLevel.Fine
+            };
+            List<Solid> solids = new List<Solid>();
+            CollectSolids(element.get_Geometry(options), solids);
+            return solids.OrderByDescending(solid => solid.Volume).FirstOrDefault();
+        }
+
+        private static void CollectSolids(GeometryElement geometry, ICollection<Solid> target)
+        {
+            if (geometry == null)
+            {
+                return;
+            }
+            foreach (GeometryObject item in geometry)
+            {
+                Solid solid = item as Solid;
+                if (solid != null && solid.Volume > 1e-12)
+                {
+                    target.Add(solid);
+                    continue;
+                }
+                GeometryInstance instance = item as GeometryInstance;
+                if (instance != null)
+                {
+                    CollectSolids(instance.GetInstanceGeometry(), target);
+                }
+            }
+        }
+
+        private static string CategoryName(Element element)
+        {
+            return element.Category == null ? null : element.Category.Name;
+        }
+
+        private static Dictionary<string, object> RoomData(Room room)
+        {
+            var data = new Dictionary<string, object>
+            {
+                { "element_id", room.Id.IntegerValue },
+                { "name", room.Name },
+                { "number", room.Number },
+                { "level", room.Level == null ? null : room.Level.Name },
+                { "area_mm2", Math.Round(room.Area * 92903.04, 3, MidpointRounding.AwayFromZero) }
+            };
+            var boundary = new List<List<Dictionary<string, object>>>();
+            try
+            {
+                foreach (IList<BoundarySegment> loop in room.GetBoundarySegments(new SpatialElementBoundaryOptions()))
+                {
+                    var loopPoints = new List<Dictionary<string, object>>();
+                    foreach (BoundarySegment segment in loop)
+                    {
+                        loopPoints.Add(PlanValues.PointData(segment.GetCurve().GetEndPoint(0)));
+                    }
+                    boundary.Add(loopPoints);
+                }
+            }
+            catch
+            {
+                // 无边界（未放置的房间）时省略 boundary。
+            }
+            data["boundary"] = boundary;
+            return data;
+        }
+
+        private static Dictionary<string, object> QueryLinks(Document document, int limit)
+        {
+            var items = new List<Dictionary<string, object>>();
+            foreach (RevitLinkInstance link in new FilteredElementCollector(document)
+                .OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().Take(limit))
+            {
+                RevitLinkType linkType = document.GetElement(link.GetTypeId()) as RevitLinkType;
+                items.Add(new Dictionary<string, object>
+                {
+                    { "id", link.Id.IntegerValue },
+                    { "name", link.Name },
+                    { "status", linkType == null ? null : linkType.GetLinkedFileStatus().ToString() },
+                    { "has_link_document", link.GetLinkDocument() != null },
+                    { "instance_transform_origin", PlanValues.PointData(link.GetTotalTransform().Origin) }
+                });
+            }
+            return new Dictionary<string, object> { { "kind", "links" }, { "items", items } };
         }
 
         private static Dictionary<string, object> QueryLevels(Document document, int limit)

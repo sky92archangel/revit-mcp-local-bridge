@@ -129,6 +129,244 @@ namespace RevitCommandBridge
             };
         }
 
+        public static Dictionary<string, object> TransformElements(PlanStep step, PlanExecutionContext context)
+        {
+            IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
+            if (ids.Count == 0)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            foreach (ElementId id in ids)
+            {
+                if (context.Document.GetElement(id) == null)
+                {
+                    throw new BridgeCommandException("找不到待变换 element_id=" + id.IntegerValue + "。");
+                }
+            }
+            string mode = PlanValues.String(step.Arguments, null, "mode").Trim().ToLowerInvariant();
+            var data = new Dictionary<string, object>
+            {
+                { "mode", mode },
+                { "target_count", ids.Count },
+                { "element_ids", ids.Select(id => id.IntegerValue).ToArray() }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Document document = context.Document;
+            switch (mode)
+            {
+                case "move":
+                    XYZ translation = ReadPoint(step.Arguments, "translation", "vector");
+                    if (translation.GetLength() < 1e-9)
+                    {
+                        throw new BridgeCommandException("transform_elements.move 的 translation 不能为零向量。");
+                    }
+                    ElementTransformUtils.MoveElements(document, ids, translation);
+                    data["translation"] = PlanValues.PointData(translation);
+                    break;
+                case "copy":
+                    XYZ offset = ReadPoint(step.Arguments, "translation", "vector", "offset");
+                    if (offset.GetLength() < 1e-9)
+                    {
+                        throw new BridgeCommandException("transform_elements.copy 的 translation 不能为零向量。");
+                    }
+                    ICollection<ElementId> copied = ElementTransformUtils.CopyElements(document, ids, offset);
+                    data["copied_count"] = copied.Count;
+                    data["element_ids"] = copied.Select(id => id.IntegerValue).ToArray();
+                    break;
+                case "rotate":
+                    XYZ origin = ReadPoint(step.Arguments, "axis_origin", "origin");
+                    XYZ direction = ReadAxisDirection(step.Arguments);
+                    double angleDegrees = PlanValues.Number(step.Arguments, 0.0, "angle", "angle_deg", "rotation");
+                    if (Math.Abs(angleDegrees) < 1e-9)
+                    {
+                        throw new BridgeCommandException("transform_elements.rotate 的 angle 不能为 0。");
+                    }
+                    ElementTransformUtils.RotateElements(
+                        document, ids, Line.CreateUnbound(origin, direction), PlanValues.ToRadians(angleDegrees));
+                    data["angle"] = angleDegrees;
+                    data["axis_origin"] = PlanValues.PointData(origin);
+                    break;
+                case "mirror":
+                    XYZ planePoint = ReadPoint(step.Arguments, "plane_point", "origin");
+                    XYZ normal = ReadPoint(step.Arguments, "plane_normal", "normal");
+                    if (normal.GetLength() < 1e-9)
+                    {
+                        throw new BridgeCommandException("transform_elements.mirror 的 plane_normal 不能为零向量。");
+                    }
+                    Plane plane = Plane.CreateByNormalAndOrigin(normal.Normalize(), planePoint);
+                    ICollection<ElementId> mirrored = ElementTransformUtils.MirrorElements(document, ids, plane, true);
+                    data["mirrored_count"] = mirrored.Count;
+                    data["element_ids"] = mirrored.Select(id => id.IntegerValue).ToArray();
+                    break;
+                default:
+                    throw new BridgeCommandException("transform_elements.mode 仅支持 move、copy、rotate、mirror。");
+            }
+            return data;
+        }
+
+        public static Dictionary<string, object> RenameElement(PlanStep step, PlanExecutionContext context)
+        {
+            IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets", "element_id");
+            if (ids.Count == 0)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            string name = PlanValues.String(step.Arguments, null, "name", "new_name");
+            string prefix = PlanValues.String(step.Arguments, null, "prefix");
+            bool withIdSuffix = PlanValues.Boolean(step.Arguments, false, "id_suffix", "append_id");
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(prefix))
+            {
+                throw new BridgeCommandException("rename_element 需要 name（单目标）或 prefix（批量模式）。");
+            }
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(prefix))
+            {
+                throw new BridgeCommandException("rename_element 的 name 与 prefix 只能二选一。");
+            }
+            if (!string.IsNullOrWhiteSpace(name) && ids.Count > 1)
+            {
+                throw new BridgeCommandException("rename_element.name 模式只支持单个目标；批量请使用 prefix。");
+            }
+
+            var data = new Dictionary<string, object>
+            {
+                { "target_count", ids.Count }
+            };
+            if (context.Preview)
+            {
+                data["mode"] = string.IsNullOrWhiteSpace(prefix) ? "name" : (withIdSuffix ? "prefix+id" : "prefix");
+                return data;
+            }
+
+            var renamed = new List<Dictionary<string, object>>();
+            foreach (ElementId id in ids)
+            {
+                Element element = context.Document.GetElement(id);
+                if (element == null)
+                {
+                    throw new BridgeCommandException("找不到待重命名 element_id=" + id.IntegerValue + "。");
+                }
+                string oldName = RevitLookups.ElementName(element);
+                string newName = string.IsNullOrWhiteSpace(prefix)
+                    ? name
+                    : (withIdSuffix ? prefix + id.IntegerValue : prefix + oldName);
+                try
+                {
+                    element.Name = newName;
+                }
+                catch (Exception ex)
+                {
+                    throw new BridgeCommandException(
+                        "重命名 element_id=" + id.IntegerValue + "（" + oldName + " → " + newName + "）失败：" + ex.Message);
+                }
+                renamed.Add(new Dictionary<string, object>
+                {
+                    { "element_id", id.IntegerValue },
+                    { "old_name", oldName },
+                    { "new_name", RevitLookups.ElementName(element) }
+                });
+            }
+            data["renamed"] = renamed;
+            data["element_ids"] = ids.Select(id => id.IntegerValue).ToArray();
+            return data;
+        }
+
+        public static Dictionary<string, object> SetElementCurve(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId id = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "target");
+            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            Element element = RequireElement(context.Document, id, "element_id");
+            LocationCurve location = element.Location as LocationCurve;
+            if (location == null)
+            {
+                throw new BridgeCommandException("set_element_curve 目标必须是线状图元（墙 / 管道 / 线管 / 桥架 / 模型线）。");
+            }
+            XYZ start = PlanValues.Point(step.Arguments, "start");
+            XYZ end = PlanValues.Point(step.Arguments, "end");
+            if (start.DistanceTo(end) < 1e-8)
+            {
+                throw new BridgeCommandException("set_element_curve 的 start 与 end 不能重合。");
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "element_id", id.IntegerValue },
+                { "start", PlanValues.PointData(start) },
+                { "end", PlanValues.PointData(end) }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            location.Curve = Line.CreateBound(start, end);
+            Parameter lengthParameter = element.get_Parameter(BuiltInParameter.CURVE_ELEM_LENGTH);
+            if (lengthParameter != null && !lengthParameter.IsReadOnly)
+            {
+                data["length_mm"] = PlanValues.ToMillimeters(location.Curve.Length);
+            }
+            data["element_ids"] = new[] { id.IntegerValue };
+            return data;
+        }
+
+        private static XYZ ReadPoint(IDictionary<string, object> arguments, params string[] fieldNames)
+        {
+            foreach (string fieldName in fieldNames)
+            {
+                if (PlanValues.Get(arguments, fieldName) != null)
+                {
+                    return PlanValues.Point(arguments, fieldName);
+                }
+            }
+            throw new BridgeCommandException("缺少参数：" + string.Join("/", fieldNames));
+        }
+
+        private static XYZ ReadAxisDirection(IDictionary<string, object> arguments)
+        {
+            object raw = PlanValues.Get(arguments, "axis_direction", "axis");
+            if (raw == null)
+            {
+                return XYZ.BasisZ;
+            }
+            string text = raw as string;
+            if (text != null)
+            {
+                switch (text.Trim().ToLowerInvariant())
+                {
+                    case "x": return XYZ.BasisX;
+                    case "y": return XYZ.BasisY;
+                    case "z": return XYZ.BasisZ;
+                    default:
+                        throw new BridgeCommandException("axis_direction 仅支持 x、y、z 或 {x,y,z} 向量。");
+                }
+            }
+            Dictionary<string, object> values = PlanValues.Dictionary(raw, "axis_direction");
+            XYZ direction = new XYZ(
+                PlanValues.Number(values, 0.0, "x"),
+                PlanValues.Number(values, 0.0, "y"),
+                PlanValues.Number(values, 0.0, "z"));
+            if (direction.GetLength() < 1e-9)
+            {
+                throw new BridgeCommandException("axis_direction 不能为零向量。");
+            }
+            return direction.Normalize();
+        }
+
+        private static Element RequireElement(Document document, ElementId id, string fieldName)
+        {
+            Element element = document.GetElement(id);
+            if (element == null)
+            {
+                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.IntegerValue + " 对应元素。");
+            }
+            return element;
+        }
+
         private static Parameter FindParameter(Element element, string requestedName)
         {
             const string prefix = "BIP:";

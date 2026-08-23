@@ -214,6 +214,11 @@ namespace RevitCommandBridge
             return millimeters * FeetPerMillimeter;
         }
 
+        public static double ToRadians(double degrees)
+        {
+            return degrees * Math.PI / 180.0;
+        }
+
         public static double ToMillimeters(double feet)
         {
             return Math.Round(feet / FeetPerMillimeter, 3, MidpointRounding.AwayFromZero);

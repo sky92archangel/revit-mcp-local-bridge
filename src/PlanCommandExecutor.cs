@@ -22,6 +22,10 @@ namespace RevitCommandBridge
             "query_catalog",
             "query_elements",
             "query_references",
+            "query_parameters",
+            "query_geometry",
+            "query_room",
+            "check_interferences",
             "create_level",
             "create_grid",
             "create_wall",
@@ -32,7 +36,9 @@ namespace RevitCommandBridge
             "create_direct_shape",
             "create_mep_curve",
             "connect_mep",
+            "create_mep_system",
             "place_family_instance",
+            "load_family",
             "create_structural_member",
             "create_view",
             "create_drafting_view",
@@ -42,6 +48,9 @@ namespace RevitCommandBridge
             "duplicate_view",
             "create_view_template",
             "create_sheet",
+            "transform_elements",
+            "rename_element",
+            "set_element_curve",
             "place_view_on_sheet",
             "create_detail_curve",
             "create_text_note",
@@ -73,7 +82,9 @@ namespace RevitCommandBridge
             "create_direct_shape",
             "create_mep_curve",
             "connect_mep",
+            "create_mep_system",
             "place_family_instance",
+            "load_family",
             "create_structural_member",
             "create_view",
             "create_drafting_view",
@@ -83,6 +94,9 @@ namespace RevitCommandBridge
             "duplicate_view",
             "create_view_template",
             "create_sheet",
+            "transform_elements",
+            "rename_element",
+            "set_element_curve",
             "place_view_on_sheet",
             "create_detail_curve",
             "create_text_note",
@@ -138,6 +152,7 @@ namespace RevitCommandBridge
 
             var context = new PlanExecutionContext(uiApplication, document, request.Preview);
             var stepResults = new List<Dictionary<string, object>>();
+            BridgeFailurePreprocessor failurePreprocessor = null;
             if (request.Preview || !hasWrites)
             {
                 ExecuteSteps(steps, context, stepResults);
@@ -151,6 +166,12 @@ namespace RevitCommandBridge
                     {
                         throw new BridgeCommandException("Revit 未能启动计划事务：" + started);
                     }
+
+                    failurePreprocessor = new BridgeFailurePreprocessor();
+                    FailureHandlingOptions failureOptions = transaction.GetFailureHandlingOptions();
+                    failureOptions.SetFailuresPreprocessor(failurePreprocessor);
+                    failureOptions.SetForcedModalHandling(false);
+                    transaction.SetFailureHandlingOptions(failureOptions);
 
                     try
                     {
@@ -183,6 +204,10 @@ namespace RevitCommandBridge
                 { "external_step_count", steps.Count(step => ExternalOperations.Contains(step.Operation)) },
                 { "steps", stepResults }
             };
+            if (failurePreprocessor != null && failurePreprocessor.Messages.Count > 0)
+            {
+                data["failure_messages"] = failurePreprocessor.Messages.ToArray();
+            }
             if (context.DeferredPreviewReferences.Count > 0)
             {
                 data["deferred_preview_references"] = context.DeferredPreviewReferences.ToArray();
@@ -289,6 +314,10 @@ namespace RevitCommandBridge
                 case "查询元素": return "query_elements";
                 case "查询几何引用":
                 case "查询标注引用": return "query_references";
+                case "查询参数": return "query_parameters";
+                case "查询几何": return "query_geometry";
+                case "查询房间": return "query_room";
+                case "碰撞检查": return "check_interferences";
                 case "创建标高": return "create_level";
                 case "创建轴网": return "create_grid";
                 case "创建墙":
@@ -300,7 +329,9 @@ namespace RevitCommandBridge
                 case "创建通用几何": return "create_direct_shape";
                 case "创建机电管线": return "create_mep_curve";
                 case "连接机电": return "connect_mep";
+                case "创建机电系统": return "create_mep_system";
                 case "放置族实例": return "place_family_instance";
+                case "加载族": return "load_family";
                 case "创建结构构件": return "create_structural_member";
                 case "创建视图": return "create_view";
                 case "创建绘图视图": return "create_drafting_view";
@@ -313,6 +344,10 @@ namespace RevitCommandBridge
                 case "复制视图": return "duplicate_view";
                 case "创建视图样板": return "create_view_template";
                 case "创建图纸": return "create_sheet";
+                case "变换元素":
+                case "移动元素": return "transform_elements";
+                case "重命名元素": return "rename_element";
+                case "修改线型": return "set_element_curve";
                 case "放置视图到图纸": return "place_view_on_sheet";
                 case "创建详图线": return "create_detail_curve";
                 case "创建文字":

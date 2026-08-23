@@ -16,6 +16,14 @@ namespace RevitCommandBridge
                     return RevitPlanQueries.QueryElements(step, context);
                 case "query_references":
                     return RevitPlanQueries.QueryReferences(step, context);
+                case "query_parameters":
+                    return RevitPlanQueries.QueryParameters(step, context);
+                case "query_geometry":
+                    return RevitPlanQueries.QueryGeometry(step, context);
+                case "query_room":
+                    return RevitPlanQueries.QueryRoom(step, context);
+                case "check_interferences":
+                    return RevitPlanQueries.CheckInterferences(step, context);
                 case "create_level":
                     return RevitPlanCreations.CreateLevel(step, context);
                 case "create_grid":
@@ -36,8 +44,12 @@ namespace RevitCommandBridge
                     return RevitPlanCreations.CreateMepCurve(step, context);
                 case "connect_mep":
                     return RevitPlanCreations.ConnectMep(step, context);
+                case "create_mep_system":
+                    return RevitPlanCreations.CreateMepSystem(step, context);
                 case "place_family_instance":
                     return RevitPlanCreations.PlaceFamilyInstance(step, context);
+                case "load_family":
+                    return RevitPlanCreations.LoadFamily(step, context);
                 case "create_structural_member":
                     return RevitPlanCreations.CreateStructuralMember(step, context);
                 case "create_view":
@@ -82,6 +94,12 @@ namespace RevitCommandBridge
                     return RevitPlanCreations.CreateOpening(step, context);
                 case "set_parameters":
                     return RevitPlanMutations.SetParameters(step, context);
+                case "transform_elements":
+                    return RevitPlanMutations.TransformElements(step, context);
+                case "rename_element":
+                    return RevitPlanMutations.RenameElement(step, context);
+                case "set_element_curve":
+                    return RevitPlanMutations.SetElementCurve(step, context);
                 case "delete_elements":
                     return RevitPlanMutations.DeleteElements(step, context);
                 case "select_elements":

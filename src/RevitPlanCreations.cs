@@ -442,6 +442,16 @@ namespace RevitCommandBridge
 
         public static Dictionary<string, object> CreateOpening(PlanStep step, PlanExecutionContext context)
         {
+            string kind = PlanValues.String(step.Arguments, "wall", "kind", "opening_type").Trim().ToLowerInvariant();
+            if (kind != "wall" && kind != "vertical" && kind != "shaft")
+            {
+                throw new BridgeCommandException("create_opening.kind 仅支持 wall、vertical、shaft。");
+            }
+            if (kind == "shaft")
+            {
+                return CreateShaftOpening(step, context);
+            }
+
             ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host", "wall_id", "wall");
             if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
             {
@@ -451,32 +461,143 @@ namespace RevitCommandBridge
                     { "reason", "preview 中前置墙体引用尚无真实 ID。" }
                 };
             }
-            Wall wall = context.Document.GetElement(hostId) as Wall;
-            if (wall == null)
-            {
-                throw new BridgeCommandException("create_opening.host_id 必须指向墙体。");
-            }
-            XYZ start = PlanValues.Point(step.Arguments, "start");
-            XYZ end = PlanValues.Point(step.Arguments, "end");
-            if (start.DistanceTo(end) < 1e-8)
-            {
-                throw new BridgeCommandException("洞口 start 与 end 不能重合。");
-            }
+            Element host = RequireElement(context.Document, hostId, "host_id");
             var data = new Dictionary<string, object>
             {
-                { "host_id", hostId.IntegerValue },
-                { "start", PlanValues.PointData(start) },
-                { "end", PlanValues.PointData(end) }
+                { "kind", kind },
+                { "host_id", hostId.IntegerValue }
+            };
+            if (kind == "wall")
+            {
+                Wall wall = host as Wall;
+                if (wall == null)
+                {
+                    throw new BridgeCommandException("create_opening(kind=wall) 的 host_id 必须指向墙体。");
+                }
+                XYZ start = PlanValues.Point(step.Arguments, "start");
+                XYZ end = PlanValues.Point(step.Arguments, "end");
+                if (start.DistanceTo(end) < 1e-8)
+                {
+                    throw new BridgeCommandException("洞口 start 与 end 不能重合。");
+                }
+                data["start"] = PlanValues.PointData(start);
+                data["end"] = PlanValues.PointData(end);
+                if (context.Preview)
+                {
+                    return data;
+                }
+                Opening opening = context.Document.Create.NewOpening(wall, start, end);
+                data["element_id"] = opening.Id.IntegerValue;
+                data["element_ids"] = new[] { opening.Id.IntegerValue };
+                return data;
+            }
+
+            Floor floor = host as Floor;
+            if (floor == null)
+            {
+                throw new BridgeCommandException("create_opening(kind=vertical) 的 host_id 必须指向楼板。");
+            }
+            XYZ corner1 = PlanValues.Point(step.Arguments,
+                PlanValues.Get(step.Arguments, "corner_1") != null ? "corner_1" : "start");
+            XYZ corner2 = PlanValues.Point(step.Arguments,
+                PlanValues.Get(step.Arguments, "corner_2") != null ? "corner_2" : "end");
+            if (Math.Abs(corner1.X - corner2.X) < 1e-8 || Math.Abs(corner1.Y - corner2.Y) < 1e-8)
+            {
+                throw new BridgeCommandException("竖直洞口 corner_1 与 corner_2 的 X、Y 分量均不能相同。");
+            }
+            data["corner_1"] = PlanValues.PointData(corner1);
+            data["corner_2"] = PlanValues.PointData(corner2);
+            if (context.Preview)
+            {
+                return data;
+            }
+            Opening verticalOpening = context.Document.Create.NewVerticalOpening(floor, corner1, corner2);
+            data["element_id"] = verticalOpening.Id.IntegerValue;
+            data["element_ids"] = new[] { verticalOpening.Id.IntegerValue };
+            return data;
+        }
+
+        private static Dictionary<string, object> CreateShaftOpening(PlanStep step, PlanExecutionContext context)
+        {
+            Level bottomLevel = ResolveLevelField(context.Document, step.Arguments, "bottom_level");
+            Level topLevel = ResolveLevelField(context.Document, step.Arguments, "top_level");
+            if (topLevel.Elevation <= bottomLevel.Elevation)
+            {
+                throw new BridgeCommandException("竖井 top_level 标高必须高于 bottom_level。");
+            }
+            CurveLoop profile = BuildBoundaryLoop(step.Arguments, "create_opening.boundary");
+            var data = new Dictionary<string, object>
+            {
+                { "kind", "shaft" },
+                { "bottom_level", bottomLevel.Name },
+                { "top_level", topLevel.Name },
+                { "bottom_elevation_mm", PlanValues.ToMillimeters(bottomLevel.Elevation) },
+                { "top_elevation_mm", PlanValues.ToMillimeters(topLevel.Elevation) },
+                { "vertex_count", profile.NumberOfCurves }
             };
             if (context.Preview)
             {
                 return data;
             }
-
-            Opening opening = context.Document.Create.NewOpening(wall, start, end);
-            data["element_id"] = opening.Id.IntegerValue;
-            data["element_ids"] = new[] { opening.Id.IntegerValue };
+            Opening shaft = context.Document.Create.NewShaftOpening(bottomLevel, topLevel, profile);
+            data["element_id"] = shaft.Id.IntegerValue;
+            data["element_ids"] = new[] { shaft.Id.IntegerValue };
             return data;
+        }
+
+        private static Level ResolveLevelField(Document document, IDictionary<string, object> arguments, string fieldName)
+        {
+            object idValue = PlanValues.Get(arguments, fieldName + "_id");
+            object nameValue = PlanValues.Get(arguments, fieldName);
+            if (idValue == null && nameValue == null)
+            {
+                throw new BridgeCommandException("缺少参数：" + fieldName + " / " + fieldName + "_id。");
+            }
+            var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            if (idValue != null)
+            {
+                lookup["level_id"] = idValue;
+            }
+            if (nameValue != null)
+            {
+                lookup["level"] = nameValue;
+            }
+            return RevitLookups.ResolveLevel(document, lookup);
+        }
+
+        private static CurveLoop BuildBoundaryLoop(IDictionary<string, object> arguments, string fieldName)
+        {
+            object raw = PlanValues.Get(arguments, "boundary", "profile", "points");
+            List<Dictionary<string, object>> points = PlanValues.DictionaryList(raw, fieldName);
+            if (points.Count < 3)
+            {
+                throw new BridgeCommandException(fieldName + " 至少需要 3 个点。");
+            }
+            var resolved = new List<XYZ>();
+            foreach (Dictionary<string, object> point in points)
+            {
+                double x = PlanValues.RequireMillimeters(point, "x", "x_mm");
+                double y = PlanValues.RequireMillimeters(point, "y", "y_mm");
+                double z = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
+                resolved.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(z)));
+            }
+            double z = resolved[0].Z;
+            if (resolved.Any(point => Math.Abs(point.Z - z) > 1e-8))
+            {
+                throw new BridgeCommandException(fieldName + " 必须共面且水平。");
+            }
+            var loop = new CurveLoop();
+            for (int index = 0; index < resolved.Count; index++)
+            {
+                XYZ start = resolved[index];
+                XYZ end = resolved[(index + 1) % resolved.Count];
+                if (start.DistanceTo(end) < 1e-8)
+                {
+                    throw new BridgeCommandException(fieldName + " 不能包含重合的相邻点。");
+                }
+                loop.Append(Line.CreateBound(start, end));
+            }
+            return loop;
         }
 
         private static CurveArray BuildClosedProfile(
@@ -655,6 +776,23 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("机电曲线 start 与 end 不能重合。");
             }
+            object rawSlope = PlanValues.Get(step.Arguments, "slope", "slope_percent", "slope_permille");
+            if (rawSlope != null)
+            {
+                string slopeUnit = PlanValues.String(step.Arguments, "percent", "slope_unit").ToLowerInvariant();
+                double slopeValue = PlanValues.Number(step.Arguments, 0.0, "slope", "slope_percent", "slope_permille");
+                double slopePercent = slopeUnit == "permille" ? slopeValue / 10.0 : slopeValue;
+                if (Math.Abs(slopePercent) > 100.0)
+                {
+                    throw new BridgeCommandException("slope 超出合理范围（-100% ~ 100%）。");
+                }
+                double horizontal = new XYZ(start.X, start.Y, 0).DistanceTo(new XYZ(end.X, end.Y, 0));
+                if (horizontal < 1e-6)
+                {
+                    throw new BridgeCommandException("slope 不能用于竖直管线（start/end 水平投影重合）。");
+                }
+                end = new XYZ(end.X, end.Y, start.Z + horizontal * slopePercent / 100.0);
+            }
             Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
             string normalizedKind = kind.Trim().ToLowerInvariant();
             var data = new Dictionary<string, object>
@@ -664,6 +802,12 @@ namespace RevitCommandBridge
                 { "start", PlanValues.PointData(start) },
                 { "end", PlanValues.PointData(end) }
             };
+            if (rawSlope != null)
+            {
+                data["slope_percent"] = PlanValues.String(step.Arguments, "percent", "slope_unit").ToLowerInvariant() == "permille"
+                    ? PlanValues.Number(step.Arguments, 0.0, "slope", "slope_percent", "slope_permille") / 10.0
+                    : PlanValues.Number(step.Arguments, 0.0, "slope", "slope_percent", "slope_permille");
+            }
 
             Element created;
             switch (normalizedKind)
@@ -766,6 +910,17 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            if (PlanValues.Boolean(step.Arguments, false, "extend_to_intersection", "extend"))
+            {
+                XYZ intersection = ExtendMepCurvesToIntersection(context.Document, first, second);
+                firstConnector = FindConnector(first, step.Arguments, "connector_a_index", second);
+                secondConnector = FindConnector(second, step.Arguments, "connector_b_index", first);
+                data["connector_a_origin"] = PlanValues.PointData(firstConnector.Origin);
+                data["connector_b_origin"] = PlanValues.PointData(secondConnector.Origin);
+                data["intersection"] = PlanValues.PointData(intersection);
+                data["extend_to_intersection"] = true;
+            }
+
             Element fittingElement = null;
             switch (fitting)
             {
@@ -787,13 +942,171 @@ namespace RevitCommandBridge
                     data["element_c"] = cId.IntegerValue;
                     data["connector_c_origin"] = PlanValues.PointData(thirdConnector.Origin);
                     break;
+                case "reducer":
+                    fittingElement = context.Document.Create.NewTransitionFitting(firstConnector, secondConnector);
+                    break;
+                case "cross":
+                    ElementId crossCId = context.ResolveSingleElementId(step.Arguments, "element_c", "third");
+                    ElementId crossDId = context.ResolveSingleElementId(step.Arguments, "element_d", "fourth");
+                    Element crossThird = RequireElement(context.Document, crossCId, "element_c");
+                    Element crossFourth = RequireElement(context.Document, crossDId, "element_d");
+                    Connector crossThirdConnector = FindConnector(crossThird, step.Arguments, "connector_c_index", first);
+                    Connector crossFourthConnector = FindConnector(crossFourth, step.Arguments, "connector_d_index", second);
+                    fittingElement = context.Document.Create.NewCrossFitting(
+                        firstConnector, secondConnector, crossThirdConnector, crossFourthConnector);
+                    data["element_c"] = crossCId.IntegerValue;
+                    data["element_d"] = crossDId.IntegerValue;
+                    data["connector_c_origin"] = PlanValues.PointData(crossThirdConnector.Origin);
+                    data["connector_d_origin"] = PlanValues.PointData(crossFourthConnector.Origin);
+                    break;
                 default:
-                    throw new BridgeCommandException("connect_mep.fitting 仅支持 auto、direct、elbow、union、tee。");
+                    throw new BridgeCommandException("connect_mep.fitting 仅支持 auto、direct、elbow、union、tee、reducer、cross。");
             }
             if (fittingElement != null)
             {
                 data["element_id"] = fittingElement.Id.IntegerValue;
                 data["element_ids"] = new[] { fittingElement.Id.IntegerValue };
+            }
+            return data;
+        }
+
+        public static Dictionary<string, object> CreateMepSystem(PlanStep step, PlanExecutionContext context)
+        {
+            string domain = PlanValues.String(step.Arguments, null, "domain", "kind").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(domain))
+            {
+                throw new BridgeCommandException("create_mep_system 缺少 domain（piping、mechanical）。");
+            }
+            string name = PlanValues.String(step.Arguments, step.Id, "name", "system_name");
+            var data = new Dictionary<string, object>
+            {
+                { "domain", domain },
+                { "name", name }
+            };
+
+            ElementId systemTypeId;
+            if (domain == "piping")
+            {
+                PipingSystemType pipingType = ResolveSystemType<PipingSystemType>(context.Document, step.Arguments, "system_type");
+                systemTypeId = pipingType.Id;
+                data["system_type"] = pipingType.Name;
+            }
+            else if (domain == "mechanical")
+            {
+                MechanicalSystemType mechanicalType = ResolveSystemType<MechanicalSystemType>(context.Document, step.Arguments, "system_type");
+                systemTypeId = mechanicalType.Id;
+                data["system_type"] = mechanicalType.Name;
+            }
+            else
+            {
+                throw new BridgeCommandException("create_mep_system.domain 仅支持 piping、mechanical。");
+            }
+
+            List<ElementId> members = new List<ElementId>();
+            object rawMembers = PlanValues.Get(step.Arguments, "members", "element_ids", "elements");
+            if (rawMembers != null)
+            {
+                foreach (ElementId memberId in context.ResolveElementIds(step.Arguments, "members", "element_ids", "elements"))
+                {
+                    if (memberId.IntegerValue != ElementId.InvalidElementId.IntegerValue)
+                    {
+                        members.Add(memberId);
+                    }
+                }
+            }
+            data["member_count"] = members.Count;
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            ElementId systemId = domain == "piping"
+                ? PipingSystem.Create(context.Document, systemTypeId, name)
+                : MechanicalSystem.Create(context.Document, systemTypeId, name);
+            data["element_id"] = systemId.IntegerValue;
+            data["element_ids"] = new[] { systemId.IntegerValue };
+            data["name"] = RevitLookups.ElementName(context.Document.GetElement(systemId));
+
+            int added = 0;
+            foreach (ElementId memberId in members)
+            {
+                try
+                {
+                    if (domain == "piping")
+                    {
+                        added += ((PipingSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                    }
+                    else
+                    {
+                        added += ((MechanicalSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new BridgeCommandException(
+                        "系统成员 element_id=" + memberId.IntegerValue + " 指派失败（域或类型不匹配）：" + ex.Message);
+                }
+            }
+            data["member_added"] = added;
+            return data;
+        }
+
+        public static Dictionary<string, object> LoadFamily(PlanStep step, PlanExecutionContext context)
+        {
+            string path = PlanValues.String(step.Arguments, null, "path", "family_path", "file");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new BridgeCommandException("load_family 缺少 path（.rfa 文件完整路径）。");
+            }
+            if (!System.IO.File.Exists(path))
+            {
+                throw new BridgeCommandException("load_family.path 不存在：" + path);
+            }
+            string symbolName = PlanValues.String(step.Arguments, null, "symbol", "type", "type_name");
+            var data = new Dictionary<string, object>
+            {
+                { "path", path },
+                { "symbol", symbolName }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Family family;
+            if (!context.Document.LoadFamily(path, new BridgeFamilyLoadOptions(), out family) || family == null)
+            {
+                throw new BridgeCommandException("Revit 拒绝加载族文件：" + path);
+            }
+            data["family"] = family.Name;
+            data["element_id"] = family.Id.IntegerValue;
+            data["element_ids"] = new[] { family.Id.IntegerValue };
+            var symbolNames = new List<string>();
+            FamilySymbol matchedSymbol = null;
+            foreach (ElementId symbolId in family.GetFamilySymbolIds())
+            {
+                FamilySymbol symbol = context.Document.GetElement(symbolId) as FamilySymbol;
+                if (symbol == null)
+                {
+                    continue;
+                }
+                symbolNames.Add(symbol.Name);
+                if (matchedSymbol == null && !string.IsNullOrWhiteSpace(symbolName) &&
+                    string.Equals(symbol.Name, symbolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedSymbol = symbol;
+                }
+            }
+            data["symbol_names"] = symbolNames.ToArray();
+            if (!string.IsNullOrWhiteSpace(symbolName))
+            {
+                if (matchedSymbol == null)
+                {
+                    throw new BridgeCommandException(
+                        "族“" + family.Name + "”没有类型“" + symbolName + "”。可用：" + string.Join("、", symbolNames));
+                }
+                ActivateSymbol(context.Document, matchedSymbol);
+                data["symbol_id"] = matchedSymbol.Id.IntegerValue;
             }
             return data;
         }
@@ -1243,6 +1556,58 @@ namespace RevitCommandBridge
                 return connectors[0];
             }
             return connectors.OrderBy(connector => otherConnectors.Min(other => connector.Origin.DistanceTo(other.Origin))).First();
+        }
+
+        private static XYZ ExtendMepCurvesToIntersection(Document document, Element first, Element second)
+        {
+            MEPCurve firstCurve = first as MEPCurve;
+            MEPCurve secondCurve = second as MEPCurve;
+            if (firstCurve == null || secondCurve == null)
+            {
+                throw new BridgeCommandException("extend_to_intersection 仅支持管道 / 风管 / 线管 / 桥架等 MEP 曲线。");
+            }
+            LocationCurve firstLocation = firstCurve.Location as LocationCurve;
+            LocationCurve secondLocation = secondCurve.Location as LocationCurve;
+            if (firstLocation == null || secondLocation == null)
+            {
+                throw new BridgeCommandException("extend_to_intersection 目标缺少 LocationCurve。");
+            }
+            Line firstLine = firstLocation.Curve as Line;
+            Line secondLine = secondLocation.Curve as Line;
+            if (firstLine == null || secondLine == null)
+            {
+                throw new BridgeCommandException("extend_to_intersection 目前只支持直线段 MEP 曲线。");
+            }
+
+            IntersectionResultArray results;
+            SetComparisonResult comparison = firstLine.Intersect(secondLine, out results);
+            if (comparison != SetComparisonResult.Overlap || results == null || results.Size == 0)
+            {
+                throw new BridgeCommandException("两条管线平行或不相交，无法延伸到交点。");
+            }
+            XYZ intersection = results.get_Item(0).XYZPoint;
+            if (intersection == null)
+            {
+                throw new BridgeCommandException("未能计算出两条管线的交点。");
+            }
+
+            firstLocation.Curve = TrimLineToPoint(firstLine, intersection);
+            secondLocation.Curve = TrimLineToPoint(secondLine, intersection);
+            document.Regenerate();
+            return intersection;
+        }
+
+        private static Line TrimLineToPoint(Line line, XYZ point)
+        {
+            XYZ start = line.GetEndPoint(0);
+            XYZ end = line.GetEndPoint(1);
+            if (start.DistanceTo(point) < 1e-8 || end.DistanceTo(point) < 1e-8)
+            {
+                throw new BridgeCommandException("交点与管线端点重合，无需延伸；请去掉 extend_to_intersection。");
+            }
+            return start.DistanceTo(point) > end.DistanceTo(point)
+                ? Line.CreateBound(start, point)
+                : Line.CreateBound(point, end);
         }
 
         private static List<Connector> GetConnectors(Element element)
