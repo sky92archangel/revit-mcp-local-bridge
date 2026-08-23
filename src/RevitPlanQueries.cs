@@ -373,6 +373,186 @@ namespace RevitCommandBridge
             };
         }
 
+        public static Dictionary<string, object> QueryMepNetwork(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId seedId = context.ResolveSingleElementId(step.Arguments, "element_id", "seed", "target", "targets");
+            if (seedId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            Element seed = context.Document.GetElement(seedId);
+            if (seed == null)
+            {
+                throw new BridgeCommandException("query_mep_network 找不到 element_id=" + seedId.IntegerValue + "。");
+            }
+            int maxDepth = PlanValues.Integer(step.Arguments, 100, "max_depth");
+            if (maxDepth < 1 || maxDepth > 2000)
+            {
+                throw new BridgeCommandException("max_depth 必须在 1 到 2000 之间。");
+            }
+            if (GetConnectorManager(seed) == null)
+            {
+                throw new BridgeCommandException("种子元素没有 MEP 连接件（必须是管道 / 风管 / 线管 / 桥架 / 配件）。");
+            }
+
+            var visited = new HashSet<ElementId>();
+            var edges = new List<Dictionary<string, object>>();
+            var edgeKeys = new HashSet<string>(StringComparer.Ordinal);
+            var queue = new Queue<ElementId>();
+            queue.Enqueue(seedId);
+            while (queue.Count > 0 && visited.Count < maxDepth)
+            {
+                ElementId currentId = queue.Dequeue();
+                if (!visited.Add(currentId))
+                {
+                    continue;
+                }
+                Element current = context.Document.GetElement(currentId);
+                if (current == null)
+                {
+                    continue;
+                }
+                ConnectorManager manager = GetConnectorManager(current);
+                if (manager == null)
+                {
+                    continue;
+                }
+                foreach (Connector connector in manager.Connectors)
+                {
+                    foreach (Connector reference in connector.AllRefs)
+                    {
+                        Element owner = reference.Owner;
+                        if (owner == null || visited.Contains(owner.Id))
+                        {
+                            continue;
+                        }
+                        long low = Math.Min(currentId.IntegerValue, owner.Id.IntegerValue);
+                        long high = Math.Max(currentId.IntegerValue, owner.Id.IntegerValue);
+                        string key = low + "-" + high;
+                        if (edgeKeys.Add(key))
+                        {
+                            edges.Add(new Dictionary<string, object>
+                            {
+                                { "from", currentId.IntegerValue },
+                                { "to", owner.Id.IntegerValue },
+                                { "at", PlanValues.PointData(connector.Origin) }
+                            });
+                        }
+                        if (!queue.Contains(owner.Id))
+                        {
+                            queue.Enqueue(owner.Id);
+                        }
+                    }
+                }
+            }
+
+            var nodes = new List<Dictionary<string, object>>();
+            foreach (ElementId id in visited)
+            {
+                Element element = context.Document.GetElement(id);
+                if (element == null)
+                {
+                    continue;
+                }
+                var node = new Dictionary<string, object>
+                {
+                    { "element_id", id.IntegerValue },
+                    { "class", element.GetType().Name },
+                    { "category", element.Category == null ? null : element.Category.Name }
+                };
+                string systemName = ReadSystemName(element);
+                if (systemName != null)
+                {
+                    node["system_name"] = systemName;
+                }
+                nodes.Add(node);
+            }
+            return new Dictionary<string, object>
+            {
+                { "seed", seedId.IntegerValue },
+                { "max_depth", maxDepth },
+                { "node_count", nodes.Count },
+                { "nodes", nodes },
+                { "edges", edges }
+            };
+        }
+
+        private static ConnectorManager GetConnectorManager(Element element)
+        {
+            MEPCurve curve = element as MEPCurve;
+            if (curve != null)
+            {
+                return curve.ConnectorManager;
+            }
+            FamilyInstance instance = element as FamilyInstance;
+            if (instance != null && instance.MEPModel != null)
+            {
+                return instance.MEPModel.ConnectorManager;
+            }
+            return null;
+        }
+
+        private static string ReadSystemName(Element element)
+        {
+            Parameter parameter = element.get_Parameter(BuiltInParameter.RBS_PIPING_SYSTEM_NAME_PARAM);
+            if (parameter == null)
+            {
+                parameter = element.get_Parameter(BuiltInParameter.RBS_DUCT_SYSTEM_NAME_PARAM);
+            }
+            if (parameter == null)
+            {
+                return null;
+            }
+            try
+            {
+                return parameter.AsString() ?? parameter.AsValueString();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static Dictionary<string, object> QueryViewRange(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
+            if (viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
+            }
+            ViewPlan viewPlan = context.Document.GetElement(viewId) as ViewPlan;
+            if (viewPlan == null || viewPlan.IsTemplate)
+            {
+                throw new BridgeCommandException("query_view_range 的 view_id 必须指向平面视图。");
+            }
+            PlanViewRange range = viewPlan.GetViewRange();
+            var ranges = new Dictionary<string, object>();
+            ranges["top"] = RangeSlotData(context.Document, range, PlanViewRangeType.Top);
+            ranges["cut_plane"] = RangeSlotData(context.Document, range, PlanViewRangeType.CutPlane);
+            ranges["bottom"] = RangeSlotData(context.Document, range, PlanViewRangeType.Bottom);
+            ranges["view_depth"] = RangeSlotData(context.Document, range, PlanViewRangeType.ViewDepth);
+            return new Dictionary<string, object>
+            {
+                { "view_id", viewId.IntegerValue },
+                { "view_name", viewPlan.Name },
+                { "ranges", ranges }
+            };
+        }
+
+        private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, PlanViewRangeType rangeType)
+        {
+            ElementId levelId = range.GetLevelId(rangeType);
+            Level level = levelId.IntegerValue == ElementId.InvalidElementId.IntegerValue
+                ? null
+                : document.GetElement(levelId) as Level;
+            return new Dictionary<string, object>
+            {
+                { "level", level == null ? null : level.Name },
+                { "level_id", level == null ? (object)null : levelId.IntegerValue },
+                { "offset_mm", PlanValues.ToMillimeters(range.GetOffset(rangeType)) }
+            };
+        }
+
         public static Dictionary<string, object> CheckInterferences(PlanStep step, PlanExecutionContext context)
         {
             Document document = context.Document;

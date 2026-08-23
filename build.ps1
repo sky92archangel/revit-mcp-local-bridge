@@ -53,6 +53,10 @@ $symbols = @()
 if ($apiVersion.Major -ge 21) {
     $symbols += 'REVIT_FORGE_UNITS'
 }
+if ($apiVersion.Major -ge 23) {
+    # Revit 2023+: BuiltInParameterGroup -> GroupTypeId (ForgeTypeId)
+    $symbols += 'REVIT_PARAMETER_GROUPS'
+}
 $compilerArguments = @(
     '/nologo',
     '/target:library',

@@ -88,6 +88,8 @@
 | `query_geometry` | 否 | `element_id` | 几何感知：`detail` = `bbox`、`solid_summary`、`faces` |
 | `query_room` | 否 | 可选 `point` / `level` | `point` 点找房间；缺省列出房间（含边界顶点） |
 | `check_interferences` | 否 | `element_ids` | 碰撞检查；可选 `against_ids`、`include_links`；候选 >500 需显式 `against_ids` |
+| `query_mep_network` | 否 | `element_id` | 沿连接件 BFS 遍历管网拓扑（nodes + edges）；可选 `max_depth`（默认 100） |
+| `query_view_range` | 否 | `view_id` | 平面视图范围四槽位（top / cut_plane / bottom / view_depth：标高 + 偏移） |
 | `create_level` | 是 | `elevation_mm` | 可选 `name` |
 | `create_grid` | 是 | `start`、`end` | 直线轴网；两点 Z 必须相同 |
 | `create_wall` | 是 | `start`、`end` | `level`、`type` / `type_id`、`height_mm`、`thickness_mm` 可选 |
@@ -96,6 +98,7 @@
 | `create_space` | 是 | `point` | 在 `level` 放置 MEP 空间；可选 `name`、`number` |
 | `create_model_curve` | 是 | `start`、`end` | 创建直线模型线和所需工作平面 |
 | `create_direct_shape` | 是 | `geometry` | 通用实体：`box`、`cylinder`、`extrusion` |
+| `create_swept_shape` | 是 | `path`、`section` | 路径放样 DirectShape；截面 `shape`: `rect`、`rect_ring`、`circle`、`circle_ring`、`horseshoe`（`width_mm`/`height_mm`/`wall_thickness_mm`） |
 | `create_mep_curve` | 是 | `kind`、`start`、`end` | `pipe`、`duct`、`conduit`、`cable_tray`；可选 `slope`（百分比，`slope_unit` 支持 permille） |
 | `connect_mep` | 是 | `element_a`、`element_b` | `fitting`: `auto`、`direct`、`elbow`、`union`、`tee`、`reducer`、`cross`（四通用 `element_c`/`element_d`）；可选 `extend_to_intersection=true` 延伸两管到交点再接配件 |
 | `create_mep_system` | 是 | `domain`、`name` | `piping` / `mechanical`；可选 `system_type`、`members`（逐个指派成员） |
@@ -123,6 +126,17 @@
 | `set_view_properties` | 是 | `view_id` | 设置比例、裁剪、视图样板、细节级别和显示样式 |
 | `create_opening` | 是 | `host_id`、`start`、`end` | `kind=wall`（默认，两点矩形墙洞）；`vertical`（楼板竖直洞口，`corner_1`/`corner_2`）；`shaft`（竖井，`bottom_level`/`top_level`/`boundary`） |
 | `set_parameters` | 是 | `targets`、`parameters` | 批量设置实例/类型参数 |
+| `duplicate_type` | 是 | `type_id` / `targets`、`new_name` | 复制 ElementType 生成新类型；可选 `parameters` 批量赋值 |
+| `manage_schema_data` | 是 | `targets`、`action` | 元素 Extensible Storage：`set` / `get` / `clear` / `transport`；`set` 传 `values`（map&lt;string,string&gt;），`transport` 从 `source_element_id` 搬运 |
+| `manage_family_parameters` | 是 | `family_id`、`actions` | 族文档参数 `add` / `rename` / `remove` / `set_formula`（通过 `load_family` 打开并 EditFamily 后回载） |
+| `manage_project_parameters` | 是 | `action` | 项目参数 `list` / `add_shared` / `delete`；`add_shared` 需 `name`、`categories`、`group`、`type`、`instance` |
+| `create_insulation` | 是 | `targets`、`thickness_mm` | 为 MEP 管件/管线添加保温层或衬里；可选 `type` / `insulation_type` |
+| `set_element_overrides` | 是 | `view_id`、`targets`、`overrides` | 视图中设置图元图形替换（颜色 / 线宽 / 半色调 / 透明度 / 表面色） |
+| `set_category_overrides` | 是 | `view_id`、`category`、`overrides` | 视图中设置类别图形替换 |
+| `manage_view_filters` | 是 | `view_id`、`action` | 视图过滤器 `add` / `remove` / `delete` / `clear`；`add` 可选 `name`、`categories`、`rules`、`hidden` |
+| `set_view_range` | 是 | `view_id`、`slots` | 设置平面视图范围四槽位（top / cut_plane / bottom / view_depth：level + offset_mm） |
+| `manage_schedule_fields` | 是 | `schedule_id`、`action` | 明细表字段 `add_field` / `remove_field` / `hide_field` / `show_field` / `add_filter` / `sort` / `set_itemized` |
+| `manage_graphics_resources` | 是 | `action`、`name` | 图形资源 `line_style` / `fill_pattern` 创建（已存在则复用） |
 | `transform_elements` | 是 | `element_ids`、`mode` | `move`（`translation`）、`copy`（`translation`，返回新元素）、`rotate`（`axis_origin`/`axis_direction`/`angle` 度）、`mirror`（`plane_point`/`plane_normal`，返回镜像副本） |
 | `rename_element` | 是 | `element_ids` | 单目标用 `name`；批量用 `prefix`（可选 `id_suffix=true` 变为 前缀+ID） |
 | `set_element_curve` | 是 | `element_id`、`start`、`end` | 修改线状图元（墙 / 管 / 模型线）走向 |

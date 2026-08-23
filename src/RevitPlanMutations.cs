@@ -129,6 +129,338 @@ namespace RevitCommandBridge
             };
         }
 
+        public static Dictionary<string, object> DuplicateType(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId sourceId = context.ResolveSingleElementId(
+                step.Arguments, "type_id", "source_type_id", "element_id", "target");
+            if (sourceId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置类型引用尚无真实 ID。" } };
+            }
+            ElementType sourceType = context.Document.GetElement(sourceId) as ElementType;
+            if (sourceType == null)
+            {
+                throw new BridgeCommandException("duplicate_type 的 type_id 必须指向 ElementType（类型）。");
+            }
+            string newName = PlanValues.String(step.Arguments, null, "new_name", "name");
+            if (string.IsNullOrWhiteSpace(newName))
+            {
+                newName = sourceType.Name + "_副本";
+            }
+            Dictionary<string, object> requested = PlanValues.Dictionary(step.Arguments, "parameters", false);
+            var data = new Dictionary<string, object>
+            {
+                { "source_type_id", sourceId.IntegerValue },
+                { "source_name", sourceType.Name },
+                { "new_name", newName },
+                { "parameter_count", requested.Count }
+            };
+            // preview 下对源类型校验参数名，尽早暴露拼写错误。
+            foreach (KeyValuePair<string, object> pair in requested)
+            {
+                Parameter parameter = FindParameter(sourceType, pair.Key);
+                if (parameter == null)
+                {
+                    throw new BridgeCommandException("类型 " + sourceId.IntegerValue + " 找不到参数“" + pair.Key + "”。");
+                }
+                if (parameter.IsReadOnly)
+                {
+                    throw new BridgeCommandException("类型 " + sourceId.IntegerValue + " 的参数“" + pair.Key + "”是只读。");
+                }
+                ValidateParameterValue(parameter, pair.Value, pair.Key);
+            }
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            ElementId newTypeId;
+            try
+            {
+                newTypeId = sourceType.Duplicate(newName);
+            }
+            catch (Exception ex)
+            {
+                throw new BridgeCommandException("复制类型“" + sourceType.Name + "”失败（名称可能已存在）：" + ex.Message);
+            }
+            ElementType newType = context.Document.GetElement(newTypeId) as ElementType;
+            if (newType == null)
+            {
+                throw new BridgeCommandException("Revit 未返回复制后的类型。");
+            }
+            foreach (KeyValuePair<string, object> pair in requested)
+            {
+                SetParameterValue(FindParameter(newType, pair.Key), pair.Value, pair.Key);
+            }
+            data["element_id"] = newTypeId.IntegerValue;
+            data["element_ids"] = new[] { newTypeId.IntegerValue };
+            data["new_name"] = newType.Name;
+            return data;
+        }
+
+        public static Dictionary<string, object> ManageSchemaData(PlanStep step, PlanExecutionContext context)
+        {
+            string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(action))
+            {
+                action = "get";
+            }
+            if (action != "set" && action != "get" && action != "clear" && action != "transport")
+            {
+                throw new BridgeCommandException("manage_schema_data.action 仅支持 set、get、clear、transport。");
+            }
+
+            Dictionary<string, string> values = null;
+            if (action == "set")
+            {
+                Dictionary<string, object> raw = PlanValues.Dictionary(step.Arguments, "values", true);
+                if (raw.Count == 0)
+                {
+                    throw new BridgeCommandException("manage_schema_data.set 的 values 不能为空。");
+                }
+                values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (KeyValuePair<string, object> pair in raw)
+                {
+                    values[pair.Key] = Convert.ToString(pair.Value, CultureInfo.InvariantCulture) ?? string.Empty;
+                }
+            }
+
+            ElementId sourceId = ElementId.InvalidElementId;
+            if (action == "transport")
+            {
+                sourceId = context.ResolveSingleElementId(step.Arguments, "source_element_id", "source");
+                if (sourceId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                {
+                    return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+                }
+            }
+
+            bool single = action == "get";
+            IList<ElementId> targets;
+            if (single)
+            {
+                ElementId id = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "target");
+                if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                {
+                    return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+                }
+                targets = new List<ElementId> { id };
+            }
+            else
+            {
+                targets = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
+                if (targets.Count == 0)
+                {
+                    return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+                }
+            }
+
+            var data = new Dictionary<string, object>
+            {
+                { "action", action },
+                { "target_count", targets.Count }
+            };
+            if (values != null)
+            {
+                data["values"] = values;
+            }
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            if (action == "transport")
+            {
+                Element source = context.Document.GetElement(sourceId);
+                if (source == null)
+                {
+                    throw new BridgeCommandException("找不到 source_element_id=" + sourceId.IntegerValue + "。");
+                }
+                values = BridgeSchemas.ReadMap(source);
+                if (values == null || values.Count == 0)
+                {
+                    throw new BridgeCommandException("源元素没有可搬运的扩展数据：" + sourceId.IntegerValue);
+                }
+                data["values"] = values;
+            }
+
+            switch (action)
+            {
+                case "set":
+                case "transport":
+                    foreach (ElementId id in targets)
+                    {
+                        Element element = context.Document.GetElement(id);
+                        if (element == null)
+                        {
+                            throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + "。");
+                        }
+                        BridgeSchemas.WriteMap(element, values);
+                    }
+                    data["written"] = targets.Count;
+                    break;
+                case "get":
+                {
+                    Element element = context.Document.GetElement(targets[0]);
+                    if (element == null)
+                    {
+                        throw new BridgeCommandException("找不到 element_id=" + targets[0].IntegerValue + "。");
+                    }
+                    data["values"] = BridgeSchemas.ReadMap(element);
+                    break;
+                }
+                case "clear":
+                    foreach (ElementId id in targets)
+                    {
+                        Element element = context.Document.GetElement(id);
+                        if (element == null)
+                        {
+                            throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + "。");
+                        }
+                        element.DeleteEntity(BridgeSchemas.AiMetadata);
+                    }
+                    data["cleared"] = targets.Count;
+                    break;
+            }
+            data["element_ids"] = targets.Select(id => id.IntegerValue).ToArray();
+            return data;
+        }
+
+        public static Dictionary<string, object> ManageFamilyParameters(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId familyId = context.ResolveSingleElementId(step.Arguments, "family_id", "family", "target");
+            if (familyId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置族引用尚无真实 ID。" } };
+            }
+            Family family = context.Document.GetElement(familyId) as Family;
+            if (family == null)
+            {
+                throw new BridgeCommandException("manage_family_parameters 的 family_id 必须指向族（Family）。");
+            }
+            List<Dictionary<string, object>> actions = PlanValues.DictionaryList(
+                PlanValues.Get(step.Arguments, "actions"), "manage_family_parameters.actions");
+            if (actions.Count == 0)
+            {
+                throw new BridgeCommandException("manage_family_parameters 至少需要一个 actions 项。");
+            }
+
+            var described = new List<string>();
+            foreach (Dictionary<string, object> item in actions)
+            {
+                string verb = PlanValues.String(item, null, "action").Trim().ToLowerInvariant();
+                string name = PlanValues.String(item, null, "name", "parameter");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    throw new BridgeCommandException("actions[].name 不能为空。");
+                }
+                switch (verb)
+                {
+                    case "add":
+                        RevitParameterAdmin.NormalizeSpecToken(PlanValues.String(item, "length", "type"));
+                        described.Add("add " + name);
+                        break;
+                    case "rename":
+                        if (string.IsNullOrWhiteSpace(PlanValues.String(item, null, "new_name")))
+                        {
+                            throw new BridgeCommandException("rename 动作需要 new_name。");
+                        }
+                        described.Add("rename " + name);
+                        break;
+                    case "remove":
+                        described.Add("remove " + name);
+                        break;
+                    case "set_formula":
+                        if (string.IsNullOrWhiteSpace(PlanValues.String(item, null, "formula")))
+                        {
+                            throw new BridgeCommandException("set_formula 动作需要 formula。");
+                        }
+                        described.Add("set_formula " + name);
+                        break;
+                    default:
+                        throw new BridgeCommandException("actions[].action 仅支持 add、rename、remove、set_formula。");
+                }
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "family", family.Name },
+                { "family_id", familyId.IntegerValue },
+                { "actions", described.ToArray() }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            Document familyDocument = context.Document.EditFamily(family);
+            using (Transaction familyTransaction = new Transaction(familyDocument, "RCB manage_family_parameters"))
+            {
+                TransactionStatus started = familyTransaction.Start();
+                if (started != TransactionStatus.Started)
+                {
+                    throw new BridgeCommandException("族文档事务启动失败：" + started);
+                }
+                try
+                {
+                    FamilyManager manager = familyDocument.FamilyManager;
+                    foreach (Dictionary<string, object> item in actions)
+                    {
+                        string verb = PlanValues.String(item, null, "action").Trim().ToLowerInvariant();
+                        string name = PlanValues.String(item, null, "name", "parameter");
+                        try
+                        {
+                            switch (verb)
+                            {
+                                case "add":
+                                    RevitParameterAdmin.AddFamilyParameter(
+                                        manager,
+                                        name,
+                                        PlanValues.String(item, "length", "type"),
+                                        PlanValues.String(item, "data", "group", "parameter_group"),
+                                        PlanValues.Boolean(item, false, "is_instance", "instance"));
+                                    break;
+                                case "rename":
+                                    manager.RenameParameter(
+                                        manager.get_Parameter(name), PlanValues.String(item, null, "new_name"));
+                                    break;
+                                case "remove":
+                                    manager.RemoveParameter(manager.get_Parameter(name));
+                                    break;
+                                case "set_formula":
+                                    manager.get_Parameter(name).Formula = PlanValues.String(item, null, "formula");
+                                    break;
+                            }
+                        }
+                        catch (BridgeCommandException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new BridgeCommandException("族参数动作“" + verb + " " + name + "”失败：" + ex.Message);
+                        }
+                    }
+                    familyTransaction.Commit();
+                }
+                catch
+                {
+                    if (familyTransaction.GetStatus() == TransactionStatus.Started)
+                    {
+                        familyTransaction.RollBack();
+                    }
+                    throw;
+                }
+            }
+            if (!familyDocument.LoadFamily(context.Document, new BridgeFamilyLoadOptions()))
+            {
+                throw new BridgeCommandException("族“" + family.Name + "”回载到项目失败。");
+            }
+            data["applied"] = actions.Count;
+            data["element_id"] = familyId.IntegerValue;
+            data["element_ids"] = new[] { familyId.IntegerValue };
+            return data;
+        }
+
         public static Dictionary<string, object> TransformElements(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");

@@ -26,6 +26,8 @@ namespace RevitCommandBridge
             "query_geometry",
             "query_room",
             "check_interferences",
+            "query_mep_network",
+            "query_view_range",
             "create_level",
             "create_grid",
             "create_wall",
@@ -34,9 +36,11 @@ namespace RevitCommandBridge
             "create_space",
             "create_model_curve",
             "create_direct_shape",
+            "create_swept_shape",
             "create_mep_curve",
             "connect_mep",
             "create_mep_system",
+            "create_insulation",
             "place_family_instance",
             "load_family",
             "create_structural_member",
@@ -62,8 +66,18 @@ namespace RevitCommandBridge
             "create_schedule",
             "place_schedule_on_sheet",
             "set_view_properties",
+            "set_element_overrides",
+            "set_category_overrides",
+            "manage_view_filters",
+            "set_view_range",
+            "manage_schedule_fields",
+            "manage_graphics_resources",
             "create_opening",
             "set_parameters",
+            "manage_schema_data",
+            "manage_family_parameters",
+            "manage_project_parameters",
+            "duplicate_type",
             "delete_elements",
             "select_elements",
             "export",
@@ -80,9 +94,11 @@ namespace RevitCommandBridge
             "create_space",
             "create_model_curve",
             "create_direct_shape",
+            "create_swept_shape",
             "create_mep_curve",
             "connect_mep",
             "create_mep_system",
+            "create_insulation",
             "place_family_instance",
             "load_family",
             "create_structural_member",
@@ -109,6 +125,18 @@ namespace RevitCommandBridge
             "place_schedule_on_sheet",
             "set_view_properties",
             "create_opening",
+            "create_swept_shape",
+            "create_insulation",
+            "set_element_overrides",
+            "set_category_overrides",
+            "manage_view_filters",
+            "set_view_range",
+            "manage_schedule_fields",
+            "manage_graphics_resources",
+            "manage_schema_data",
+            "manage_family_parameters",
+            "manage_project_parameters",
+            "duplicate_type",
             "set_parameters",
             "delete_elements"
         };
@@ -318,6 +346,8 @@ namespace RevitCommandBridge
                 case "查询几何": return "query_geometry";
                 case "查询房间": return "query_room";
                 case "碰撞检查": return "check_interferences";
+                case "查询管网": return "query_mep_network";
+                case "查询视图范围": return "query_view_range";
                 case "创建标高": return "create_level";
                 case "创建轴网": return "create_grid";
                 case "创建墙":
@@ -327,9 +357,11 @@ namespace RevitCommandBridge
                 case "创建空间": return "create_space";
                 case "创建模型线": return "create_model_curve";
                 case "创建通用几何": return "create_direct_shape";
+                case "创建放样实体": return "create_swept_shape";
                 case "创建机电管线": return "create_mep_curve";
                 case "连接机电": return "connect_mep";
                 case "创建机电系统": return "create_mep_system";
+                case "创建保温层": return "create_insulation";
                 case "放置族实例": return "place_family_instance";
                 case "加载族": return "load_family";
                 case "创建结构构件": return "create_structural_member";
@@ -360,8 +392,18 @@ namespace RevitCommandBridge
                 case "创建明细表": return "create_schedule";
                 case "放置明细表到图纸": return "place_schedule_on_sheet";
                 case "设置视图属性": return "set_view_properties";
+                case "设置图元替换": return "set_element_overrides";
+                case "设置类别替换": return "set_category_overrides";
+                case "管理视图过滤器": return "manage_view_filters";
+                case "设置视图范围": return "set_view_range";
+                case "管理明细表字段": return "manage_schedule_fields";
+                case "管理图形资源": return "manage_graphics_resources";
                 case "创建洞口": return "create_opening";
                 case "设置参数": return "set_parameters";
+                case "管理扩展数据": return "manage_schema_data";
+                case "管理族参数": return "manage_family_parameters";
+                case "管理项目参数": return "manage_project_parameters";
+                case "复制类型": return "duplicate_type";
                 case "删除元素": return "delete_elements";
                 case "选择元素": return "select_elements";
                 case "导出": return "export";

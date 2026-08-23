@@ -319,6 +319,21 @@ namespace RevitCommandBridge
             Level level = family == ViewFamily.ThreeDimensional
                 ? null
                 : RevitLookups.ResolveLevel(context.Document, step.Arguments);
+            XYZ eye = null;
+            XYZ forward = null;
+            XYZ up = null;
+            if (family == ViewFamily.ThreeDimensional && PlanValues.Get(step.Arguments, "eye", "eye_position", "camera_position") != null)
+            {
+                eye = ReadOptionalPoint(step.Arguments, "eye", "eye_position", "camera_position", "position");
+                forward = ReadDirectionVector(step.Arguments, "forward", "forward_direction");
+                up = PlanValues.Get(step.Arguments, "up", "up_direction") == null
+                    ? XYZ.BasisZ
+                    : ReadDirectionVector(step.Arguments, "up", "up_direction");
+                if (Math.Abs(forward.Dot(up)) > 1e-3)
+                {
+                    throw new BridgeCommandException("create_view 的 forward 与 up 必须近似垂直。");
+                }
+            }
             var data = new Dictionary<string, object>
             {
                 { "kind", kind },
@@ -329,6 +344,12 @@ namespace RevitCommandBridge
                 { "perspective", perspective },
                 { "name", name }
             };
+            if (eye != null)
+            {
+                data["eye"] = PlanValues.PointData(eye);
+                data["forward"] = PlanValues.PointData(forward);
+                data["up"] = PlanValues.PointData(up);
+            }
             if (context.Preview)
             {
                 return data;
@@ -352,6 +373,15 @@ namespace RevitCommandBridge
             if (!string.IsNullOrWhiteSpace(name))
             {
                 view.Name = name;
+            }
+            if (eye != null)
+            {
+                View3D view3D = view as View3D;
+                if (view3D == null)
+                {
+                    throw new BridgeCommandException("相机参数仅适用于 3d 视图。");
+                }
+                view3D.SetOrientation(new ViewOrientation3D(eye, forward, up));
             }
             data["element_id"] = view.Id.IntegerValue;
             data["element_ids"] = new[] { view.Id.IntegerValue };
@@ -1111,6 +1141,155 @@ namespace RevitCommandBridge
             return data;
         }
 
+        public static Dictionary<string, object> CreateInsulation(PlanStep step, PlanExecutionContext context)
+        {
+            IList<ElementId> targets = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
+            if (targets.Count == 0)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            double thicknessMm = PlanValues.RequireMillimeters(step.Arguments, "thickness_mm", "thickness");
+            if (thicknessMm <= 0.0)
+            {
+                throw new BridgeCommandException("create_insulation.thickness_mm 必须大于 0。");
+            }
+            string typeName = PlanValues.String(step.Arguments, null, "type", "insulation_type");
+            var data = new Dictionary<string, object>
+            {
+                { "target_count", targets.Count },
+                { "thickness_mm", thicknessMm },
+                { "type", typeName }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            double thickness = PlanValues.ToFeet(thicknessMm);
+            var created = new List<ElementId>();
+            bool pipeTypeResolved = false;
+            bool ductTypeResolved = false;
+            ElementId pipeTypeId = null;
+            ElementId ductTypeId = null;
+            foreach (ElementId targetId in targets)
+            {
+                Element target = RequireElement(context.Document, targetId, "element_ids");
+                Pipe pipe = target as Pipe;
+                if (pipe != null)
+                {
+                    if (!pipeTypeResolved)
+                    {
+                        pipeTypeId = ResolveInsulationTypeId<PipeInsulationType>(context.Document, typeName);
+                        pipeTypeResolved = true;
+                    }
+                    created.Add(PipeInsulation.Create(context.Document, pipe.Id, pipeTypeId, thickness).Id);
+                    continue;
+                }
+                Duct duct = target as Duct;
+                if (duct != null)
+                {
+                    if (!ductTypeResolved)
+                    {
+                        ductTypeId = ResolveInsulationTypeId<DuctInsulationType>(context.Document, typeName);
+                        ductTypeResolved = true;
+                    }
+                    created.Add(DuctInsulation.Create(context.Document, duct.Id, ductTypeId, thickness).Id);
+                    continue;
+                }
+                throw new BridgeCommandException("create_insulation 目标必须是管道或风管：element_id=" + targetId.IntegerValue);
+            }
+            data["element_ids"] = created.Select(id => id.IntegerValue).ToArray();
+            data["created_count"] = created.Count;
+            if (created.Count == 1)
+            {
+                data["element_id"] = created[0].IntegerValue;
+            }
+            return data;
+        }
+
+        private static ElementId ResolveInsulationTypeId<T>(Document document, string typeName) where T : ElementType
+        {
+            List<T> candidates = new FilteredElementCollector(document)
+                .OfClass(typeof(T))
+                .Cast<T>()
+                .OrderBy(RevitLookups.ElementName)
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(typeName))
+            {
+                candidates = candidates.Where(candidate =>
+                    string.Equals(RevitLookups.ElementName(candidate), typeName, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            if (candidates.Count == 0)
+            {
+                throw new BridgeCommandException(
+                    "当前项目没有可用 " + typeof(T).Name + (string.IsNullOrWhiteSpace(typeName) ? string.Empty : "（名称 " + typeName + "）") + "。");
+            }
+            return candidates[0].Id;
+        }
+
+        public static Dictionary<string, object> CreateSweptShape(PlanStep step, PlanExecutionContext context)
+        {
+            List<Dictionary<string, object>> rawPoints = PlanValues.DictionaryList(
+                PlanValues.Get(step.Arguments, "path", "points"), "create_swept_shape.path");
+            var pathPoints = new List<XYZ>();
+            foreach (Dictionary<string, object> item in rawPoints)
+            {
+                pathPoints.Add(new XYZ(
+                    PlanValues.ToFeet(PlanValues.RequireMillimeters(item, "x", "x_mm")),
+                    PlanValues.ToFeet(PlanValues.RequireMillimeters(item, "y", "y_mm")),
+                    PlanValues.ToFeet(PlanValues.Millimeters(item, 0.0, "z", "z_mm"))));
+            }
+            Dictionary<string, object> section = PlanValues.Dictionary(
+                PlanValues.Get(step.Arguments, "section", "profile"), "create_swept_shape.section");
+            string shape = PlanValues.String(section, "rect", "shape", "kind");
+            double widthMm = PlanValues.RequireMillimeters(section, "width_mm", "width", "diameter_mm", "diameter");
+            double heightMm = PlanValues.Millimeters(section, widthMm, "height_mm", "height");
+            double wallThicknessMm = PlanValues.Millimeters(section, 0.0, "wall_thickness_mm", "wall_thickness");
+            ElementId categoryId = RevitLookups.ResolveCategoryId(
+                context.Document, step.Arguments, BuiltInCategory.OST_GenericModel);
+            string name = PlanValues.String(step.Arguments, step.Id, "name");
+
+            var data = new Dictionary<string, object>
+            {
+                { "name", name },
+                { "path_point_count", pathPoints.Count },
+                { "section", new Dictionary<string, object>
+                    {
+                        { "shape", shape },
+                        { "width_mm", widthMm },
+                        { "height_mm", heightMm },
+                        { "wall_thickness_mm", wallThicknessMm }
+                    }
+                },
+                { "category_id", categoryId.IntegerValue }
+            };
+            CurveLoop path = RevitSectionFactory.BuildPath(pathPoints, "create_swept_shape.path");
+            XYZ pathStart = path.First().GetEndPoint(0);
+            XYZ tangent = path.First().GetEndPoint(1).Subtract(path.First().GetEndPoint(0));
+            IList<CurveLoop> profiles = RevitSectionFactory.CreateSectionLoops(
+                shape, widthMm, heightMm, wallThicknessMm, pathStart, tangent);
+            if (context.Preview)
+            {
+                data["profile_loop_count"] = profiles.Count;
+                return data;
+            }
+
+            Solid solid = GeometryCreationUtilities.CreateSweptGeometry(path, 0, 0, profiles);
+            IList<GeometryObject> geometry = new List<GeometryObject> { solid };
+            DirectShape directShape = DirectShape.CreateElement(context.Document, categoryId);
+            if (!directShape.IsValidShape(geometry))
+            {
+                throw new BridgeCommandException("放样几何无效（截面可能自交或与路径平面冲突）。");
+            }
+            directShape.ApplicationId = BridgeProtocol.Version;
+            directShape.ApplicationDataId = step.Id;
+            directShape.Name = name;
+            directShape.SetShape(geometry);
+            data["element_id"] = directShape.Id.IntegerValue;
+            data["element_ids"] = new[] { directShape.Id.IntegerValue };
+            return data;
+        }
+
         public static Dictionary<string, object> PlaceFamilyInstance(PlanStep step, PlanExecutionContext context)
         {
             FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(context.Document, step.Arguments);
@@ -1715,6 +1894,37 @@ namespace RevitCommandBridge
             return SketchPlane.Create(
                 context.Document,
                 Plane.CreateByNormalAndOrigin(normal.Normalize(), origin));
+        }
+
+        private static XYZ ReadOptionalPoint(IDictionary<string, object> arguments, params string[] fieldNames)
+        {
+            foreach (string fieldName in fieldNames)
+            {
+                if (PlanValues.Get(arguments, fieldName) != null)
+                {
+                    return PlanValues.Point(arguments, fieldName);
+                }
+            }
+            throw new BridgeCommandException("缺少参数：" + string.Join("/", fieldNames));
+        }
+
+        private static XYZ ReadDirectionVector(IDictionary<string, object> arguments, params string[] fieldNames)
+        {
+            object raw = PlanValues.Get(arguments, fieldNames);
+            if (raw == null)
+            {
+                throw new BridgeCommandException("缺少参数：" + string.Join("/", fieldNames));
+            }
+            Dictionary<string, object> values = PlanValues.Dictionary(raw, fieldNames[0]);
+            XYZ direction = new XYZ(
+                PlanValues.Number(values, 0.0, "x"),
+                PlanValues.Number(values, 0.0, "y"),
+                PlanValues.Number(values, 0.0, "z"));
+            if (direction.GetLength() < 1e-9)
+            {
+                throw new BridgeCommandException(fieldNames[0] + " 不能为零向量。");
+            }
+            return direction.Normalize();
         }
 
         private static XYZ ReadReferenceDirection(IDictionary<string, object> arguments)

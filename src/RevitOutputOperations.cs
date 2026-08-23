@@ -704,6 +704,730 @@ namespace RevitCommandBridge
             return data;
         }
 
+        public static Dictionary<string, object> SetElementOverrides(PlanStep step, PlanExecutionContext context)
+        {
+            IList<ElementId> targets = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
+            if (targets.Count == 0)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
+            }
+            View view = ResolveGraphicsView(context, step.Arguments);
+            OverrideGraphicSettings overrides = BuildOverrides(step.Arguments);
+            var data = new Dictionary<string, object>
+            {
+                { "target_count", targets.Count },
+                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_name", view == null ? null : view.Name }
+            };
+            if (context.Preview || view == null)
+            {
+                return data;
+            }
+            foreach (ElementId id in targets)
+            {
+                view.SetElementOverrides(id, overrides);
+            }
+            data["element_ids"] = targets.Select(id => id.IntegerValue).ToArray();
+            return data;
+        }
+
+        public static Dictionary<string, object> SetCategoryOverrides(PlanStep step, PlanExecutionContext context)
+        {
+            object rawCategory = PlanValues.Get(step.Arguments, "category", "category_id");
+            if (rawCategory == null)
+            {
+                throw new BridgeCommandException("set_category_overrides 缺少 category。");
+            }
+            var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            lookup["category"] = rawCategory;
+            ElementId categoryId = RevitLookups.ResolveCategoryId(
+                context.Document, lookup, BuiltInCategory.OST_GenericModel);
+            View view = ResolveGraphicsView(context, step.Arguments);
+            OverrideGraphicSettings overrides = BuildOverrides(step.Arguments);
+            var data = new Dictionary<string, object>
+            {
+                { "category", Convert.ToString(rawCategory, CultureInfo.InvariantCulture) },
+                { "category_id", categoryId.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_name", view == null ? null : view.Name }
+            };
+            if (context.Preview || view == null)
+            {
+                return data;
+            }
+            view.SetCategoryOverrides(categoryId, overrides);
+            data["element_ids"] = new[] { categoryId.IntegerValue };
+            return data;
+        }
+
+        public static Dictionary<string, object> ManageViewFilters(PlanStep step, PlanExecutionContext context)
+        {
+            string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
+            switch (action)
+            {
+                case "add":
+                    return AddViewFilter(step, context);
+                case "remove":
+                case "delete":
+                case "clear":
+                    return ModifyViewFilter(step, context, action);
+                default:
+                    throw new BridgeCommandException("manage_view_filters.action 仅支持 add、remove、delete、clear。");
+            }
+        }
+
+        private static Dictionary<string, object> AddViewFilter(PlanStep step, PlanExecutionContext context)
+        {
+            string name = PlanValues.String(step.Arguments, null, "name", "filter_name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new BridgeCommandException("manage_view_filters.add 需要 name。");
+            }
+            List<string> categoryTokens = new List<string>();
+            object rawCategories = PlanValues.Get(step.Arguments, "categories", "category");
+            if (rawCategories != null)
+            {
+                foreach (object item in PlanValues.List(rawCategories, "categories"))
+                {
+                    string text = Convert.ToString(item, CultureInfo.InvariantCulture);
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        categoryTokens.Add(text.Trim());
+                    }
+                }
+            }
+            if (categoryTokens.Count == 0)
+            {
+                throw new BridgeCommandException("manage_view_filters.add 需要 categories 数组。");
+            }
+            var categoryIds = new List<ElementId>();
+            foreach (string token in categoryTokens)
+            {
+                var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                lookup["category"] = token;
+                categoryIds.Add(RevitLookups.ResolveCategoryId(
+                    context.Document, lookup, BuiltInCategory.OST_GenericModel));
+            }
+            List<Dictionary<string, object>> rules = PlanValues.DictionaryList(
+                PlanValues.Get(step.Arguments, "rules"), "manage_view_filters.rules");
+            var data = new Dictionary<string, object>
+            {
+                { "action", "add" },
+                { "name", name },
+                { "categories", categoryTokens.ToArray() },
+                { "rule_count", rules.Count }
+            };
+            View view = ResolveGraphicsView(context, step.Arguments);
+            if (view == null)
+            {
+                throw new BridgeCommandException("manage_view_filters 需要 view_id（或存在活动视图）。");
+            }
+            data["view_id"] = view.Id.IntegerValue;
+            data["view_name"] = view.Name;
+            OverrideGraphicSettings overrides = BuildOverrides(step.Arguments);
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            ParameterFilterElement filter = new FilteredElementCollector(context.Document)
+                .OfClass(typeof(ParameterFilterElement))
+                .Cast<ParameterFilterElement>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+            bool created = filter == null;
+            if (created)
+            {
+                ElementFilter elementFilter = rules.Count == 0
+                    ? null
+                    : BuildElementFilter(context.Document, categoryIds, rules);
+                filter = elementFilter == null
+                    ? ParameterFilterElement.Create(context.Document, name, categoryIds)
+                    : ParameterFilterElement.Create(context.Document, name, categoryIds, elementFilter);
+            }
+            view.AddFilter(filter.Id);
+            view.SetFilterVisibility(filter.Id, true);
+            view.SetFilterOverrides(filter.Id, overrides);
+            data["created"] = created;
+            data["filter_id"] = filter.Id.IntegerValue;
+            data["element_id"] = filter.Id.IntegerValue;
+            data["element_ids"] = new[] { filter.Id.IntegerValue };
+            return data;
+        }
+
+        private static Dictionary<string, object> ModifyViewFilter(
+            PlanStep step, PlanExecutionContext context, string action)
+        {
+            View view = ResolveGraphicsView(context, step.Arguments);
+            if (view == null)
+            {
+                throw new BridgeCommandException("manage_view_filters 需要 view_id（或存在活动视图）。");
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "action", action },
+                { "view_id", view.Id.IntegerValue },
+                { "view_name", view.Name }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            if (action == "clear")
+            {
+                List<ElementId> current = view.GetFilters().ToList();
+                foreach (ElementId filterId in current)
+                {
+                    view.RemoveFilter(filterId);
+                }
+                data["removed_count"] = current.Count;
+                return data;
+            }
+
+            ElementId targetId = ResolveFilterId(step, context, view);
+            if (action == "remove")
+            {
+                view.RemoveFilter(targetId);
+                data["removed_count"] = 1;
+                return data;
+            }
+            ICollection<ElementId> deleted = context.Document.Delete(new List<ElementId> { targetId });
+            data["deleted_count"] = deleted.Count;
+            return data;
+        }
+
+        private static ElementId ResolveFilterId(PlanStep step, PlanExecutionContext context, View view)
+        {
+            object rawId = PlanValues.Get(step.Arguments, "filter_id");
+            if (rawId != null)
+            {
+                return new ElementId(RevitLookups.ParsePositiveId(rawId, "filter_id"));
+            }
+            string name = PlanValues.String(step.Arguments, null, "name", "filter_name");
+            ParameterFilterElement filter = new FilteredElementCollector(context.Document)
+                .OfClass(typeof(ParameterFilterElement))
+                .Cast<ParameterFilterElement>()
+                .FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (filter == null)
+            {
+                throw new BridgeCommandException("找不到视图过滤器：“" + name + "”。");
+            }
+            return filter.Id;
+        }
+
+        private static ElementFilter BuildElementFilter(
+            Document document,
+            ICollection<ElementId> categoryIds,
+            List<Dictionary<string, object>> rules)
+        {
+            var filterRules = new List<FilterRule>();
+            foreach (Dictionary<string, object> rule in rules)
+            {
+                string parameterName = PlanValues.String(rule, null, "parameter", "parameter_name");
+                if (string.IsNullOrWhiteSpace(parameterName))
+                {
+                    throw new BridgeCommandException("rules[].parameter 不能为空。");
+                }
+                ElementId parameterId = FindParameterIdForCategories(document, categoryIds, parameterName);
+                object equals = PlanValues.Get(rule, "equals", "value");
+                if (equals == null)
+                {
+                    throw new BridgeCommandException("rules[].equals 不能为空。");
+                }
+                filterRules.Add(CreateEqualsRule(parameterId, equals, parameterName));
+            }
+            return new ElementParameterFilter(filterRules, false);
+        }
+
+        private static FilterRule CreateEqualsRule(ElementId parameterId, object value, string parameterName)
+        {
+            if (value is bool)
+            {
+                return ParameterFilterRuleFactory.CreateEqualsRule(parameterId, (bool)value ? 1 : 0);
+            }
+            if (value is int || value is short || value is byte || value is long)
+            {
+                return ParameterFilterRuleFactory.CreateEqualsRule(
+                    parameterId, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+            }
+            if (value is double || value is float || value is decimal)
+            {
+                return ParameterFilterRuleFactory.CreateEqualsRule(
+                    parameterId, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+            }
+            return ParameterFilterRuleFactory.CreateEqualsRule(
+                parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
+        }
+
+        private static ElementId FindParameterIdForCategories(
+            Document document, ICollection<ElementId> categoryIds, string parameterName)
+        {
+            foreach (ElementId categoryId in categoryIds)
+            {
+                Element sample = new FilteredElementCollector(document)
+                    .WherePasses(new ElementCategoryFilter(categoryId))
+                    .WhereElementIsNotElementType()
+                    .FirstOrDefault();
+                Parameter parameter = sample == null ? null : sample.LookupParameter(parameterName);
+                if (parameter != null)
+                {
+                    return parameter.Id;
+                }
+                Element sampleType = new FilteredElementCollector(document)
+                    .WherePasses(new ElementCategoryFilter(categoryId))
+                    .WhereElementIsElementType()
+                    .FirstOrDefault();
+                parameter = sampleType == null ? null : sampleType.LookupParameter(parameterName);
+                if (parameter != null)
+                {
+                    return parameter.Id;
+                }
+            }
+            throw new BridgeCommandException(
+                "类别元素上找不到参数“" + parameterName + "”，无法构造过滤器规则。");
+        }
+
+        public static Dictionary<string, object> SetViewRange(PlanStep step, PlanExecutionContext context)
+        {
+            ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
+            if (viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
+            }
+            ViewPlan viewPlan = context.Document.GetElement(viewId) as ViewPlan;
+            if (viewPlan == null || viewPlan.IsTemplate)
+            {
+                throw new BridgeCommandException("set_view_range 的 view_id 必须指向平面视图。");
+            }
+            var slots = new Dictionary<string, PlanViewRangeType>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "top", PlanViewRangeType.Top },
+                { "cut_plane", PlanViewRangeType.CutPlane },
+                { "bottom", PlanViewRangeType.Bottom },
+                { "view_depth", PlanViewRangeType.ViewDepth }
+            };
+            var changes = new List<string>();
+            var slotSpecs = new List<KeyValuePair<PlanViewRangeType, Dictionary<string, object>>>();
+            foreach (KeyValuePair<string, PlanViewRangeType> slot in slots)
+            {
+                object raw = PlanValues.Get(step.Arguments, slot.Key);
+                if (raw == null)
+                {
+                    continue;
+                }
+                Dictionary<string, object> spec = PlanValues.Dictionary(raw, slot.Key);
+                slotSpecs.Add(new KeyValuePair<PlanViewRangeType, Dictionary<string, object>>(slot.Value, spec));
+                changes.Add(slot.Key);
+            }
+            if (slotSpecs.Count == 0)
+            {
+                throw new BridgeCommandException(
+                    "set_view_range 至少提供一个槽位：top、cut_plane、bottom、view_depth（{level/level_id, offset_mm}）。");
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "view_id", viewId.IntegerValue },
+                { "view_name", viewPlan.Name },
+                { "changed", changes.ToArray() }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            PlanViewRange range = viewPlan.GetViewRange();
+            foreach (KeyValuePair<PlanViewRangeType, Dictionary<string, object>> slot in slotSpecs)
+            {
+                object rawLevel = PlanValues.Get(slot.Value, "level", "level_id", "level_name");
+                if (rawLevel != null)
+                {
+                    var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                    if (PlanValues.Get(slot.Value, "level_id") != null)
+                    {
+                        lookup["level_id"] = PlanValues.Get(slot.Value, "level_id");
+                    }
+                    else
+                    {
+                        lookup["level"] = rawLevel;
+                    }
+                    range.SetLevelId(slot.Key, RevitLookups.ResolveLevel(context.Document, lookup).Id);
+                }
+                object rawOffset = PlanValues.Get(slot.Value, "offset_mm", "offset");
+                if (rawOffset != null)
+                {
+                    range.SetOffset(slot.Key,
+                        PlanValues.ToFeet(PlanValues.ParseMillimeters(rawOffset, "offset_mm")));
+                }
+            }
+            viewPlan.SetViewRange(range);
+            data["element_id"] = viewId.IntegerValue;
+            data["element_ids"] = new[] { viewId.IntegerValue };
+            return data;
+        }
+
+        public static Dictionary<string, object> ManageScheduleFields(PlanStep step, PlanExecutionContext context)
+        {
+            string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(action))
+            {
+                throw new BridgeCommandException("manage_schedule_fields 缺少 action（add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized）。");
+            }
+            ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "target");
+            if (scheduleId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            {
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置明细表引用尚无真实 ID。" } };
+            }
+            ViewSchedule schedule = context.Document.GetElement(scheduleId) as ViewSchedule;
+            if (schedule == null || schedule.IsTemplate)
+            {
+                throw new BridgeCommandException("manage_schedule_fields 的 schedule_id 必须指向明细表。");
+            }
+            ScheduleDefinition definition = schedule.Definition;
+            if (definition == null)
+            {
+                throw new BridgeCommandException("明细表没有可编辑的字段定义。");
+            }
+            string fieldName = PlanValues.String(step.Arguments, null, "field", "parameter", "parameter_name", "heading");
+            var data = new Dictionary<string, object>
+            {
+                { "action", action },
+                { "schedule_id", scheduleId.IntegerValue },
+                { "field", fieldName }
+            };
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            switch (action)
+            {
+                case "add_field":
+                {
+                    if (string.IsNullOrWhiteSpace(fieldName))
+                    {
+                        throw new BridgeCommandException("add_field 需要 field（参数名）。");
+                    }
+                    bool isInstance = PlanValues.Boolean(step.Arguments, true, "is_instance", "instance");
+                    ScheduleField addedField = AddScheduleField(context.Document, definition, fieldName, isInstance);
+                    string heading = PlanValues.String(step.Arguments, null, "heading");
+                    if (!string.IsNullOrWhiteSpace(heading))
+                    {
+                        addedField.ColumnHeading = heading;
+                    }
+                    data["field_id"] = addedField.FieldId;
+                    break;
+                }
+                case "remove_field":
+                case "hide_field":
+                case "show_field":
+                {
+                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    if (index < 0)
+                    {
+                        throw new BridgeCommandException("明细表中找不到字段“" + fieldName + "”。");
+                    }
+                    if (action == "remove_field")
+                    {
+                        definition.RemoveField(index);
+                    }
+                    else
+                    {
+                        definition.GetField(index).IsHidden = action == "hide_field";
+                    }
+                    break;
+                }
+                case "add_filter":
+                {
+                    if (string.IsNullOrWhiteSpace(fieldName))
+                    {
+                        throw new BridgeCommandException("add_filter 需要 field（参数名）。");
+                    }
+                    object equals = PlanValues.Get(step.Arguments, "equals", "value");
+                    if (equals == null)
+                    {
+                        throw new BridgeCommandException("add_filter 需要 equals 值。");
+                    }
+                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    if (index < 0)
+                    {
+                        ScheduleField added = AddScheduleField(
+                            context.Document, definition, fieldName, true);
+                        index = FindScheduleFieldIndex(definition, fieldName);
+                        if (index < 0)
+                        {
+                            throw new BridgeCommandException("未能定位新增字段：" + fieldName);
+                        }
+                    }
+                    ScheduleField field = definition.GetField(index);
+                    definition.AddFilter(BuildScheduleFilter(field, equals));
+                    break;
+                }
+                case "sort":
+                {
+                    if (string.IsNullOrWhiteSpace(fieldName))
+                    {
+                        throw new BridgeCommandException("sort 需要 field（参数名）。");
+                    }
+                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    if (index < 0)
+                    {
+                        throw new BridgeCommandException("明细表中找不到字段“" + fieldName + "”。");
+                    }
+                    definition.AddSortGroupField(new ScheduleSortGroupField(
+                        definition.GetField(index).FieldId));
+                    break;
+                }
+                case "set_itemized":
+                    definition.IsItemized = PlanValues.Boolean(step.Arguments, true, "itemized");
+                    break;
+                default:
+                    throw new BridgeCommandException(
+                        "manage_schedule_fields.action 仅支持 add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized。");
+            }
+            data["field_count"] = definition.GetFieldCount();
+            data["element_ids"] = new[] { scheduleId.IntegerValue };
+            return data;
+        }
+
+        private static ScheduleField AddScheduleField(
+            Document document, ScheduleDefinition definition, string parameterName, bool isInstance)
+        {
+            Element sample = definition.CategoryId == null
+                ? null
+                : new FilteredElementCollector(document)
+                    .WherePasses(new ElementCategoryFilter(definition.CategoryId))
+                    .WhereElementIsNotElementType()
+                    .FirstOrDefault();
+            Parameter parameter = sample == null ? null : sample.LookupParameter(parameterName);
+            ScheduleFieldType fieldType;
+            ElementId parameterId;
+            if (parameter != null)
+            {
+                fieldType = ScheduleFieldType.Instance;
+                parameterId = parameter.Id;
+            }
+            else
+            {
+                Element sampleType = definition.CategoryId == null
+                    ? null
+                    : new FilteredElementCollector(document)
+                        .WherePasses(new ElementCategoryFilter(definition.CategoryId))
+                        .WhereElementIsElementType()
+                        .FirstOrDefault();
+                Parameter typeParameter = sampleType == null ? null : sampleType.LookupParameter(parameterName);
+                if (typeParameter == null)
+                {
+                    throw new BridgeCommandException(
+                        "明细表类别元素上找不到参数“" + parameterName + "”。");
+                }
+                fieldType = ScheduleFieldType.ElementType;
+                parameterId = typeParameter.Id;
+            }
+            return definition.AddField(fieldType, parameterId);
+        }
+
+        private static int FindScheduleFieldIndex(ScheduleDefinition definition, string fieldName)
+        {
+            if (string.IsNullOrWhiteSpace(fieldName))
+            {
+                return -1;
+            }
+            for (int index = 0; index < definition.GetFieldCount(); index++)
+            {
+                ScheduleField field = definition.GetField(index);
+                if (string.Equals(field.ColumnHeading, fieldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+                SchedulableField schedulable = field.GetSchedulableField();
+                if (schedulable != null &&
+                    string.Equals(schedulable.GetName(), fieldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+            return -1;
+        }
+
+        private static ScheduleFilter BuildScheduleFilter(ScheduleField field, object value)
+        {
+            if (value is bool)
+            {
+                return new ScheduleFilter(field, ScheduleFilterType.Equal, (bool)value ? 1 : 0);
+            }
+            if (value is int || value is short || value is byte || value is long)
+            {
+                return new ScheduleFilter(
+                    field, ScheduleFilterType.Equal, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+            }
+            if (value is double || value is float || value is decimal)
+            {
+                return new ScheduleFilter(
+                    field, ScheduleFilterType.Equal, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+            }
+            return new ScheduleFilter(
+                field, ScheduleFilterType.Equal, Convert.ToString(value, CultureInfo.InvariantCulture));
+        }
+
+        public static Dictionary<string, object> ManageGraphicsResources(PlanStep step, PlanExecutionContext context)
+        {
+            string action = PlanValues.String(step.Arguments, null, "action", "kind", "resource")
+                .Trim().ToLowerInvariant();
+            string name = PlanValues.String(step.Arguments, null, "name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new BridgeCommandException("manage_graphics_resources 需要 name。");
+            }
+            var data = new Dictionary<string, object>
+            {
+                { "action", action },
+                { "name", name }
+            };
+            if (action != "line_style" && action != "fill_pattern")
+            {
+                throw new BridgeCommandException("manage_graphics_resources.action 仅支持 line_style、fill_pattern。");
+            }
+            if (context.Preview)
+            {
+                return data;
+            }
+
+            switch (action)
+            {
+                case "line_style":
+                {
+                    Category lineStyles = context.Document.Settings.Categories.get_Item(BuiltInCategory.OST_LineStyles);
+                    if (lineStyles == null)
+                    {
+                        throw new BridgeCommandException("当前项目没有线样式类别。");
+                    }
+                    Category existing = null;
+                    foreach (Category sub in lineStyles.SubCategories)
+                    {
+                        if (string.Equals(sub.Name, name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            existing = sub;
+                            break;
+                        }
+                    }
+                    if (existing != null)
+                    {
+                        data["created"] = false;
+                        data["element_id"] = existing.Id.IntegerValue;
+                    }
+                    else
+                    {
+                        Category created = context.Document.Settings.Categories.NewSubcategory(lineStyles, name);
+                        if (created == null)
+                        {
+                            throw new BridgeCommandException("创建线样式失败：" + name);
+                        }
+                        data["created"] = true;
+                        data["element_id"] = created.Id.IntegerValue;
+                    }
+                    break;
+                }
+                case "fill_pattern":
+                {
+                    FillPatternElement existing = new FilteredElementCollector(context.Document)
+                        .OfClass(typeof(FillPatternElement))
+                        .Cast<FillPatternElement>()
+                        .FirstOrDefault(candidate =>
+                            string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        data["created"] = false;
+                        data["element_id"] = existing.Id.IntegerValue;
+                        break;
+                    }
+                    string target = PlanValues.String(step.Arguments, "drafting", "target").ToLowerInvariant();
+                    FillPatternTarget fillTarget = target == "model"
+                        ? FillPatternTarget.Model
+                        : FillPatternTarget.Drafting;
+                    FillPatternHostOrientation orientation = fillTarget == FillPatternTarget.Model
+                        ? FillPatternHostOrientation.ToHost
+                        : FillPatternHostOrientation.ToView;
+                    FillPattern pattern = new FillPattern(name, fillTarget, orientation);
+                    ElementId createdId = FillPatternElement.Create(context.Document, pattern);
+                    data["created"] = true;
+                    data["element_id"] = createdId.IntegerValue;
+                    break;
+                }
+            }
+            data["element_ids"] = new[] { (int)data["element_id"] };
+            return data;
+        }
+
+        private static View ResolveGraphicsView(PlanExecutionContext context, IDictionary<string, object> arguments)
+        {
+            View view = ResolveView(context, arguments, true, "view_id", "view");
+            if (view == null)
+            {
+                return null;
+            }
+            if (view.ViewType == ViewType.Schedule || view.ViewType == ViewType.SystemBrowser ||
+                view.ViewType == ViewType.ProjectBrowser || view.ViewType == ViewType.Undefined)
+            {
+                throw new BridgeCommandException("图形替换不适用于视图类型：" + view.ViewType);
+            }
+            return view;
+        }
+
+        private static OverrideGraphicSettings BuildOverrides(IDictionary<string, object> arguments)
+        {
+            var overrides = new OverrideGraphicSettings();
+            object rawColor = PlanValues.Get(arguments, "color", "line_color", "projection_color");
+            if (rawColor != null)
+            {
+                overrides.SetProjectionLineColor(ReadColor(rawColor, "color"));
+            }
+            object rawWeight = PlanValues.Get(arguments, "line_weight", "projection_line_weight");
+            if (rawWeight != null)
+            {
+                int weight = PlanValues.Integer(arguments, 1, "line_weight", "projection_line_weight");
+                if (weight < 1 || weight > 16)
+                {
+                    throw new BridgeCommandException("line_weight 必须在 1 到 16 之间。");
+                }
+                overrides.SetProjectionLineWeight(weight);
+            }
+            if (PlanValues.Boolean(arguments, false, "halftone"))
+            {
+                overrides.SetHalftone(true);
+            }
+            object rawTransparency = PlanValues.Get(arguments, "surface_transparency", "transparency");
+            if (rawTransparency != null)
+            {
+                int transparency = PlanValues.Integer(arguments, 0, "surface_transparency", "transparency");
+                if (transparency < 0 || transparency > 100)
+                {
+                    throw new BridgeCommandException("surface_transparency 必须在 0 到 100 之间。");
+                }
+                overrides.SetSurfaceTransparency(transparency);
+            }
+            object rawSurfaceColor = PlanValues.Get(arguments, "surface_color");
+            if (rawSurfaceColor != null)
+            {
+                overrides.SetSurfaceForegroundPatternColor(ReadColor(rawSurfaceColor, "surface_color"));
+            }
+            return overrides;
+        }
+
+        private static Color ReadColor(object raw, string fieldName)
+        {
+            Dictionary<string, object> values = PlanValues.Dictionary(raw, fieldName);
+            int r = PlanValues.Integer(values, 0, "r", "red");
+            int g = PlanValues.Integer(values, 0, "g", "green");
+            int b = PlanValues.Integer(values, 0, "b", "blue");
+            if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+            {
+                throw new BridgeCommandException(fieldName + " 的 r/g/b 必须在 0 到 255 之间。");
+            }
+            return new Color((byte)r, (byte)g, (byte)b);
+        }
+
         public static Dictionary<string, object> Export(PlanStep step, PlanExecutionContext context)
         {
             string format = PlanValues.String(step.Arguments, null, "format", "kind", "export_kind");

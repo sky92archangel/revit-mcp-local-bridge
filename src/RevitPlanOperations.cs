@@ -24,6 +24,10 @@ namespace RevitCommandBridge
                     return RevitPlanQueries.QueryRoom(step, context);
                 case "check_interferences":
                     return RevitPlanQueries.CheckInterferences(step, context);
+                case "query_mep_network":
+                    return RevitPlanQueries.QueryMepNetwork(step, context);
+                case "query_view_range":
+                    return RevitPlanQueries.QueryViewRange(step, context);
                 case "create_level":
                     return RevitPlanCreations.CreateLevel(step, context);
                 case "create_grid":
@@ -40,12 +44,16 @@ namespace RevitCommandBridge
                     return RevitPlanCreations.CreateModelCurve(step, context);
                 case "create_direct_shape":
                     return RevitPlanCreations.CreateDirectShape(step, context);
+                case "create_swept_shape":
+                    return RevitPlanCreations.CreateSweptShape(step, context);
                 case "create_mep_curve":
                     return RevitPlanCreations.CreateMepCurve(step, context);
                 case "connect_mep":
                     return RevitPlanCreations.ConnectMep(step, context);
                 case "create_mep_system":
                     return RevitPlanCreations.CreateMepSystem(step, context);
+                case "create_insulation":
+                    return RevitPlanCreations.CreateInsulation(step, context);
                 case "place_family_instance":
                     return RevitPlanCreations.PlaceFamilyInstance(step, context);
                 case "load_family":
@@ -90,10 +98,30 @@ namespace RevitCommandBridge
                     return RevitOutputOperations.PlaceScheduleOnSheet(step, context);
                 case "set_view_properties":
                     return RevitOutputOperations.SetViewProperties(step, context);
+                case "set_element_overrides":
+                    return RevitOutputOperations.SetElementOverrides(step, context);
+                case "set_category_overrides":
+                    return RevitOutputOperations.SetCategoryOverrides(step, context);
+                case "manage_view_filters":
+                    return RevitOutputOperations.ManageViewFilters(step, context);
+                case "set_view_range":
+                    return RevitOutputOperations.SetViewRange(step, context);
+                case "manage_schedule_fields":
+                    return RevitOutputOperations.ManageScheduleFields(step, context);
+                case "manage_graphics_resources":
+                    return RevitOutputOperations.ManageGraphicsResources(step, context);
                 case "create_opening":
                     return RevitPlanCreations.CreateOpening(step, context);
                 case "set_parameters":
                     return RevitPlanMutations.SetParameters(step, context);
+                case "manage_schema_data":
+                    return RevitPlanMutations.ManageSchemaData(step, context);
+                case "manage_family_parameters":
+                    return RevitPlanMutations.ManageFamilyParameters(step, context);
+                case "manage_project_parameters":
+                    return RevitParameterAdmin.ManageProjectParameters(step, context);
+                case "duplicate_type":
+                    return RevitPlanMutations.DuplicateType(step, context);
                 case "transform_elements":
                     return RevitPlanMutations.TransformElements(step, context);
                 case "rename_element":
