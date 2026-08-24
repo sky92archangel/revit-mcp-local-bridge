@@ -2,9 +2,9 @@
 
 面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、空间、出图、参数和选中显示，而不是为每一种构件增加一个插件命令。
 
-> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。本交付包支持 Revit 2020–2024；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
+> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。本交付包支持 Revit 2020–2027+；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
-单文件安装器会自动扫描本机 Revit 2020–2024。检测到内置适配包时直接使用；没有对应预编译包时，安装器使用该电脑对应年份的 Revit API 自动生成匹配 DLL。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。2021–2024 的自动适配路线已实现，但仍需分别在装有对应 Revit 的机器上完成加载和建模回归。
+单文件安装器会自动扫描本机 Revit 2020–2027+。检测到内置适配包时直接使用；没有对应预编译包时，安装器使用该电脑对应年份的 Revit API 自动生成匹配 DLL。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。2020–2024 使用 Windows 内置 csc.exe 编译；2025+ 需 .NET SDK（安装器会提示）。每个年份仍需在装有对应 Revit 的机器上完成加载和建模回归。
 
 ## 目录结构
 
@@ -278,4 +278,4 @@ flowchart LR
 | Revit 功能区没有按钮 | 检查 %APPDATA%\Autodesk\Revit\Addins\<year>\RevitCommandBridge.addin |
 | 其它年份 Revit 不加载 | 为对应年份重新引用 RevitAPI.dll / RevitAPIUI.dll 并编译适配包 |
 
-完整请求、响应和操作参数见 [PROTOCOL.md](./PROTOCOL.md)；任意 Harness 可直接采用 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json) 做 Function Calling / 请求校验；长期扩展原则与覆盖边界见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+完整请求、响应和操作参数见 [PROTOCOL.md](./PROTOCOL.md)；任意 Harness 可直接采用 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json) 做 Function Calling / 请求校验；长期扩展原则与覆盖边界见 [ARCHITECTURE.md](./ARCHITECTURE.md)。更多常见问题见 [plans/FAQ.md](./plans/FAQ.md)。

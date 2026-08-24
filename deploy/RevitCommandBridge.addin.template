@@ -4,7 +4,7 @@
     <Name>Revit Command Bridge</Name>
     <Assembly>__ASSEMBLY_PATH__</Assembly>
     <AddInId>7B82A6B1-73C3-4B02-93D4-6C02C1A8F315</AddInId>
-    <FullClassName>RevitCommandBridge.RevitCommandBridgeApp</FullClassName>
+    <FullClassName>__FULL_CLASS_NAME__</FullClassName>
     <VendorId>RCB0</VendorId>
     <VendorDescription>Local, auditable Revit command bridge</VendorDescription>
   </AddIn>

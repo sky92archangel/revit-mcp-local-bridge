@@ -1,16 +1,14 @@
 <Project>
   <!--
-    .NET 10 适配器项目共享属性（Revit 2027+）。
-    Revit 2027 起运行时从 .NET 8 升级到 .NET 10，
-    需要独立的 TargetFramework 和条件编译符号。
+    .NET 10 适配器项目共享 ItemGroup（Revit 2027+）。
+    各年份的 .csproj 独立声明 TargetFramework。
   -->
+
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <AssemblyName>RevitCommandBridge</AssemblyName>
     <RootNamespace>RevitCommandBridge</RootNamespace>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Optimize>true</Optimize>
@@ -18,19 +16,19 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
 
-  <!-- 共享 src/ 下全部源文件（链接方式，不复制） -->
   <ItemGroup>
     <Compile Include="..\src\*.cs" Link="src/%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!-- Revit API 引用（路径由 build.ps1 通过 MSBuild 属性传入） -->
   <ItemGroup>
-    <Reference Include="RevitAPI" HintPath="$(RevitAPI)" Condition="Exists('$(RevitAPI)')" />
-    <Reference Include="RevitAPIUI" HintPath="$(RevitAPIUI)" Condition="Exists('$(RevitAPIUI)')" />
-    <ReferenceErrorText Condition="!Exists('$(RevitAPI)')" />
+    <Reference Include="RevitAPI" Condition="'$(RevitAPI)' != ''">
+      <HintPath>$(RevitAPI)</HintPath>
+    </Reference>
+    <Reference Include="RevitAPIUI" Condition="'$(RevitAPIUI)' != ''">
+      <HintPath>$(RevitAPIUI)</HintPath>
+    </Reference>
   </ItemGroup>
 
-  <!-- System.Text.Json（.NET 10 原生包含，但仍显式保障版本一致性） -->
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="10.0.0" />
   </ItemGroup>

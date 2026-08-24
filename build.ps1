@@ -167,12 +167,17 @@ foreach ($fileName in @('README.md', 'PROTOCOL.md', 'ARCHITECTURE.md',
 }
 
 # ── 5. 版本元数据 ──
+$entryClass = 'RevitCommandBridge.RevitCommandBridgeApp'
+if (Get-Member -InputObject $versionConfig -Name 'entry_class' -MemberType Properties -ErrorAction SilentlyContinue) {
+    $entryClass = 'RevitCommandBridge.' + $versionConfig.entry_class
+}
 $metadata = [ordered]@{
     product       = 'RevitCommandBridge'
     revit_version = $RevitVersion
     protocol      = 'revit-command-bridge/2.0'
     runtime       = $versionConfig.runtime
     symbols       = $versionConfig.define_symbols -join ','
+    entry_class   = $entryClass
 }
 $metadata | ConvertTo-Json | Set-Content (Join-Path $outputDir 'bridge.config.json') -Encoding UTF8
 

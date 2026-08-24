@@ -310,6 +310,11 @@ $installedAssembly = Join-Path $InstallDirectory 'RevitCommandBridge.dll'
 Write-Output 'RCB_INSTALL_STAGE=write-manifest'
 $manifestTemplate = Get-Content -LiteralPath (Join-Path $PackageDirectory 'deploy\RevitCommandBridge.addin.template') -Raw -Encoding UTF8
 $manifest = $manifestTemplate.Replace('__ASSEMBLY_PATH__', [System.Security.SecurityElement]::Escape($installedAssembly))
+$entryClass = [string]$metadata.entry_class
+if ([string]::IsNullOrWhiteSpace($entryClass)) {
+    $entryClass = 'RevitCommandBridge.RevitCommandBridgeApp'
+}
+$manifest = $manifest.Replace('__FULL_CLASS_NAME__', $entryClass)
 New-Item -ItemType Directory -Force -Path $AddinsDirectory | Out-Null
 [System.IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
 

@@ -2,7 +2,7 @@
 
 本次 PR 包含两部分工作：
 
-- **原子操作扩展**：实现 [EXTENSION-PLAN.md](plans/EXTENSION-PLAN.md) 全部范围，原子操作从约 40 个扩展至 **65 个**
+- **原子操作扩展**：实现 [EXTENSION-PLAN.md](plans/EXTENSION-PLAN.md) 全部范围，原子操作从约 40 个扩展至 **64 个**
 - **多版本构建管道**：建立版本清单驱动的跨运行时编译体系，支持 Revit 2020–2027+
 
 总计：**约 38 个文件变更，+6900 行新增**
@@ -18,11 +18,11 @@
 | `321a69e` | 计划迭代 |
 | `d414f7f` | 主实现波：P0/P1/P2 操作 + 查询/出图扩展 |
 | `9e09094` | 最终实现：MEP 查询、截面工厂、Schema 管理 |
-| *(未提交)* | 多版本构建管道：version-manifest、src-net8、src-net10、build-all |
+| `b758753` | 多版本构建管道：version-manifest、src-net8、src-net10、build-all |
 
 ---
 
-## 一、原子操作扩展（65 个操作）
+## 一、原子操作扩展（64 个操作）
 
 ### 新增源文件
 
@@ -55,6 +55,8 @@
 | **P2** 深化表现 | `create_insulation`、`query_mep_network`、`set_element_overrides`+`set_category_overrides`、`manage_view_filters`、`query/set_view_range`、`manage_schedule_fields`、`manage_schema_data`、`create_swept_shape`、`create_view` camera、`manage_family_parameters` | 10/10 |
 | **P3** 按需 | `manage_project_parameters`、`manage_graphics_resources` | 2/2 |
 
+最终 `AtomicOperations` 白名单共 **64 项**（含 `query_document` 等 10 个只读、4 个外部操作、12 个独立新增，加上原有 40 个操作中的重叠去重）。
+
 ### 架构特征
 
 1. **失败预处理器全覆盖**：所有写事务自动挂接 `BridgeFailurePreprocessor`，无人值守队列不因模态警告卡死
@@ -68,10 +70,10 @@
 
 | 文件 | 变更 |
 |------|------|
-| `PROTOCOL.md` | 协议版本升级至 `revit-command-bridge/2.0`，操作表 40→65 项 |
+| `PROTOCOL.md` | 协议版本升级至 `revit-command-bridge/2.0`，操作表 40→64 项 |
 | `schemas/execute-plan.schema.json` | operation enum 扩展 |
 | `plans/EXTENSION-PLAN.md` | 1478 行 — 完整扩展计划与技术设计 |
-| `plans/SEPD-ATOMIC-ANALYSIS.md` | 141 行 — 300+ 生产用法的原子化分析 |
+| `plans/ATOMIC-ANALYSIS.md` | 141 行 — 300+ sepd-revit-extension 用法的原子化分析（取代 SEPD-ATOMIC-ANALYSIS.md） |
 | `plans/FAQ.md` | 117 行 — 常见问题 |
 
 ---

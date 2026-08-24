@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <AssemblyName>RevitCommandBridge</AssemblyName>
     <ApiMajorVersion>26</ApiMajorVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="AdapterEntry26.cs" Link="AdapterEntry.cs" />
+    <Compile Include="AdapterEntry26.cs" />
   </ItemGroup>
 
 </Project>
