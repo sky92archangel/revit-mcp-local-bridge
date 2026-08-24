@@ -541,11 +541,7 @@ namespace RevitCommandBridge
 
         private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, int rangeType)
         {
-#if REVIT_NET8
-            PlanViewRangeType slot = (PlanViewRangeType)rangeType;
-#else
-            PlanViewPlane slot = (PlanViewPlane)rangeType;
-#endif
+PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             ElementId levelId = range.GetLevelId(slot);
             Level level = levelId.IntegerValue == ElementId.InvalidElementId.IntegerValue
                 ? null

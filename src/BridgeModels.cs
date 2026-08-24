@@ -2,12 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-#if REVIT_NET8
 using System.Text.Json;
 using System.Text.Json.Serialization;
-#else
-using System.Web.Script.Serialization;
-#endif
 
 namespace RevitCommandBridge
 {
@@ -86,7 +82,6 @@ namespace RevitCommandBridge
 
     internal static class BridgeJson
     {
-#if REVIT_NET8
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             MaxDepth = 10,
@@ -177,43 +172,6 @@ namespace RevitCommandBridge
         {
             return JsonSerializer.Serialize(value, JsonOptions);
         }
-#else
-        private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer
-        {
-            MaxJsonLength = 1024 * 1024
-        };
-
-        public static BridgeRequest ParseRequest(string json)
-        {
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                throw new BridgeCommandException("命令请求为空。");
-            }
-
-            object parsed;
-            try
-            {
-                parsed = Serializer.DeserializeObject(json);
-            }
-            catch (Exception ex)
-            {
-                throw new BridgeCommandException("命令 JSON 无法解析：" + ex.Message);
-            }
-
-            IDictionary<string, object> root = parsed as IDictionary<string, object>;
-            if (root == null)
-            {
-                throw new BridgeCommandException("命令 JSON 顶层必须是对象。");
-            }
-
-            return BuildRequest(root);
-        }
-
-        public static string Serialize(object value)
-        {
-            return Serializer.Serialize(value);
-        }
-#endif
 
         private static BridgeRequest BuildRequest(IDictionary<string, object> root)
         {

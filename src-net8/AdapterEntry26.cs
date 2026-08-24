@@ -11,9 +11,7 @@ namespace RevitCommandBridge
     {
         public override Result OnStartup(UIControlledApplication application)
         {
-#if REVIT_2026
-            BridgeBuildInfo.SetApiYear(2026);
-#endif
+BridgeBuildInfo.SetApiYear(2026);
             return base.OnStartup(application);
         }
 

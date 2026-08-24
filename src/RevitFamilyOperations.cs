@@ -595,7 +595,6 @@ namespace RevitCommandBridge
 
         private static FamilyParameter AddFamilyParameter(FamilyManager manager, FamilyParameterSpec spec)
         {
-#if REVIT_FORGE_UNITS
             Assembly assembly = manager.GetType().Assembly;
             Type forgeType = assembly.GetType("Autodesk.Revit.DB.ForgeTypeId", false);
             MethodInfo overload = manager.GetType().GetMethods()
@@ -627,16 +626,8 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("创建族参数“" + spec.Name + "”失败：" +
                     (ex.InnerException == null ? ex.Message : ex.InnerException.Message));
             }
-#else
-            return manager.AddParameter(
-                spec.Name,
-                ParseBuiltInParameterGroup(spec.Group),
-                ParseParameterType(spec.Type),
-                spec.IsInstance);
-#endif
         }
 
-#if REVIT_FORGE_UNITS
         private static object ResolveForgeSpecTypeId(Assembly assembly, string type)
         {
             switch (type)
@@ -688,41 +679,6 @@ namespace RevitCommandBridge
                 default: return "Data";
             }
         }
-#else
-        private static ParameterType ParseParameterType(string type)
-        {
-            switch (type)
-            {
-                case "text": return ParameterType.Text;
-                case "multiline_text": return ParameterType.MultilineText;
-                case "integer": return ParameterType.Integer;
-                case "number": return ParameterType.Number;
-                case "length": return ParameterType.Length;
-                case "area": return ParameterType.Area;
-                case "volume": return ParameterType.Volume;
-                case "angle": return ParameterType.Angle;
-                case "yesno": return ParameterType.YesNo;
-                case "material": return ParameterType.Material;
-                case "url": return ParameterType.URL;
-                default:
-                    throw new BridgeCommandException("不支持的 Revit 2020 族参数类型：" + type);
-            }
-        }
-
-        private static BuiltInParameterGroup ParseBuiltInParameterGroup(string group)
-        {
-            switch (group)
-            {
-                case "constraints": return BuiltInParameterGroup.PG_CONSTRAINTS;
-                case "geometry": return BuiltInParameterGroup.PG_GEOMETRY;
-                case "identity": return BuiltInParameterGroup.PG_IDENTITY_DATA;
-                case "materials": return BuiltInParameterGroup.PG_MATERIALS;
-                case "text": return BuiltInParameterGroup.PG_TEXT;
-                case "data":
-                default: return BuiltInParameterGroup.PG_DATA;
-            }
-        }
-#endif
 
         private static List<FamilyTypeSpec> AddFamilyTypes(
             Document familyDocument,

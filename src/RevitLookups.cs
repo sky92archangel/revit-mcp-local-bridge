@@ -258,11 +258,7 @@ namespace RevitCommandBridge
             {
                 case StorageType.Double:
                     data["internal_value"] = parameter.AsDouble();
-#if REVIT_FORGE_UNITS
-                    data["display_unit_type"] = parameter.GetUnitTypeId().TypeId;
-#else
-                    data["display_unit_type"] = parameter.DisplayUnitType.ToString();
-#endif
+data["display_unit_type"] = parameter.GetUnitTypeId().TypeId;
                     break;
                 case StorageType.Integer:
                     data["value"] = parameter.AsInteger();

@@ -10,8 +10,7 @@ namespace RevitCommandBridge
     /// <summary>
     /// 参数定义层（项目参数 / 共享参数 / 族参数）的类型与分组解析，
     /// 以及 manage_project_parameters 的实现。
-    /// 版本断代集中在此：2020 用 ParameterType/BuiltInParameterGroup，
-    /// 2021+ 用 ForgeTypeId 规格（REVIT_FORGE_UNITS），2023+ 分组也换成 ForgeTypeId（REVIT_PARAMETER_GROUPS）。
+    /// 使用 ForgeTypeId（SpecTypeId / GroupTypeId）API。
     /// </summary>
     internal static class RevitParameterAdmin
     {
@@ -82,7 +81,6 @@ namespace RevitCommandBridge
             }
         }
 
-#if REVIT_FORGE_UNITS
         public static ForgeTypeId ResolveSpec(string token)
         {
             switch (NormalizeSpecToken(token))
@@ -97,24 +95,7 @@ namespace RevitCommandBridge
                 default: return SpecTypeId.Length;
             }
         }
-#else
-        public static ParameterType ResolveSpec(string token)
-        {
-            switch (NormalizeSpecToken(token))
-            {
-                case "length": return ParameterType.Length;
-                case "number": return ParameterType.Number;
-                case "text": return ParameterType.Text;
-                case "yesno": return ParameterType.YesNo;
-                case "angle": return ParameterType.Angle;
-                case "area": return ParameterType.Area;
-                case "volume": return ParameterType.Volume;
-                default: return ParameterType.Length;
-            }
-        }
-#endif
 
-#if REVIT_PARAMETER_GROUPS
         private static ForgeTypeId ResolveGroup(string token)
         {
             switch (NormalizeGroupToken(token))
@@ -135,28 +116,6 @@ namespace RevitCommandBridge
                 default: return GroupTypeId.Data;
             }
         }
-#else
-        private static BuiltInParameterGroup ResolveGroup(string token)
-        {
-            switch (NormalizeGroupToken(token))
-            {
-                case "geometry": return BuiltInParameterGroup.PG_GEOMETRY;
-                case "data": return BuiltInParameterGroup.PG_DATA;
-                case "general": return BuiltInParameterGroup.PG_GENERAL;
-                case "mechanical": return BuiltInParameterGroup.PG_MECHANICAL;
-                case "electrical": return BuiltInParameterGroup.PG_ELECTRICAL;
-                case "plumbing": return BuiltInParameterGroup.PG_PLUMBING;
-                case "text": return BuiltInParameterGroup.PG_TEXT;
-                case "identity": return BuiltInParameterGroup.PG_IDENTITY_DATA;
-                case "materials": return BuiltInParameterGroup.PG_MATERIALS;
-                case "structural": return BuiltInParameterGroup.PG_STRUCTURAL;
-                case "constraints": return BuiltInParameterGroup.PG_CONSTRAINTS;
-                case "visibility": return BuiltInParameterGroup.PG_VISIBILITY;
-                case "phasing": return BuiltInParameterGroup.PG_PHASING;
-                default: return BuiltInParameterGroup.PG_DATA;
-            }
-        }
-#endif
 
         public static FamilyParameter AddFamilyParameter(
             FamilyManager manager,
@@ -165,18 +124,8 @@ namespace RevitCommandBridge
             string groupToken,
             bool isInstance)
         {
-#if REVIT_FORGE_UNITS
-            ForgeTypeId spec = ResolveSpec(typeToken);
-#else
-            ParameterType spec = ResolveSpec(typeToken);
-#endif
-#if REVIT_PARAMETER_GROUPS
-            ForgeTypeId group = ResolveGroup(groupToken);
-#else
-            BuiltInParameterGroup group = ResolveGroup(groupToken);
-#endif
-            // 2020: AddParameter(name, group, spec, isInstance)
-            // 2021+: 参数类型换 ForgeTypeId；2023+ 分组换 GroupTypeId——位置不变
+ForgeTypeId spec = ResolveSpec(typeToken);
+ForgeTypeId group = ResolveGroup(groupToken);
             return manager.AddParameter(name, group, spec, isInstance);
         }
 
@@ -292,13 +241,9 @@ namespace RevitCommandBridge
             ExternalDefinition definition = group.Definitions.get_Item(name) as ExternalDefinition;
             if (definition == null)
             {
-#if REVIT_FORGE_UNITS
-                ExternalDefinitionCreationOptions options =
-                    new ExternalDefinitionCreationOptions(name, ResolveSpec(typeToken));
-                definition = group.Definitions.Create(options) as ExternalDefinition;
-#else
-                definition = group.Definitions.Create(name, ResolveSpec(typeToken)) as ExternalDefinition;
-#endif
+ExternalDefinitionCreationOptions options =
+    new ExternalDefinitionCreationOptions(name, ResolveSpec(typeToken));
+definition = group.Definitions.Create(options) as ExternalDefinition;
             }
             if (definition == null)
             {
@@ -322,11 +267,7 @@ namespace RevitCommandBridge
             ElementBinding binding = isInstance
                 ? (ElementBinding)application.Create.NewInstanceBinding(categorySet)
                 : application.Create.NewTypeBinding(categorySet);
-#if REVIT_PARAMETER_GROUPS
-            bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
-#else
-            bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
-#endif
+bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
             data["bound"] = bound;
             return data;
         }

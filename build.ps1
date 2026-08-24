@@ -57,69 +57,12 @@ $assemblyPath = Join-Path $outputDir 'RevitCommandBridge.dll'
 
 # ── 3. 按编译器分派 ──
 switch ($versionConfig.compiler) {
-
-    # ═══════════════════════════════════════════
-    # 管道 A：csc.exe（Revit 2020-2024）
-    # ═══════════════════════════════════════════
-    'csc' {
-        $cscPath = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-        if (-not (Test-Path -LiteralPath $cscPath)) {
-            throw "csc.exe 未找到: $cscPath"
-        }
-        if (-not (Test-Path -LiteralPath $revitApi)) {
-            throw "RevitAPI.dll 未找到: $revitApi"
-        }
-
-        $sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src') -Filter '*.cs' |
-            Sort-Object Name | ForEach-Object FullName)
-
-        $refArgs = @()
-        $refArgs += "/reference:$revitApi"
-        $refArgs += "/reference:$revitApiUi"
-
-        # 框架引用（简单名称，csc 自动搜索路径）
-        foreach ($refName in $versionConfig.framework_references) {
-            $refArgs += "/reference:$refName"
-        }
-
-        # WPF 引用（硬编码路径，与原始 build.ps1 一致）
-        $wpfDir = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF'
-        foreach ($refName in $versionConfig.wpf_references) {
-            $refPath = Join-Path $wpfDir $refName
-            if (Test-Path -LiteralPath $refPath) {
-                $refArgs += "/reference:$refPath"
-            } else {
-                Write-Warning "WPF 引用未找到: $refPath"
-            }
-        }
-
-        $defineArgs = if ($versionConfig.define_symbols.Count -gt 0) {
-            @("/define:" + ($versionConfig.define_symbols -join ';'))
-        } else { @() }
-
-        $cscArgs = @(
-            '/nologo', '/target:library', '/platform:anycpu',
-            '/optimize+', '/debug:pdbonly'
-        ) + $defineArgs + @("/out:$assemblyPath") + $refArgs + $sourceFiles
-
-        Write-Host "[csc] 编译 Revit $RevitVersion ..."
-        & $cscPath @cscArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "Revit $RevitVersion 编译失败 (csc exit code: $LASTEXITCODE)"
-        }
-        Write-Host "[csc] $assemblyPath"
-    }
-
-    # ═══════════════════════════════════════════
-    # 管道 B：dotnet build（Revit 2025+，运行时由 manifest 指定）
-    # ═══════════════════════════════════════════
     'dotnet' {
         $projectFile = Join-Path $PSScriptRoot $versionConfig.project_file
         if (-not (Test-Path -LiteralPath $projectFile)) {
             throw "项目文件未找到: $projectFile"
         }
 
-        # 验证 dotnet SDK
         $dotnetVersion = dotnet --version 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw ".NET SDK 未安装。请安装 .NET 8/10 SDK。"
@@ -127,10 +70,7 @@ switch ($versionConfig.compiler) {
         Write-Host "[dotnet] SDK version: $($dotnetVersion.Trim())"
 
         Write-Host "[dotnet] 编译 Revit $RevitVersion ($($versionConfig.runtime)) ..."
-        Write-Host "[dotnet] symbols: $($versionConfig.define_symbols -join ';')"
-        $constantsValue = ($versionConfig.define_symbols -join ';').Replace(';', '%3B')
         dotnet build $projectFile --configuration Release `
-            -p:DefineConstants="$constantsValue" `
             -p:RevitAPI="$revitApi" `
             -p:RevitAPIUI="$revitApiUi" `
             -p:OutputPath="$outputDir" `
@@ -143,7 +83,7 @@ switch ($versionConfig.compiler) {
     }
 
     default {
-        throw "未知编译器类型: $($versionConfig.compiler)。version-manifest.json 中 compiler 字段仅支持 csc 或 dotnet。"
+        throw "未知编译器类型: $($versionConfig.compiler)。version-manifest.json 中 compiler 字段仅支持 dotnet。"
     }
 }
 
@@ -159,7 +99,7 @@ foreach ($directoryName in @('scripts', 'examples', 'deploy', 'schemas', 'src', 
 
 foreach ($fileName in @('README.md', 'PROTOCOL.md', 'ARCHITECTURE.md',
     'ENGINEERING-RECORD.md', 'VERSION-SUPPORT.md', 'CONNECTORS.md',
-    'install-revit.ps1', 'uninstall-revit.ps1', 'build-revit-adapter.ps1'))
+    'install-revit.ps1', 'uninstall-revit.ps1'))
 {
     $source = Join-Path $PSScriptRoot $fileName
     if (Test-Path -LiteralPath $source) {

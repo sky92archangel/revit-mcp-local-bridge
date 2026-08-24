@@ -3,7 +3,7 @@ param(
     [string]$DistDirectory,
     [string]$OutputPath,
     [string]$NodeExecutable,
-    [ValidatePattern('^20(2[0-4])$')]
+    [ValidatePattern('^20(2[5-7])$')]
     [string[]]$RevitVersion
 )
 
