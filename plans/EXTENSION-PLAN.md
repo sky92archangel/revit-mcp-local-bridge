@@ -1086,7 +1086,7 @@ view.SetFilterVisibility(filter.Id, true);
 view.SetFilterOverrides(filter.Id, BuildOverrides(step.Arguments));
 ```
 
-`FindParameterId`：候选类别 `FilteredElementCollector` 首个元素的 `LookupParameter(parameterName).Id`（BIP `GetElement` 兜底）。**版本注意**：`ParameterFilterRuleFactory.CreateEqualsRule` 在 2020 有效、更高版本逐步弃用——若未来支持包上 2025+，用 `FilterStringRule` / `FilterNumericEquals` 组合并 `#if` 切换。
+`FindParameterId`：候选类别 `FilteredElementCollector` 首个元素的 `LookupParameter(parameterName).Id`（BIP `GetElement` 兜底）。**版本注意**：`ParameterFilterRuleFactory.CreateEqualsRule` 在 2020 有效、2021+ 逐步弃用——用 `FilterStringRule` / `FilterNumericEquals` 组合并 `#if REVIT_FORGE_UNITS` 切换。
 
 ### 7.5 `query_view_range` / `set_view_range`（SEPD ☆#5）
 
@@ -1380,7 +1380,7 @@ get-or-create 语义的线型 / 填充样式工具（低优先，也可并入未
 
 | 事项 | 说明 |
 | --- | --- |
-| 目标版本不同 | 共享库面向 **Revit 2024–2026**（`UnitConverter.cs` 头部注明"仅支持 Revit 2024~2026"）；桥接支持 **2020–2024**。两者交集仅 2024 |
+| 目标版本不同 | 共享库面向 **Revit 2024**（`UnitConverter.cs` 头部注明"仅支持 Revit 2024"）；桥接支持 **2020–2024**。两者交集仅 2024 |
 | 单位 API 断代 | 库中 `UnitTypeId` / `ForgeTypeId` / `SpecTypeId` 是 Revit **2021+** API；Revit 2020 需 `DisplayUnitType.DUT_*` 旧体系。桥接 2020 适配包应继续用自有的 `FeetPerMillimeter` 常量（`src/RevitCommandExecutor.cs`），不要直接搬 `UnitConverter`。仓库已有 `#if REVIT_FORGE_UNITS` 先例（`src/RevitLookups.cs:261`），所有断代点集中走该符号 |
 | 条件编译先例 | 库内 `FilterRuleExtension.cs` 使用 `#if RLS_REVIT_2026` 按年份切换实现——与桥接 `REVIT_FORGE_UNITS` 模式互证：一份源码 + 编译符号，替代按年份维护分支 |
 | 移植原则 | 只取**算法模式**（连接件配对、延伸求交、AllRefs 遍历、失败预处理流程），在桥接代码风格（`PlanValues` 取参、`BridgeCommandException` 报错、mm 默认单位）下重写 |

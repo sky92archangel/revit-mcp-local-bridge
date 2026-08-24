@@ -26,7 +26,7 @@
 
 | ID | 项目 | 取用/未取用 | 版本证据 |
 | --- | --- | --- | --- |
-| G1 | [mcp-servers-for-revit/revit-mcp](https://github.com/mcp-servers-for-revit/revit-mcp) | 参考工具注册与线/点构件抽象；不直接复用其“一个工具一个处理器”结构 | MIT，`c9ef49e4c397298d291304f822b89ba3a102e6bf` |
+| G1 | [mcp-servers-for-revit/revit-mcp](https://github.com/mcp-servers-for-revit/revit-mcp) | 参考工具注册与线/点构件抽象；不直接复用其"一个工具一个处理器"结构 | MIT，`c9ef49e4c397298d291304f822b89ba3a102e6bf` |
 | G2 | [mcp-servers-for-revit/revit-mcp-plugin](https://github.com/mcp-servers-for-revit/revit-mcp-plugin) | 参考 ExternalEvent / 命令注册思路；不使用其直接代码执行入口 | MIT，`80085027e3770cd0d7e038daa6637e92769c7573` |
 
 ## 覆盖矩阵
@@ -45,7 +45,6 @@
 | [T] | 真机创建 pipe/duct/conduit/cable tray、族和 MEP fitting | 需在含对应类型/系统的项目中逐项预览和执行 |
 | [T] | 新增出图扩展真实 Revit 回归 | 用户本轮要求不做真机测试；需在含图框、标签、文字、修订资源的项目中逐项预览和执行 |
 | [T] | Revit 2021–2024 适配包 | 构建路由已实现；仍需要该年份 Revit API DLL 与独立构建/真机验证 |
-| [T] | Revit 2025–2026 适配包 | 需完成 .NET 8 适配构建和真机验证 |
 
 ## 已知待办
 
@@ -55,4 +54,3 @@
 | P1 | 宿主/面基/工作平面族 | 增加通用 host、face、work-plane 放置原子参数 |
 | P1 | 自动 MEP 路径和避障 | 作为上层规划器能力，生成多个 `create_mep_curve` + `connect_mep` 步骤 |
 | P2 | Revit 2021–2024 适配 | 为每个目标年份提供 Revit API、生成对应 DLL 并建立真机兼容测试矩阵 |
-| P2 | Revit 2025–2026 .NET 8 适配 | 将宿主层迁移到 .NET 8，同时保持 `execute_plan` 协议不变 |
