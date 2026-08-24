@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ApiMajorVersion>26</ApiMajorVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AdapterEntry26.cs" Link="AdapterEntry.cs" />
+  </ItemGroup>
+
+</Project>

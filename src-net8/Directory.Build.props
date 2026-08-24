@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    .NET 8 适配器项目共享属性。
+    各年份的独立 .csproj 通过 Import 此文件获得公共配置。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>RevitCommandBridge</AssemblyName>
+    <RootNamespace>RevitCommandBridge</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!-- 共享 src/ 下全部源文件（链接方式，不复制） -->
+  <ItemGroup>
+    <Compile Include="..\src\*.cs" Link="src/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Revit API 引用（路径由 build.ps1 通过 MSBuild 属性传入） -->
+  <ItemGroup>
+    <Reference Include="RevitAPI" HintPath="$(RevitAPI)" Condition="Exists('$(RevitAPI)')" />
+    <Reference Include="RevitAPIUI" HintPath="$(RevitAPIUI)" Condition="Exists('$(RevitAPIUI)')" />
+    <ReferenceErrorText Condition="!Exists('$(RevitAPI)')" />
+  </ItemGroup>
+
+  <!-- 替代 System.Web.Extensions（.NET 8 无此程序集） -->
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.4" />
+  </ItemGroup>
+</Project>

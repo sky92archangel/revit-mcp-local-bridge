@@ -6,6 +6,116 @@
 
 单文件安装器会自动扫描本机 Revit 2020–2024。检测到内置适配包时直接使用；没有对应预编译包时，安装器使用该电脑对应年份的 Revit API 自动生成匹配 DLL。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。2021–2024 的自动适配路线已实现，但仍需分别在装有对应 Revit 的机器上完成加载和建模回归。
 
+## 目录结构
+
+```
+revit-mcp-local-bridge/
+│
+├── src/                               ← ★ 单一事实源（22 个 .cs，全部版本共享）
+│   ├── BridgeModels.cs
+│   ├── BridgeRuntime.cs
+│   ├── PlanCommandExecutor.cs
+│   ├── RevitCommandExecutor.cs
+│   ├── RevitCommandBridgeApp.cs
+│   ├── RevitLookups.cs
+│   ├── RevitParameterAdmin.cs
+│   ├── RevitPlanCreations.cs
+│   ├── RevitPlanMutations.cs
+│   ├── RevitPlanQueries.cs
+│   ├── RevitPlanOperations.cs
+│   ├── RevitFamilyOperations.cs
+│   ├── RevitGeometryFactory.cs
+│   ├── RevitSectionFactory.cs
+│   ├── RevitOutputOperations.cs
+│   ├── CommandPanelForm.cs
+│   ├── BridgeFailurePreprocessor.cs
+│   ├── BridgeFamilyLoadOptions.cs
+│   ├── BridgeFileQueue.cs
+│   ├── BridgeSchemas.cs
+│   ├── BridgeBuildInfo.cs
+│   └── PlanValues.cs
+│
+├── build/                             ← 版本矩阵 & 编译属性
+│   ├── version-manifest.json
+│   └── props/
+│       ├── net48.common.props
+│       └── net8.common.props
+│
+├── src-net8/                          ← .NET 8 项目族（Revit 2025–2026）
+│   ├── Directory.Build.props
+│   ├── RevitCommandBridge.Adapter25.csproj
+│   ├── RevitCommandBridge.Adapter26.csproj
+│   ├── AdapterEntry25.cs
+│   └── AdapterEntry26.cs
+│
+├── src-net10/                         ← .NET 10 项目族（Revit 2027+）
+│   ├── Directory.Build.props
+│   ├── RevitCommandBridge.Adapter27.csproj
+│   └── AdapterEntry27.cs
+│
+├── scripts/                           ← 运行时脚本
+│   ├── revit-mcp-server.mjs
+│   ├── revit-http-gateway.mjs
+│   ├── revit-openai-compatible-chat.mjs
+│   ├── bridge-client.mjs
+│   ├── send-revit-command.ps1
+│   ├── configure-ai-provider.ps1
+│   ├── configure-connector.ps1
+│   ├── configure-detected-clients.ps1
+│   └── start-openai-compatible-chat.ps1
+│
+├── examples/                          ← 请求示例
+│   ├── health.json
+│   ├── create-level.json
+│   ├── preview-rectangle-walls.json
+│   ├── preview-universal-plan.json
+│   ├── preview-create-family.json
+│   ├── preview-export-image.json
+│   ├── preview-architecture-output-plan.json
+│   └── preview-output-documentation-plan.json
+│
+├── schemas/
+│   └── execute-plan.schema.json
+│
+├── plans/                             ← 设计方案
+│   ├── BUILD-PIPELINE.md
+│   ├── EXTENSION-PLAN.md
+│   ├── REVIT2025-PORT.md
+│   ├── SEPD-ATOMIC-ANALYSIS.md
+│   ├── FAQ.md
+│   └── PR-DESCRIPTION.md
+│
+├── deploy/
+│   └── RevitCommandBridge.addin.template
+│
+├── verification/
+│   └── 2026-08-19-regression.md
+│
+├── setup/
+│   ├── RevitAIHubSetup.cs
+│   └── RevitCommandBridge.ico
+│
+├── release/                           ← 发布包输出
+├── build.ps1                          ← 单版本编译
+├── build-all.ps1                      ← 全版本批量编译
+├── build-installer.ps1                ← 安装器打包
+├── build-revit-adapter.ps1
+├── install-revit.ps1                  ← 安装/检测
+├── install-revit2020.ps1
+├── uninstall-revit.ps1
+├── PROTOCOL.md
+├── ARCHITECTURE.md
+├── VERSION-SUPPORT.md
+├── CONNECTORS.md
+├── ENGINEERING-RECORD.md
+├── NOTICE.md
+├── LICENSE
+├── SOURCE-PACKAGE.txt
+└── README.md
+```
+
+更多构建管道细节见 [plans/BUILD-PIPELINE.md](./plans/BUILD-PIPELINE.md)。
+
 ## 快速开始
 
 先查看可安装的 Revit：

@@ -24,7 +24,7 @@ using WpfTypeface = System.Windows.Media.Typeface;
 
 namespace RevitCommandBridge
 {
-    public sealed class RevitCommandBridgeApp : IExternalApplication
+    public class RevitCommandBridgeApp : IExternalApplication
     {
         public Result OnStartup(UIControlledApplication application)
         {
