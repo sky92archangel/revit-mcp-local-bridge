@@ -137,9 +137,50 @@ namespace RevitCommandBridge
                 }
             }
 
-            public override void Write(Utf8JsonWriter writer, Dictionary<string, object> value, JsonSerializerOptions options)
+public override void Write(Utf8JsonWriter writer, Dictionary<string, object> value, JsonSerializerOptions options)
             {
-                JsonSerializer.Serialize(writer, value, options);
+                writer.WriteStartObject();
+                foreach (KeyValuePair<string, object> kvp in value)
+                {
+                    writer.WritePropertyName(kvp.Key);
+                    WriteValue(writer, kvp.Value);
+                }
+                writer.WriteEndObject();
+            }
+
+            private static void WriteValue(Utf8JsonWriter writer, object value)
+            {
+                if (value == null)
+                {
+                    writer.WriteNullValue();
+                    return;
+                }
+                if (value is Dictionary<string, object> dict)
+                {
+                    writer.WriteStartObject();
+                    foreach (KeyValuePair<string, object> kvp in dict)
+                    {
+                        writer.WritePropertyName(kvp.Key);
+                        WriteValue(writer, kvp.Value);
+                    }
+                    writer.WriteEndObject();
+                    return;
+                }
+                if (value is IList<object> list)
+                {
+                    writer.WriteStartArray();
+                    foreach (object item in list)
+                        WriteValue(writer, item);
+                    writer.WriteEndArray();
+                    return;
+                }
+                if (value is string s) { writer.WriteStringValue(s); return; }
+                if (value is bool b) { writer.WriteBooleanValue(b); return; }
+                if (value is long l) { writer.WriteNumberValue(l); return; }
+                if (value is double d) { writer.WriteNumberValue(d); return; }
+                if (value is int i) { writer.WriteNumberValue(i); return; }
+                if (value is decimal m) { writer.WriteNumberValue(m); return; }
+                writer.WriteStringValue(value.ToString());
             }
         }
 

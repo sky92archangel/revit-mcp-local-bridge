@@ -6,8 +6,31 @@
     <ApiMajorVersion>26</ApiMajorVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="AdapterEntry26.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>..\depandency\RevitAPI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>..\depandency\RevitAPIUI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="copy &quot;$(TargetDir)$(TargetFileName)&quot; &quot;C:\ProgramData\Autodesk\Revit\Addins\2026\&quot; /Y&#xA;copy &quot;$(ProjectDir)RevitCommandBridge.2026.addin&quot; &quot;C:\ProgramData\Autodesk\Revit\Addins\2026\&quot; /Y&#xA;" />
+  </Target>
 
 </Project>

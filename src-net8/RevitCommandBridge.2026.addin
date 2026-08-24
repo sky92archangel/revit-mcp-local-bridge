@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Revit Command Bridge</Name>
+    <Assembly>C:\ProgramData\Autodesk\Revit\Addins\2026\RevitCommandBridge.dll</Assembly>
+    <AddInId>C3D736C1-54D3-47E4-9403-FBF2FFB2A07F</AddInId>
+    <FullClassName>RevitCommandBridge.RevitCommandBridgeApp26</FullClassName>
+    <VendorId>RCB0</VendorId>
+    <VendorDescription>Local, auditable Revit command bridge</VendorDescription>
+  </AddIn>
+</RevitAddIns>

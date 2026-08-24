@@ -26,8 +26,11 @@ for await (const line of input) {
   if (!line.trim()) {
     continue;
   }
-
-  await handleLine(line);
+  try {
+    await handleLine(line);
+  } catch (loopErr) {
+    console.error("HANDLE_ERROR:", loopErr?.stack || loopErr);
+  }
 }
 
 async function handleLine(line) {
@@ -376,7 +379,11 @@ function parseWaitSeconds(value) {
 }
 
 function writeMessage(message) {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
+  try {
+    process.stdout.write(`${JSON.stringify(message)}\n`);
+  } catch (writeErr) {
+    console.error("WRITE_FAIL:", writeErr?.message, JSON.stringify(message).slice(0, 200));
+  }
 }
 
 function jsonRpcError(id, code, message, data) {
