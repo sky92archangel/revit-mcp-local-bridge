@@ -223,7 +223,7 @@ namespace RevitCommandBridge
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", level.Id.IntegerValue },
+                    { "id", (int)level.Id.Value },
                     { "name", level.Name },
                     { "elevation_mm", RoundMillimeters(level.Elevation) }
                 });
@@ -243,7 +243,7 @@ namespace RevitCommandBridge
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", wallType.Id.IntegerValue },
+                    { "id", (int)wallType.Id.Value },
                     { "name", wallType.Name },
                     { "width_mm", RoundMillimeters(wallType.Width) }
                 });
@@ -283,7 +283,7 @@ namespace RevitCommandBridge
                 transaction.Commit();
             }
 
-            plan["id"] = created.Id.IntegerValue;
+            plan["id"] = (int)created.Id.Value;
             plan["name"] = created.Name;
             return BridgeResponse.Success("completed", "已创建标高“" + created.Name + "”。", plan);
         }
@@ -322,7 +322,7 @@ namespace RevitCommandBridge
                 transaction.Commit();
             }
 
-            plan["id"] = created.Id.IntegerValue;
+            plan["id"] = (int)created.Id.Value;
             plan["name"] = created.Name;
             return BridgeResponse.Success("completed", "已创建轴网“" + created.Name + "”。", plan);
         }
@@ -392,7 +392,7 @@ namespace RevitCommandBridge
             }
 
             plan["wall_type_target"] = targetType.Name;
-            plan["wall_ids"] = walls.Select(wall => wall.Id.IntegerValue).ToArray();
+            plan["wall_ids"] = walls.Select(wall => (int)wall.Id.Value).ToArray();
             return BridgeResponse.Success("completed", "已创建 4 面矩形墙。", plan);
         }
 
@@ -453,7 +453,7 @@ namespace RevitCommandBridge
             }
 
             plan["wall_type_target"] = targetType.Name;
-            plan["id"] = created.Id.IntegerValue;
+            plan["id"] = (int)created.Id.Value;
             return BridgeResponse.Success("completed", "已创建墙体。", plan);
         }
 

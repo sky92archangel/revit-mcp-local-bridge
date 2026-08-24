@@ -20,7 +20,7 @@ namespace RevitCommandBridge
             {
                 { "kind", "drafting" },
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
+                { "type_id", type.Id.Value },
                 { "name", name }
             };
             if (context.Preview)
@@ -30,8 +30,8 @@ namespace RevitCommandBridge
 
             ViewDrafting view = ViewDrafting.Create(context.Document, type.Id);
             SetOptionalViewName(view, name);
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["element_id"] = view.Id.Value;
+            data["element_ids"] = new[] { view.Id.Value };
             data["name"] = view.Name;
             return data;
         }
@@ -69,7 +69,7 @@ namespace RevitCommandBridge
             {
                 { "kind", kind },
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
+                { "type_id", type.Id.Value },
                 { "origin", PlanValues.PointData(origin) },
                 { "direction", VectorData(direction) },
                 { "up", VectorData(up) },
@@ -97,8 +97,8 @@ namespace RevitCommandBridge
                 ? ViewSection.CreateDetail(context.Document, type.Id, box)
                 : ViewSection.CreateSection(context.Document, type.Id, box);
             SetOptionalViewName(view, name);
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["element_id"] = view.Id.Value;
+            data["element_ids"] = new[] { view.Id.Value };
             data["name"] = view.Name;
             return data;
         }
@@ -126,8 +126,8 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
-                { "plan_view_id", planView.Id.IntegerValue },
+                { "type_id", type.Id.Value },
+                { "plan_view_id", planView.Id.Value },
                 { "origin", PlanValues.PointData(origin) },
                 { "index", index },
                 { "scale", scale },
@@ -141,9 +141,9 @@ namespace RevitCommandBridge
             ElevationMarker marker = ElevationMarker.CreateElevationMarker(context.Document, type.Id, origin, scale);
             ViewSection view = marker.CreateElevation(context.Document, planView.Id, index);
             SetOptionalViewName(view, name);
-            data["marker_id"] = marker.Id.IntegerValue;
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["marker_id"] = marker.Id.Value;
+            data["element_id"] = view.Id.Value;
+            data["element_ids"] = new[] { view.Id.Value };
             data["name"] = view.Name;
             return data;
         }
@@ -161,9 +161,9 @@ namespace RevitCommandBridge
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
             var data = new Dictionary<string, object>
             {
-                { "parent_view_id", parent == null ? (object)null : parent.Id.IntegerValue },
+                { "parent_view_id", parent == null ? (object)null : parent.Id.Value },
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
+                { "type_id", type.Id.Value },
                 { "start", PlanValues.PointData(start) },
                 { "end", PlanValues.PointData(end) },
                 { "name", name }
@@ -174,8 +174,8 @@ namespace RevitCommandBridge
             }
             View created = ViewSection.CreateCallout(context.Document, parent.Id, type.Id, start, end);
             SetOptionalViewName(created, name);
-            data["element_id"] = created.Id.IntegerValue;
-            data["element_ids"] = new[] { created.Id.IntegerValue };
+            data["element_id"] = created.Id.Value;
+            data["element_ids"] = new[] { created.Id.Value };
             data["name"] = created.Name;
             return data;
         }
@@ -203,7 +203,7 @@ namespace RevitCommandBridge
             string templateName = PlanValues.String(step.Arguments, null, "view_template", "template");
             var data = new Dictionary<string, object>
             {
-                { "source_view_id", source == null ? (object)null : source.Id.IntegerValue },
+                { "source_view_id", source == null ? (object)null : source.Id.Value },
                 { "option", option.ToString() },
                 { "name", name },
                 { "view_template", string.IsNullOrWhiteSpace(templateName) ? (object)null : templateName }
@@ -228,8 +228,8 @@ namespace RevitCommandBridge
             }
             SetOptionalViewName(duplicate, name);
             ApplyOptionalViewTemplate(context, duplicate, rawTemplateId, templateName);
-            data["element_id"] = duplicate.Id.IntegerValue;
-            data["element_ids"] = new[] { duplicate.Id.IntegerValue };
+            data["element_id"] = duplicate.Id.Value;
+            data["element_ids"] = new[] { duplicate.Id.Value };
             data["name"] = duplicate.Name;
             return data;
         }
@@ -240,7 +240,7 @@ namespace RevitCommandBridge
             string name = PlanValues.String(step.Arguments, null, "name", "template_name");
             var data = new Dictionary<string, object>
             {
-                { "source_view_id", source == null ? (object)null : source.Id.IntegerValue },
+                { "source_view_id", source == null ? (object)null : source.Id.Value },
                 { "name", name }
             };
             if (source == null || context.Preview)
@@ -257,8 +257,8 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("当前视图类型不支持创建视图样板。");
             }
             SetOptionalViewName(template, name);
-            data["element_id"] = template.Id.IntegerValue;
-            data["element_ids"] = new[] { template.Id.IntegerValue };
+            data["element_id"] = template.Id.Value;
+            data["element_ids"] = new[] { template.Id.Value };
             data["name"] = template.Name;
             return data;
         }
@@ -274,7 +274,7 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
                 { "start", PlanValues.PointData(start) },
                 { "end", PlanValues.PointData(end) }
             };
@@ -283,8 +283,8 @@ namespace RevitCommandBridge
                 return data;
             }
             DetailCurve curve = context.Document.Create.NewDetailCurve(view, Line.CreateBound(start, end));
-            data["element_id"] = curve.Id.IntegerValue;
-            data["element_ids"] = new[] { curve.Id.IntegerValue };
+            data["element_id"] = curve.Id.Value;
+            data["element_ids"] = new[] { curve.Id.Value };
             return data;
         }
 
@@ -300,8 +300,8 @@ namespace RevitCommandBridge
             TextNoteType type = ResolveTextNoteType(context.Document, step.Arguments);
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
-                { "type_id", type.Id.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
+                { "type_id", type.Id.Value },
                 { "type", type.Name },
                 { "point", PlanValues.PointData(point) },
                 { "text", text }
@@ -311,8 +311,8 @@ namespace RevitCommandBridge
                 return data;
             }
             TextNote note = TextNote.Create(context.Document, view.Id, point, text, type.Id);
-            data["element_id"] = note.Id.IntegerValue;
-            data["element_ids"] = new[] { note.Id.IntegerValue };
+            data["element_id"] = note.Id.Value;
+            data["element_ids"] = new[] { note.Id.Value };
             return data;
         }
 
@@ -328,7 +328,7 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
                 { "start", PlanValues.PointData(start) },
                 { "end", PlanValues.PointData(end) },
                 { "reference_count", stableReferences.Count }
@@ -356,8 +356,8 @@ namespace RevitCommandBridge
                 references.Append(reference);
             }
             Dimension dimension = context.Document.Create.NewDimension(view, Line.CreateBound(start, end), references);
-            data["element_id"] = dimension.Id.IntegerValue;
-            data["element_ids"] = new[] { dimension.Id.IntegerValue };
+            data["element_id"] = dimension.Id.Value;
+            data["element_ids"] = new[] { dimension.Id.Value };
             return data;
         }
 
@@ -372,8 +372,8 @@ namespace RevitCommandBridge
             TagMode mode = ParseEnum(step.Arguments, "mode", TagMode.TM_ADDBY_CATEGORY);
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
-                { "tag_type_id", tagTypeId == null ? (object)null : tagTypeId.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
+                { "tag_type_id", tagTypeId == null ? (object)null : tagTypeId.Value },
                 { "point", PlanValues.PointData(point) },
                 { "leader", leader },
                 { "orientation", orientation.ToString() },
@@ -395,8 +395,8 @@ namespace RevitCommandBridge
             IndependentTag tag = tagTypeId == null
                 ? IndependentTag.Create(context.Document, view.Id, reference, leader, mode, orientation, point)
                 : IndependentTag.Create(context.Document, tagTypeId, view.Id, reference, leader, orientation, point);
-            data["element_id"] = tag.Id.IntegerValue;
-            data["element_ids"] = new[] { tag.Id.IntegerValue };
+            data["element_id"] = tag.Id.Value;
+            data["element_ids"] = new[] { tag.Id.Value };
             return data;
         }
 
@@ -419,8 +419,8 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
-                { "filled_region_type_id", typeId.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
+                { "filled_region_type_id", typeId.Value },
                 { "point_count", points.Count }
             };
             if (view == null || context.Preview)
@@ -429,8 +429,8 @@ namespace RevitCommandBridge
             }
             var loops = new List<CurveLoop> { CurveLoop.Create(curves) };
             FilledRegion region = FilledRegion.Create(context.Document, typeId, view.Id, loops);
-            data["element_id"] = region.Id.IntegerValue;
-            data["element_ids"] = new[] { region.Id.IntegerValue };
+            data["element_id"] = region.Id.Value;
+            data["element_ids"] = new[] { region.Id.Value };
             return data;
         }
 
@@ -460,11 +460,11 @@ namespace RevitCommandBridge
             if (!string.IsNullOrWhiteSpace(revisionDate)) revision.RevisionDate = revisionDate;
             if (!string.IsNullOrWhiteSpace(issuedBy)) revision.IssuedBy = issuedBy;
             if (!string.IsNullOrWhiteSpace(issuedTo)) revision.IssuedTo = issuedTo;
-            revision.NumberType = numberType;
+            // revision.NumberType = numberType; // 在 Revit 2026 中已移除
             revision.Visibility = visibility;
             if (hasIssued) revision.Issued = issued;
-            data["element_id"] = revision.Id.IntegerValue;
-            data["element_ids"] = new[] { revision.Id.IntegerValue };
+            data["element_id"] = revision.Id.Value;
+            data["element_ids"] = new[] { revision.Id.Value };
             data["revision_number"] = revision.RevisionNumber;
             return data;
         }
@@ -492,11 +492,11 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
-                { "revision_id", revisionId.IntegerValue == ElementId.InvalidElementId.IntegerValue ? (object)null : revisionId.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
+                { "revision_id", revisionId.Value == ElementId.InvalidElementId.Value ? (object)null : revisionId.Value },
                 { "point_count", points.Count }
             };
-            if (revisionId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (revisionId.Value == ElementId.InvalidElementId.Value)
             {
                 data["deferred"] = true;
                 data["reason"] = "preview 中前置修订引用尚无真实 ID。";
@@ -512,8 +512,8 @@ namespace RevitCommandBridge
                 return data;
             }
             RevisionCloud cloud = RevisionCloud.Create(context.Document, view, revision.Id, curves);
-            data["element_id"] = cloud.Id.IntegerValue;
-            data["element_ids"] = new[] { cloud.Id.IntegerValue };
+            data["element_id"] = cloud.Id.Value;
+            data["element_ids"] = new[] { cloud.Id.Value };
             return data;
         }
 
@@ -530,7 +530,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "kind", kind },
-                { "category_id", categoryRequired ? (object)categoryId.IntegerValue : null },
+                { "category_id", categoryRequired ? (object)categoryId.Value : null },
                 { "name", PlanValues.String(step.Arguments, null, "name", "schedule_name") }
             };
             if (context.Preview)
@@ -592,8 +592,8 @@ namespace RevitCommandBridge
                     data["last_field"] = added.GetName();
                 }
             }
-            data["element_id"] = schedule.Id.IntegerValue;
-            data["element_ids"] = new[] { schedule.Id.IntegerValue };
+            data["element_id"] = schedule.Id.Value;
+            data["element_ids"] = new[] { schedule.Id.Value };
             data["name"] = schedule.Name;
             data["field_count"] = definition.GetFieldCount();
             return data;
@@ -604,8 +604,8 @@ namespace RevitCommandBridge
             ElementId sheetId = context.ResolveSingleElementId(step.Arguments, "sheet_id", "sheet", "target_sheet");
             ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "view_id", "view");
             XYZ point = PlanValues.Point(step.Arguments, "point");
-            if (sheetId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
-                scheduleId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (sheetId.Value == ElementId.InvalidElementId.Value ||
+                scheduleId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object>
                 {
@@ -622,8 +622,8 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "sheet_id", sheetId.IntegerValue },
-                { "schedule_id", scheduleId.IntegerValue },
+                { "sheet_id", sheetId.Value },
+                { "schedule_id", scheduleId.Value },
                 { "point", PlanValues.PointData(point) }
             };
             if (context.Preview)
@@ -631,8 +631,8 @@ namespace RevitCommandBridge
                 return data;
             }
             ScheduleSheetInstance instance = ScheduleSheetInstance.Create(context.Document, sheetId, scheduleId, point);
-            data["element_id"] = instance.Id.IntegerValue;
-            data["element_ids"] = new[] { instance.Id.IntegerValue };
+            data["element_id"] = instance.Id.Value;
+            data["element_ids"] = new[] { instance.Id.Value };
             return data;
         }
 
@@ -671,7 +671,7 @@ namespace RevitCommandBridge
             bool cropVisible = PlanValues.Boolean(step.Arguments, false, "crop_visible");
             var data = new Dictionary<string, object>
             {
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
                 { "scale", scaleRaw == null ? (object)null : scale },
                 { "name", name },
                 { "changed", changed }
@@ -699,8 +699,8 @@ namespace RevitCommandBridge
             if (hasDisplay) view.DisplayStyle = displayStyle;
             SetOptionalViewName(view, name);
             data["name"] = view.Name;
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["element_id"] = view.Id.Value;
+            data["element_ids"] = new[] { view.Id.Value };
             return data;
         }
 
@@ -716,7 +716,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "target_count", targets.Count },
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "view_id", view == null ? (object)null : view.Id.Value },
                 { "view_name", view == null ? null : view.Name }
             };
             if (context.Preview || view == null)
@@ -727,7 +727,7 @@ namespace RevitCommandBridge
             {
                 view.SetElementOverrides(id, overrides);
             }
-            data["element_ids"] = targets.Select(id => id.IntegerValue).ToArray();
+            data["element_ids"] = targets.Select(id => id.Value).ToArray();
             return data;
         }
 
@@ -747,8 +747,8 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "category", Convert.ToString(rawCategory, CultureInfo.InvariantCulture) },
-                { "category_id", categoryId.IntegerValue },
-                { "view_id", view == null ? (object)null : view.Id.IntegerValue },
+                { "category_id", categoryId.Value },
+                { "view_id", view == null ? (object)null : view.Id.Value },
                 { "view_name", view == null ? null : view.Name }
             };
             if (context.Preview || view == null)
@@ -756,7 +756,7 @@ namespace RevitCommandBridge
                 return data;
             }
             view.SetCategoryOverrides(categoryId, overrides);
-            data["element_ids"] = new[] { categoryId.IntegerValue };
+            data["element_ids"] = new[] { categoryId.Value };
             return data;
         }
 
@@ -822,7 +822,7 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("manage_view_filters 需要 view_id（或存在活动视图）。");
             }
-            data["view_id"] = view.Id.IntegerValue;
+            data["view_id"] = view.Id.Value;
             data["view_name"] = view.Name;
             OverrideGraphicSettings overrides = BuildOverrides(step.Arguments);
             if (context.Preview)
@@ -849,9 +849,9 @@ namespace RevitCommandBridge
             view.SetFilterVisibility(filter.Id, true);
             view.SetFilterOverrides(filter.Id, overrides);
             data["created"] = created;
-            data["filter_id"] = filter.Id.IntegerValue;
-            data["element_id"] = filter.Id.IntegerValue;
-            data["element_ids"] = new[] { filter.Id.IntegerValue };
+            data["filter_id"] = filter.Id.Value;
+            data["element_id"] = filter.Id.Value;
+            data["element_ids"] = new[] { filter.Id.Value };
             return data;
         }
 
@@ -866,7 +866,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "action", action },
-                { "view_id", view.Id.IntegerValue },
+                { "view_id", view.Id.Value },
                 { "view_name", view.Name }
             };
             if (context.Preview)
@@ -954,8 +954,8 @@ namespace RevitCommandBridge
             }
             if (value is double || value is float || value is decimal)
             {
-                return ParameterFilterRuleFactory.CreateEqualsRule(
-                    parameterId, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+return ParameterFilterRuleFactory.CreateEqualsRule(
+                    parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
             }
             return ParameterFilterRuleFactory.CreateEqualsRule(
                 parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
@@ -992,7 +992,7 @@ namespace RevitCommandBridge
         public static Dictionary<string, object> SetViewRange(PlanStep step, PlanExecutionContext context)
         {
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
-            if (viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (viewId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
             }
@@ -1001,16 +1001,16 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("set_view_range 的 view_id 必须指向平面视图。");
             }
-            var slots = new Dictionary<string, PlanViewRangeType>(StringComparer.OrdinalIgnoreCase)
+            var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
-                { "top", PlanViewRangeType.Top },
-                { "cut_plane", PlanViewRangeType.CutPlane },
-                { "bottom", PlanViewRangeType.Bottom },
-                { "view_depth", PlanViewRangeType.ViewDepth }
+                { "top", 0 },
+                { "cut_plane", 1 },
+                { "bottom", 2 },
+                { "view_depth", 3 }
             };
             var changes = new List<string>();
-            var slotSpecs = new List<KeyValuePair<PlanViewRangeType, Dictionary<string, object>>>();
-            foreach (KeyValuePair<string, PlanViewRangeType> slot in slots)
+            var slotSpecs = new List<KeyValuePair<int, Dictionary<string, object>>>();
+            foreach (KeyValuePair<string, int> slot in slots)
             {
                 object raw = PlanValues.Get(step.Arguments, slot.Key);
                 if (raw == null)
@@ -1018,7 +1018,7 @@ namespace RevitCommandBridge
                     continue;
                 }
                 Dictionary<string, object> spec = PlanValues.Dictionary(raw, slot.Key);
-                slotSpecs.Add(new KeyValuePair<PlanViewRangeType, Dictionary<string, object>>(slot.Value, spec));
+                slotSpecs.Add(new KeyValuePair<int, Dictionary<string, object>>(slot.Value, spec));
                 changes.Add(slot.Key);
             }
             if (slotSpecs.Count == 0)
@@ -1028,7 +1028,7 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "view_id", viewId.IntegerValue },
+                { "view_id", viewId.Value },
                 { "view_name", viewPlan.Name },
                 { "changed", changes.ToArray() }
             };
@@ -1038,7 +1038,7 @@ namespace RevitCommandBridge
             }
 
             PlanViewRange range = viewPlan.GetViewRange();
-            foreach (KeyValuePair<PlanViewRangeType, Dictionary<string, object>> slot in slotSpecs)
+            foreach (KeyValuePair<int, Dictionary<string, object>> slot in slotSpecs)
             {
                 object rawLevel = PlanValues.Get(slot.Value, "level", "level_id", "level_name");
                 if (rawLevel != null)
@@ -1052,18 +1052,18 @@ namespace RevitCommandBridge
                     {
                         lookup["level"] = rawLevel;
                     }
-                    range.SetLevelId(slot.Key, RevitLookups.ResolveLevel(context.Document, lookup).Id);
+range.SetLevelId((PlanViewPlane)slot.Key, RevitLookups.ResolveLevel(context.Document, lookup).Id);
                 }
                 object rawOffset = PlanValues.Get(slot.Value, "offset_mm", "offset");
                 if (rawOffset != null)
                 {
-                    range.SetOffset(slot.Key,
+range.SetOffset((PlanViewPlane)slot.Key,
                         PlanValues.ToFeet(PlanValues.ParseMillimeters(rawOffset, "offset_mm")));
                 }
             }
             viewPlan.SetViewRange(range);
-            data["element_id"] = viewId.IntegerValue;
-            data["element_ids"] = new[] { viewId.IntegerValue };
+            data["element_id"] = viewId.Value;
+            data["element_ids"] = new[] { viewId.Value };
             return data;
         }
 
@@ -1075,7 +1075,7 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("manage_schedule_fields 缺少 action（add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized）。");
             }
             ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "target");
-            if (scheduleId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (scheduleId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置明细表引用尚无真实 ID。" } };
             }
@@ -1093,7 +1093,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "action", action },
-                { "schedule_id", scheduleId.IntegerValue },
+                { "schedule_id", scheduleId.Value },
                 { "field", fieldName }
             };
             if (context.Preview)
@@ -1123,10 +1123,10 @@ namespace RevitCommandBridge
                 case "hide_field":
                 case "show_field":
                 {
-                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
                     {
-                        throw new BridgeCommandException("明细表中找不到字段“" + fieldName + "”。");
+                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"。");
                     }
                     if (action == "remove_field")
                     {
@@ -1149,12 +1149,12 @@ namespace RevitCommandBridge
                     {
                         throw new BridgeCommandException("add_filter 需要 equals 值。");
                     }
-                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
                     {
                         ScheduleField added = AddScheduleField(
                             context.Document, definition, fieldName, true);
-                        index = FindScheduleFieldIndex(definition, fieldName);
+                        index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                         if (index < 0)
                         {
                             throw new BridgeCommandException("未能定位新增字段：" + fieldName);
@@ -1170,10 +1170,10 @@ namespace RevitCommandBridge
                     {
                         throw new BridgeCommandException("sort 需要 field（参数名）。");
                     }
-                    int index = FindScheduleFieldIndex(definition, fieldName);
+                    int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
                     {
-                        throw new BridgeCommandException("明细表中找不到字段“" + fieldName + "”。");
+                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"。");
                     }
                     definition.AddSortGroupField(new ScheduleSortGroupField(
                         definition.GetField(index).FieldId));
@@ -1187,7 +1187,7 @@ namespace RevitCommandBridge
                         "manage_schedule_fields.action 仅支持 add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized。");
             }
             data["field_count"] = definition.GetFieldCount();
-            data["element_ids"] = new[] { scheduleId.IntegerValue };
+            data["element_ids"] = new[] { scheduleId.Value };
             return data;
         }
 
@@ -1228,7 +1228,7 @@ namespace RevitCommandBridge
             return definition.AddField(fieldType, parameterId);
         }
 
-        private static int FindScheduleFieldIndex(ScheduleDefinition definition, string fieldName)
+        private static int FindScheduleFieldIndex(Document document, ScheduleDefinition definition, string fieldName)
         {
             if (string.IsNullOrWhiteSpace(fieldName))
             {
@@ -1243,7 +1243,7 @@ namespace RevitCommandBridge
                 }
                 SchedulableField schedulable = field.GetSchedulableField();
                 if (schedulable != null &&
-                    string.Equals(schedulable.GetName(), fieldName, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(schedulable.GetName(document), fieldName, StringComparison.OrdinalIgnoreCase))
                 {
                     return index;
                 }
@@ -1255,20 +1255,20 @@ namespace RevitCommandBridge
         {
             if (value is bool)
             {
-                return new ScheduleFilter(field, ScheduleFilterType.Equal, (bool)value ? 1 : 0);
+                return new ScheduleFilter(field.FieldId, ScheduleFilterType.Equal, (bool)value ? 1 : 0);
             }
             if (value is int || value is short || value is byte || value is long)
             {
                 return new ScheduleFilter(
-                    field, ScheduleFilterType.Equal, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+                    field.FieldId, ScheduleFilterType.Equal, Convert.ToInt32(value, CultureInfo.InvariantCulture));
             }
             if (value is double || value is float || value is decimal)
             {
                 return new ScheduleFilter(
-                    field, ScheduleFilterType.Equal, Convert.ToDouble(value, CultureInfo.InvariantCulture));
+                    field.FieldId, ScheduleFilterType.Equal, Convert.ToDouble(value, CultureInfo.InvariantCulture));
             }
             return new ScheduleFilter(
-                field, ScheduleFilterType.Equal, Convert.ToString(value, CultureInfo.InvariantCulture));
+                field.FieldId, ScheduleFilterType.Equal, Convert.ToString(value, CultureInfo.InvariantCulture));
         }
 
         public static Dictionary<string, object> ManageGraphicsResources(PlanStep step, PlanExecutionContext context)
@@ -1298,7 +1298,7 @@ namespace RevitCommandBridge
             {
                 case "line_style":
                 {
-                    Category lineStyles = context.Document.Settings.Categories.get_Item(BuiltInCategory.OST_LineStyles);
+                    Category lineStyles = context.Document.Settings.Categories.get_Item(BuiltInCategory.OST_Lines);
                     if (lineStyles == null)
                     {
                         throw new BridgeCommandException("当前项目没有线样式类别。");
@@ -1315,7 +1315,7 @@ namespace RevitCommandBridge
                     if (existing != null)
                     {
                         data["created"] = false;
-                        data["element_id"] = existing.Id.IntegerValue;
+                        data["element_id"] = existing.Id.Value;
                     }
                     else
                     {
@@ -1325,7 +1325,7 @@ namespace RevitCommandBridge
                             throw new BridgeCommandException("创建线样式失败：" + name);
                         }
                         data["created"] = true;
-                        data["element_id"] = created.Id.IntegerValue;
+                        data["element_id"] = created.Id.Value;
                     }
                     break;
                 }
@@ -1339,7 +1339,7 @@ namespace RevitCommandBridge
                     if (existing != null)
                     {
                         data["created"] = false;
-                        data["element_id"] = existing.Id.IntegerValue;
+                        data["element_id"] = existing.Id.Value;
                         break;
                     }
                     string target = PlanValues.String(step.Arguments, "drafting", "target").ToLowerInvariant();
@@ -1350,9 +1350,9 @@ namespace RevitCommandBridge
                         ? FillPatternHostOrientation.ToHost
                         : FillPatternHostOrientation.ToView;
                     FillPattern pattern = new FillPattern(name, fillTarget, orientation);
-                    ElementId createdId = FillPatternElement.Create(context.Document, pattern);
+                    FillPatternElement created = FillPatternElement.Create(context.Document, pattern);
                     data["created"] = true;
-                    data["element_id"] = createdId.IntegerValue;
+                    data["element_id"] = created.Id.Value;
                     break;
                 }
             }
@@ -1450,7 +1450,7 @@ namespace RevitCommandBridge
             if (format == "schedule_csv" || format == "schedule")
             {
                 ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "view_id", "view");
-                if (scheduleId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                if (scheduleId.Value == ElementId.InvalidElementId.Value)
                 {
                     data["deferred"] = true;
                     return data;
@@ -1460,7 +1460,7 @@ namespace RevitCommandBridge
                 {
                     throw new BridgeCommandException("export schedule_csv 需要有效的 schedule_id。");
                 }
-                data["schedule_id"] = scheduleId.IntegerValue;
+                data["schedule_id"] = scheduleId.Value;
                 if (context.Preview) return data;
                 string folder = Path.GetDirectoryName(fullOutput);
                 string fileName = Path.GetFileNameWithoutExtension(fullOutput);
@@ -1474,7 +1474,7 @@ namespace RevitCommandBridge
             }
 
             List<ElementId> viewIds = ResolveExportViewIds(step, context);
-            data["view_ids"] = viewIds.Select(id => id.IntegerValue).ToArray();
+            data["view_ids"] = viewIds.Select(id => id.Value).ToArray();
             if (context.Preview)
             {
                 return data;
@@ -1580,7 +1580,7 @@ namespace RevitCommandBridge
                 return context.Document.ActiveView;
             }
             ElementId id = context.ResolveSingleElementId(arguments, names);
-            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (id.Value == ElementId.InvalidElementId.Value)
             {
                 return null;
             }
@@ -1782,7 +1782,7 @@ namespace RevitCommandBridge
                 }
                 templateId = template.Id;
             }
-            if (templateId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (templateId.Value == ElementId.InvalidElementId.Value)
             {
                 return;
             }

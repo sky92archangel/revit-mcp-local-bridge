@@ -39,8 +39,8 @@ namespace RevitCommandBridge
             {
                 level.Name = name;
             }
-            data["element_id"] = level.Id.IntegerValue;
-            data["element_ids"] = new[] { level.Id.IntegerValue };
+            data["element_id"] = level.Id.Value;
+            data["element_ids"] = new[] { level.Id.Value };
             data["name"] = level.Name;
             return data;
         }
@@ -74,8 +74,8 @@ namespace RevitCommandBridge
             {
                 grid.Name = name;
             }
-            data["element_id"] = grid.Id.IntegerValue;
-            data["element_ids"] = new[] { grid.Id.IntegerValue };
+            data["element_id"] = grid.Id.Value;
+            data["element_ids"] = new[] { grid.Id.Value };
             data["name"] = grid.Name;
             return data;
         }
@@ -143,8 +143,8 @@ namespace RevitCommandBridge
                 PlanValues.ToFeet(baseOffsetMm),
                 false,
                 false);
-            data["element_id"] = wall.Id.IntegerValue;
-            data["element_ids"] = new[] { wall.Id.IntegerValue };
+            data["element_id"] = wall.Id.Value;
+            data["element_ids"] = new[] { wall.Id.Value };
             data["type_target"] = targetType.Name;
             return data;
         }
@@ -163,7 +163,7 @@ namespace RevitCommandBridge
             {
                 { "level", level.Name },
                 { "type", floorType.Name },
-                { "type_id", floorType.Id.IntegerValue },
+                { "type_id", floorType.Id.Value },
                 { "structural", structural },
                 { "offset_mm", offsetMm },
                 { "boundary_segment_count", profile.Size }
@@ -173,9 +173,12 @@ namespace RevitCommandBridge
                 return data;
             }
 
-            Floor floor = context.Document.Create.NewFloor(profile, floorType, level, structural);
-            data["element_id"] = floor.Id.IntegerValue;
-            data["element_ids"] = new[] { floor.Id.IntegerValue };
+            var floorProfile = new CurveLoop();
+            foreach (Curve c in profile)
+                floorProfile.Append(c);
+Floor floor = Floor.Create(context.Document, new[] { floorProfile }, floorType.Id, level.Id, structural, null, 0.0);
+            data["element_id"] = floor.Id.Value;
+            data["element_ids"] = new[] { floor.Id.Value };
             return data;
         }
 
@@ -206,8 +209,8 @@ namespace RevitCommandBridge
             {
                 room.Number = number;
             }
-            data["element_id"] = room.Id.IntegerValue;
-            data["element_ids"] = new[] { room.Id.IntegerValue };
+            data["element_id"] = room.Id.Value;
+            data["element_ids"] = new[] { room.Id.Value };
             data["name"] = room.Name;
             data["number"] = room.Number;
             return data;
@@ -240,8 +243,8 @@ namespace RevitCommandBridge
             {
                 space.Number = number;
             }
-            data["element_id"] = space.Id.IntegerValue;
-            data["element_ids"] = new[] { space.Id.IntegerValue };
+            data["element_id"] = space.Id.Value;
+            data["element_ids"] = new[] { space.Id.Value };
             data["name"] = space.Name;
             data["number"] = space.Number;
             return data;
@@ -276,8 +279,8 @@ namespace RevitCommandBridge
             ModelCurve curve = context.Document.Create.NewModelCurve(
                 Line.CreateBound(start, end),
                 sketchPlane);
-            data["element_id"] = curve.Id.IntegerValue;
-            data["element_ids"] = new[] { curve.Id.IntegerValue };
+            data["element_id"] = curve.Id.Value;
+            data["element_ids"] = new[] { curve.Id.Value };
             if (!string.IsNullOrWhiteSpace(name))
             {
                 data["name_applied"] = false;
@@ -329,7 +332,7 @@ namespace RevitCommandBridge
                 up = PlanValues.Get(step.Arguments, "up", "up_direction") == null
                     ? XYZ.BasisZ
                     : ReadDirectionVector(step.Arguments, "up", "up_direction");
-                if (Math.Abs(forward.Dot(up)) > 1e-3)
+if (Math.Abs(forward.DotProduct(up)) > 1e-3)
                 {
                     throw new BridgeCommandException("create_view 的 forward 与 up 必须近似垂直。");
                 }
@@ -339,7 +342,7 @@ namespace RevitCommandBridge
                 { "kind", kind },
                 { "view_family", family.ToString() },
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
+                { "type_id", type.Id.Value },
                 { "level", level == null ? null : level.Name },
                 { "perspective", perspective },
                 { "name", name }
@@ -383,8 +386,8 @@ namespace RevitCommandBridge
                 }
                 view3D.SetOrientation(new ViewOrientation3D(eye, forward, up));
             }
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["element_id"] = view.Id.Value;
+            data["element_ids"] = new[] { view.Id.Value };
             data["name"] = view.Name;
             return data;
         }
@@ -396,7 +399,7 @@ namespace RevitCommandBridge
             string name = PlanValues.String(step.Arguments, null, "name", "sheet_name");
             var data = new Dictionary<string, object>
             {
-                { "title_block_type_id", titleBlock == null ? (object)null : titleBlock.Id.IntegerValue },
+                { "title_block_type_id", titleBlock == null ? (object)null : titleBlock.Id.Value },
                 { "title_block", titleBlock == null ? null : titleBlock.Name },
                 { "sheet_number", sheetNumber },
                 { "name", name }
@@ -417,8 +420,8 @@ namespace RevitCommandBridge
             {
                 sheet.Name = name;
             }
-            data["element_id"] = sheet.Id.IntegerValue;
-            data["element_ids"] = new[] { sheet.Id.IntegerValue };
+            data["element_id"] = sheet.Id.Value;
+            data["element_ids"] = new[] { sheet.Id.Value };
             data["sheet_number"] = sheet.SheetNumber;
             data["name"] = sheet.Name;
             return data;
@@ -428,8 +431,8 @@ namespace RevitCommandBridge
         {
             ElementId sheetId = context.ResolveSingleElementId(step.Arguments, "sheet_id", "sheet", "target_sheet");
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view", "target_view");
-            if (sheetId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
-                viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (sheetId.Value == ElementId.InvalidElementId.Value ||
+                viewId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object>
                 {
@@ -441,17 +444,17 @@ namespace RevitCommandBridge
             View view = context.Document.GetElement(viewId) as View;
             if (sheet == null)
             {
-                throw new BridgeCommandException("sheet_id 不是有效图纸：" + sheetId.IntegerValue);
+                throw new BridgeCommandException("sheet_id 不是有效图纸：" + sheetId.Value);
             }
             if (view == null || view.IsTemplate)
             {
-                throw new BridgeCommandException("view_id 不是可放置的视图：" + viewId.IntegerValue);
+                throw new BridgeCommandException("view_id 不是可放置的视图：" + viewId.Value);
             }
             XYZ point = PlanValues.Point(step.Arguments, "point");
             var data = new Dictionary<string, object>
             {
-                { "sheet_id", sheetId.IntegerValue },
-                { "view_id", viewId.IntegerValue },
+                { "sheet_id", sheetId.Value },
+                { "view_id", viewId.Value },
                 { "point", PlanValues.PointData(point) },
                 { "can_place", Viewport.CanAddViewToSheet(context.Document, sheetId, viewId) }
             };
@@ -465,8 +468,8 @@ namespace RevitCommandBridge
             }
 
             Viewport viewport = Viewport.Create(context.Document, sheetId, viewId, point);
-            data["element_id"] = viewport.Id.IntegerValue;
-            data["element_ids"] = new[] { viewport.Id.IntegerValue };
+            data["element_id"] = viewport.Id.Value;
+            data["element_ids"] = new[] { viewport.Id.Value };
             return data;
         }
 
@@ -483,7 +486,7 @@ namespace RevitCommandBridge
             }
 
             ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host", "wall_id", "wall");
-            if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (hostId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object>
                 {
@@ -495,7 +498,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "kind", kind },
-                { "host_id", hostId.IntegerValue }
+                { "host_id", hostId.Value }
             };
             if (kind == "wall")
             {
@@ -517,8 +520,8 @@ namespace RevitCommandBridge
                     return data;
                 }
                 Opening opening = context.Document.Create.NewOpening(wall, start, end);
-                data["element_id"] = opening.Id.IntegerValue;
-                data["element_ids"] = new[] { opening.Id.IntegerValue };
+                data["element_id"] = opening.Id.Value;
+                data["element_ids"] = new[] { opening.Id.Value };
                 return data;
             }
 
@@ -541,9 +544,19 @@ namespace RevitCommandBridge
             {
                 return data;
             }
-            Opening verticalOpening = context.Document.Create.NewVerticalOpening(floor, corner1, corner2);
-            data["element_id"] = verticalOpening.Id.IntegerValue;
-            data["element_ids"] = new[] { verticalOpening.Id.IntegerValue };
+// Revit 2026: Opening.CreateVertical
+CurveLoop verticalProfile = new CurveLoop();
+            verticalProfile.Append(Line.CreateBound(corner1, new XYZ(corner2.X, corner1.Y, 0)));
+            verticalProfile.Append(Line.CreateBound(new XYZ(corner2.X, corner1.Y, 0), corner2));
+            verticalProfile.Append(Line.CreateBound(corner2, new XYZ(corner1.X, corner2.Y, 0)));
+            verticalProfile.Append(Line.CreateBound(new XYZ(corner1.X, corner2.Y, 0), corner1));
+Element floorElement = context.Document.GetElement(floor.Id);
+            CurveArray openingCurves = new CurveArray();
+            foreach (Curve c in verticalProfile)
+                openingCurves.Append(c);
+            Opening verticalOpening = context.Document.Create.NewOpening(floorElement, openingCurves, false);
+            data["element_id"] = verticalOpening.Id.Value;
+            data["element_ids"] = new[] { verticalOpening.Id.Value };
             return data;
         }
 
@@ -563,15 +576,18 @@ namespace RevitCommandBridge
                 { "top_level", topLevel.Name },
                 { "bottom_elevation_mm", PlanValues.ToMillimeters(bottomLevel.Elevation) },
                 { "top_elevation_mm", PlanValues.ToMillimeters(topLevel.Elevation) },
-                { "vertex_count", profile.NumberOfCurves }
+                { "vertex_count", profile.NumberOfCurves() }
             };
             if (context.Preview)
             {
                 return data;
             }
-            Opening shaft = context.Document.Create.NewShaftOpening(bottomLevel, topLevel, profile);
-            data["element_id"] = shaft.Id.IntegerValue;
-            data["element_ids"] = new[] { shaft.Id.IntegerValue };
+CurveArray shaftCurves = new CurveArray();
+            foreach (Curve c in profile)
+                shaftCurves.Append(c);
+            Opening shaft = context.Document.Create.NewOpening(context.Document.GetElement(bottomLevel.Id), shaftCurves, false);
+            data["element_id"] = shaft.Id.Value;
+            data["element_ids"] = new[] { shaft.Id.Value };
             return data;
         }
 
@@ -608,8 +624,8 @@ namespace RevitCommandBridge
             {
                 double x = PlanValues.RequireMillimeters(point, "x", "x_mm");
                 double y = PlanValues.RequireMillimeters(point, "y", "y_mm");
-                double z = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
-                resolved.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(z)));
+                double zOffset = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
+                resolved.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(zOffset)));
             }
             double z = resolved[0].Z;
             if (resolved.Any(point => Math.Abs(point.Z - z) > 1e-8))
@@ -732,7 +748,7 @@ namespace RevitCommandBridge
             }
             FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(document, lookup);
             if (symbol.Category == null ||
-                symbol.Category.Id.IntegerValue != new ElementId(BuiltInCategory.OST_TitleBlocks).IntegerValue)
+                symbol.Category.Id.Value != new ElementId(BuiltInCategory.OST_TitleBlocks).Value)
             {
                 throw new BridgeCommandException("指定的 title_block 不是图框族类型。");
             }
@@ -745,7 +761,7 @@ namespace RevitCommandBridge
                 context.Document, step.Arguments, BuiltInCategory.OST_GenericModel);
             if (!DirectShape.IsValidCategoryId(categoryId, context.Document))
             {
-                throw new BridgeCommandException("DirectShape 不支持类别 ID：" + categoryId.IntegerValue);
+                throw new BridgeCommandException("DirectShape 不支持类别 ID：" + categoryId.Value);
             }
 
             string name = PlanValues.String(step.Arguments, step.Id, "name");
@@ -760,7 +776,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "name", name },
-                { "category_id", categoryId.IntegerValue },
+                { "category_id", categoryId.Value },
                 { "material", materialName },
                 { "material_exists", material != null },
                 { "geometry", geometryData }
@@ -788,8 +804,8 @@ namespace RevitCommandBridge
             shape.ApplicationDataId = PlanValues.String(step.Arguments, step.Id, "application_data_id");
             shape.Name = name;
             shape.SetShape(geometry);
-            data["element_id"] = shape.Id.IntegerValue;
-            data["element_ids"] = new[] { shape.Id.IntegerValue };
+            data["element_id"] = shape.Id.Value;
+            data["element_ids"] = new[] { shape.Id.Value };
             return data;
         }
 
@@ -908,8 +924,8 @@ namespace RevitCommandBridge
                     throw new BridgeCommandException("create_mep_curve.kind 仅支持 pipe、duct、conduit、cable_tray。");
             }
 
-            data["element_id"] = created.Id.IntegerValue;
-            data["element_ids"] = new[] { created.Id.IntegerValue };
+            data["element_id"] = created.Id.Value;
+            data["element_ids"] = new[] { created.Id.Value };
             return data;
         }
 
@@ -918,8 +934,8 @@ namespace RevitCommandBridge
             ElementId aId = context.ResolveSingleElementId(step.Arguments, "element_a", "from", "first");
             ElementId bId = context.ResolveSingleElementId(step.Arguments, "element_b", "to", "second");
             string fitting = PlanValues.String(step.Arguments, "auto", "fitting").ToLowerInvariant();
-            if (aId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
-                bId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (aId.Value == ElementId.InvalidElementId.Value ||
+                bId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
@@ -929,8 +945,8 @@ namespace RevitCommandBridge
             Connector secondConnector = FindConnector(second, step.Arguments, "connector_b_index", first);
             var data = new Dictionary<string, object>
             {
-                { "element_a", aId.IntegerValue },
-                { "element_b", bId.IntegerValue },
+                { "element_a", aId.Value },
+                { "element_b", bId.Value },
                 { "fitting", fitting },
                 { "connector_a_origin", PlanValues.PointData(firstConnector.Origin) },
                 { "connector_b_origin", PlanValues.PointData(secondConnector.Origin) }
@@ -969,7 +985,7 @@ namespace RevitCommandBridge
                     Element third = RequireElement(context.Document, cId, "element_c");
                     Connector thirdConnector = FindConnector(third, step.Arguments, "connector_c_index", first);
                     fittingElement = context.Document.Create.NewTeeFitting(firstConnector, secondConnector, thirdConnector);
-                    data["element_c"] = cId.IntegerValue;
+                    data["element_c"] = cId.Value;
                     data["connector_c_origin"] = PlanValues.PointData(thirdConnector.Origin);
                     break;
                 case "reducer":
@@ -984,8 +1000,8 @@ namespace RevitCommandBridge
                     Connector crossFourthConnector = FindConnector(crossFourth, step.Arguments, "connector_d_index", second);
                     fittingElement = context.Document.Create.NewCrossFitting(
                         firstConnector, secondConnector, crossThirdConnector, crossFourthConnector);
-                    data["element_c"] = crossCId.IntegerValue;
-                    data["element_d"] = crossDId.IntegerValue;
+                    data["element_c"] = crossCId.Value;
+                    data["element_d"] = crossDId.Value;
                     data["connector_c_origin"] = PlanValues.PointData(crossThirdConnector.Origin);
                     data["connector_d_origin"] = PlanValues.PointData(crossFourthConnector.Origin);
                     break;
@@ -994,8 +1010,8 @@ namespace RevitCommandBridge
             }
             if (fittingElement != null)
             {
-                data["element_id"] = fittingElement.Id.IntegerValue;
-                data["element_ids"] = new[] { fittingElement.Id.IntegerValue };
+                data["element_id"] = fittingElement.Id.Value;
+                data["element_ids"] = new[] { fittingElement.Id.Value };
             }
             return data;
         }
@@ -1038,7 +1054,7 @@ namespace RevitCommandBridge
             {
                 foreach (ElementId memberId in context.ResolveElementIds(step.Arguments, "members", "element_ids", "elements"))
                 {
-                    if (memberId.IntegerValue != ElementId.InvalidElementId.IntegerValue)
+                    if (memberId.Value != ElementId.InvalidElementId.Value)
                     {
                         members.Add(memberId);
                     }
@@ -1051,10 +1067,10 @@ namespace RevitCommandBridge
             }
 
             ElementId systemId = domain == "piping"
-                ? PipingSystem.Create(context.Document, systemTypeId, name)
-                : MechanicalSystem.Create(context.Document, systemTypeId, name);
-            data["element_id"] = systemId.IntegerValue;
-            data["element_ids"] = new[] { systemId.IntegerValue };
+                ? PipingSystem.Create(context.Document, systemTypeId, name).Id
+                : MechanicalSystem.Create(context.Document, systemTypeId, name).Id;
+            data["element_id"] = systemId.Value;
+            data["element_ids"] = new[] { systemId.Value };
             data["name"] = RevitLookups.ElementName(context.Document.GetElement(systemId));
 
             int added = 0;
@@ -1062,19 +1078,44 @@ namespace RevitCommandBridge
             {
                 try
                 {
-                    if (domain == "piping")
+                    Element member = context.Document.GetElement(memberId);
+                    ConnectorSet connectorSet = new ConnectorSet();
+                    ConnectorManager cm = null;
+                    MEPCurve mepCurve = member as MEPCurve;
+                    if (mepCurve != null)
                     {
-                        added += ((PipingSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                        cm = mepCurve.ConnectorManager;
                     }
                     else
                     {
-                        added += ((MechanicalSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                        FamilyInstance fi = member as FamilyInstance;
+                        if (fi != null && fi.MEPModel != null)
+                        {
+                            cm = fi.MEPModel.ConnectorManager;
+                        }
+                    }
+                    if (cm != null)
+                    {
+                        foreach (Connector c in cm.Connectors)
+                        {
+                            connectorSet.Insert(c);
+                        }
+                    }
+                    if (domain == "piping")
+                    {
+    ((PipingSystem)context.Document.GetElement(systemId)).Add(connectorSet);
+                    added++;
+                    }
+                    else
+                    {
+                        ((MechanicalSystem)context.Document.GetElement(systemId)).Add(connectorSet);
+                    added++;
                     }
                 }
                 catch (Exception ex)
                 {
                     throw new BridgeCommandException(
-                        "系统成员 element_id=" + memberId.IntegerValue + " 指派失败（域或类型不匹配）：" + ex.Message);
+                        "系统成员 element_id=" + memberId.Value + " 指派失败（域或类型不匹配）：" + ex.Message);
                 }
             }
             data["member_added"] = added;
@@ -1109,8 +1150,8 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("Revit 拒绝加载族文件：" + path);
             }
             data["family"] = family.Name;
-            data["element_id"] = family.Id.IntegerValue;
-            data["element_ids"] = new[] { family.Id.IntegerValue };
+            data["element_id"] = family.Id.Value;
+            data["element_ids"] = new[] { family.Id.Value };
             var symbolNames = new List<string>();
             FamilySymbol matchedSymbol = null;
             foreach (ElementId symbolId in family.GetFamilySymbolIds())
@@ -1136,7 +1177,7 @@ namespace RevitCommandBridge
                         "族“" + family.Name + "”没有类型“" + symbolName + "”。可用：" + string.Join("、", symbolNames));
                 }
                 ActivateSymbol(context.Document, matchedSymbol);
-                data["symbol_id"] = matchedSymbol.Id.IntegerValue;
+                data["symbol_id"] = matchedSymbol.Id.Value;
             }
             return data;
         }
@@ -1196,13 +1237,13 @@ namespace RevitCommandBridge
                     created.Add(DuctInsulation.Create(context.Document, duct.Id, ductTypeId, thickness).Id);
                     continue;
                 }
-                throw new BridgeCommandException("create_insulation 目标必须是管道或风管：element_id=" + targetId.IntegerValue);
+                throw new BridgeCommandException("create_insulation 目标必须是管道或风管：element_id=" + targetId.Value);
             }
-            data["element_ids"] = created.Select(id => id.IntegerValue).ToArray();
+            data["element_ids"] = created.Select(id => id.Value).ToArray();
             data["created_count"] = created.Count;
             if (created.Count == 1)
             {
-                data["element_id"] = created[0].IntegerValue;
+                data["element_id"] = created[0].Value;
             }
             return data;
         }
@@ -1261,7 +1302,7 @@ namespace RevitCommandBridge
                         { "wall_thickness_mm", wallThicknessMm }
                     }
                 },
-                { "category_id", categoryId.IntegerValue }
+                { "category_id", categoryId.Value }
             };
             CurveLoop path = RevitSectionFactory.BuildPath(pathPoints, "create_swept_shape.path");
             XYZ pathStart = path.First().GetEndPoint(0);
@@ -1285,8 +1326,8 @@ namespace RevitCommandBridge
             directShape.ApplicationDataId = step.Id;
             directShape.Name = name;
             directShape.SetShape(geometry);
-            data["element_id"] = directShape.Id.IntegerValue;
-            data["element_ids"] = new[] { directShape.Id.IntegerValue };
+            data["element_id"] = directShape.Id.Value;
+            data["element_ids"] = new[] { directShape.Id.Value };
             return data;
         }
 
@@ -1303,7 +1344,7 @@ namespace RevitCommandBridge
             {
                 { "family", symbol.Family.Name },
                 { "type", symbol.Name },
-                { "type_id", symbol.Id.IntegerValue },
+                { "type_id", symbol.Id.Value },
                 { "placement_type", placementType.ToString() },
                 { "structural_type", structuralType.ToString() }
             };
@@ -1327,13 +1368,13 @@ namespace RevitCommandBridge
                 case FamilyPlacementType.OneLevelBasedHosted:
                     XYZ hostedPoint = PlanValues.Point(step.Arguments, "point");
                     ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
-                    if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                    if (hostId.Value == ElementId.InvalidElementId.Value)
                     {
                         return DeferredPlacement(data, "$host");
                     }
                     Element host = RequireElement(context.Document, hostId, "host_id");
                     data["point"] = PlanValues.PointData(hostedPoint);
-                    data["host_id"] = hostId.IntegerValue;
+                    data["host_id"] = hostId.Value;
                     data["host_class"] = host.GetType().FullName;
                     if (context.Preview)
                     {
@@ -1351,7 +1392,7 @@ namespace RevitCommandBridge
                     if (useHostFace)
                     {
                         ElementId faceHostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
-                        if (faceHostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                        if (faceHostId.Value == ElementId.InvalidElementId.Value)
                         {
                             return DeferredPlacement(data, "$host");
                         }
@@ -1359,7 +1400,7 @@ namespace RevitCommandBridge
                         int faceIndex = PlanValues.Integer(step.Arguments, 0, "host_face_index", "face_index");
                         Reference face = FindFaceReference(faceHost, faceIndex);
                         XYZ direction = ReadReferenceDirection(step.Arguments);
-                        data["host_id"] = faceHostId.IntegerValue;
+                        data["host_id"] = faceHostId.Value;
                         data["host_face_index"] = faceIndex;
                         data["reference_direction"] = PlanValues.PointData(direction);
                         if (context.Preview)
@@ -1379,7 +1420,7 @@ namespace RevitCommandBridge
                             return data;
                         }
                         SketchPlane workPlane = ResolveOrCreateWorkPlane(context, step.Arguments, workPlanePoint);
-                        data["work_plane_id"] = workPlane.Id.IntegerValue;
+                        data["work_plane_id"] = workPlane.Id.Value;
                         ActivateSymbol(context.Document, symbol);
                         instance = context.Document.Create.NewFamilyInstance(workPlanePoint, symbol, workPlane, structuralType);
                     }
@@ -1389,7 +1430,7 @@ namespace RevitCommandBridge
                     XYZ viewPoint = PlanValues.Point(step.Arguments, "point");
                     View view = ResolveTargetView(context, step.Arguments, "view_id", "view");
                     data["point"] = PlanValues.PointData(viewPoint);
-                    data["view_id"] = view.Id.IntegerValue;
+                    data["view_id"] = view.Id.Value;
                     data["view_name"] = view.Name;
                     if (context.Preview)
                     {
@@ -1415,7 +1456,7 @@ namespace RevitCommandBridge
                         PlanValues.Get(step.Arguments, "view_id", "view") != null)
                     {
                         View curveView = ResolveTargetView(context, step.Arguments, "view_id", "view");
-                        data["view_id"] = curveView.Id.IntegerValue;
+                        data["view_id"] = curveView.Id.Value;
                         data["view_name"] = curveView.Name;
                         if (context.Preview)
                         {
@@ -1457,19 +1498,19 @@ namespace RevitCommandBridge
                         ReferencePoint referencePoint = context.Document.GetElement(pointIds[index]) as ReferencePoint;
                         if (referencePoint == null)
                         {
-                            throw new BridgeCommandException("未能定位自适应族放置点：" + pointIds[index].IntegerValue);
+                            throw new BridgeCommandException("未能定位自适应族放置点：" + pointIds[index].Value);
                         }
                         referencePoint.Position = adaptivePoints[index];
                     }
-                    data["adaptive_point_ids"] = pointIds.Select(id => id.IntegerValue).ToArray();
+                    data["adaptive_point_ids"] = pointIds.Select(id => id.Value).ToArray();
                     break;
 
                 default:
                     throw new BridgeCommandException(
                         "族“" + symbol.Family.Name + "”使用暂未识别的放置类型：" + placementType + "。");
             }
-            data["element_id"] = instance.Id.IntegerValue;
-            data["element_ids"] = new[] { instance.Id.IntegerValue };
+            data["element_id"] = instance.Id.Value;
+            data["element_ids"] = new[] { instance.Id.Value };
             return data;
         }
 
@@ -1489,7 +1530,7 @@ namespace RevitCommandBridge
                 { "kind", normalizedKind },
                 { "family", symbol.Family == null ? null : symbol.Family.Name },
                 { "type", symbol.Name },
-                { "type_id", symbol.Id.IntegerValue },
+                { "type_id", symbol.Id.Value },
                 { "level", level.Name }
             };
 
@@ -1511,8 +1552,8 @@ namespace RevitCommandBridge
                 ActivateSymbol(context.Document, symbol);
                 FamilyInstance lineInstance = context.Document.Create.NewFamilyInstance(
                     Line.CreateBound(start, end), symbol, level, structuralType);
-                data["element_id"] = lineInstance.Id.IntegerValue;
-                data["element_ids"] = new[] { lineInstance.Id.IntegerValue };
+                data["element_id"] = lineInstance.Id.Value;
+                data["element_ids"] = new[] { lineInstance.Id.Value };
                 return data;
             }
 
@@ -1527,8 +1568,8 @@ namespace RevitCommandBridge
                 ActivateSymbol(context.Document, symbol);
                 FamilyInstance column = context.Document.Create.NewFamilyInstance(point, symbol, level, StructuralType.Column);
                 SetOptionalLengthParameter(column, BuiltInParameter.INSTANCE_LENGTH_PARAM, step.Arguments, "height_mm", "height");
-                data["element_id"] = column.Id.IntegerValue;
-                data["element_ids"] = new[] { column.Id.IntegerValue };
+                data["element_id"] = column.Id.Value;
+                data["element_ids"] = new[] { column.Id.Value };
                 return data;
             }
             throw new BridgeCommandException("create_structural_member.kind 仅支持 beam、brace、column。");
@@ -1698,7 +1739,7 @@ namespace RevitCommandBridge
             Element element = document.GetElement(id);
             if (element == null)
             {
-                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.IntegerValue + " 对应元素。");
+                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.Value + " 对应元素。");
             }
             return element;
         }
@@ -1712,7 +1753,7 @@ namespace RevitCommandBridge
             List<Connector> connectors = GetConnectors(element);
             if (connectors.Count == 0)
             {
-                throw new BridgeCommandException("元素 " + element.Id.IntegerValue + " 没有可连接的 MEP Connector。");
+                throw new BridgeCommandException("元素 " + element.Id.Value + " 没有可连接的 MEP Connector。");
             }
             object rawIndex = PlanValues.Get(arguments, indexName);
             if (rawIndex != null)
@@ -1850,7 +1891,7 @@ namespace RevitCommandBridge
             params string[] names)
         {
             ElementId id = context.ResolveSingleElementId(arguments, names);
-            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (id.Value == ElementId.InvalidElementId.Value)
             {
                 throw new BridgeCommandException("预览中视图引用尚无真实 ID。请将该步骤单独预览，或直接指定已有 view_id。");
             }

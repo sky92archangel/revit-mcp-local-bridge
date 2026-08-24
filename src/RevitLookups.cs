@@ -189,20 +189,20 @@ namespace RevitCommandBridge
         {
             var data = new Dictionary<string, object>
             {
-                { "id", element.Id.IntegerValue },
+                { "id", (int)element.Id.Value },
                 { "unique_id", element.UniqueId },
                 { "name", ElementName(element) },
                 { "class", element.GetType().FullName },
                 { "category", element.Category == null ? null : element.Category.Name },
-                { "category_id", element.Category == null ? (object)null : element.Category.Id.IntegerValue },
+                { "category_id", element.Category == null ? (object)null : (int)element.Category.Id.Value },
                 { "is_type", element is ElementType }
             };
 
             ElementId typeId = element.GetTypeId();
-            if (typeId != null && typeId.IntegerValue != ElementId.InvalidElementId.IntegerValue)
+            if (typeId != null && typeId != ElementId.InvalidElementId)
             {
                 Element type = document.GetElement(typeId);
-                data["type_id"] = typeId.IntegerValue;
+                data["type_id"] = (int)typeId.Value;
                 data["type_name"] = ElementName(type);
                 data["family_name"] = FamilyName(type);
             }
@@ -267,7 +267,7 @@ data["display_unit_type"] = parameter.GetUnitTypeId().TypeId;
                     data["value"] = parameter.AsString();
                     break;
                 case StorageType.ElementId:
-                    data["element_id"] = parameter.AsElementId().IntegerValue;
+                    data["element_id"] = (int)parameter.AsElementId().Value;
                     break;
             }
             return data;

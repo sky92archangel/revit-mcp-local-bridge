@@ -93,10 +93,10 @@ namespace RevitCommandBridge
                     throw;
                 }
             }
-            data["family_id"] = family.Id.IntegerValue;
+            data["family_id"] = (int)family.Id.Value;
             data["family_name"] = family.Name;
             data["placement_type"] = family.FamilyPlacementType.ToString();
-            data["symbol_ids"] = family.GetFamilySymbolIds().Select(id => id.IntegerValue).ToArray();
+            data["symbol_ids"] = family.GetFamilySymbolIds().Select(id => (int)id.Value).ToArray();
             return BridgeResponse.Success("completed", "已载入族“" + family.Name + "”。", data);
         }
 
@@ -250,10 +250,10 @@ namespace RevitCommandBridge
                             }
 
                             plan["loaded"] = true;
-                            plan["family_id"] = loadedFamily.Id.IntegerValue;
+                            plan["family_id"] = (int)loadedFamily.Id.Value;
                             plan["family_name"] = loadedFamily.Name;
                             plan["placement_type"] = loadedFamily.FamilyPlacementType.ToString();
-                            plan["symbol_ids"] = loadedFamily.GetFamilySymbolIds().Select(id => id.IntegerValue).ToArray();
+                            plan["symbol_ids"] = loadedFamily.GetFamilySymbolIds().Select(id => (int)id.Value).ToArray();
 
                             if (place.Count > 0)
                             {
@@ -492,7 +492,7 @@ namespace RevitCommandBridge
                 new Dictionary<string, object> { { "category", requestedCategory } },
                 BuiltInCategory.OST_GenericModel);
             Category category = familyDocument.Settings.Categories.Cast<Category>()
-                .FirstOrDefault(candidate => candidate.Id.IntegerValue == categoryId.IntegerValue);
+                .FirstOrDefault(candidate => candidate.Id.Value == categoryId.Value);
             if (category == null)
             {
                 throw new BridgeCommandException("族样板不支持类别：“" + requestedCategory + "”。");
@@ -835,7 +835,7 @@ namespace RevitCommandBridge
             FamilySymbol symbol = ResolveLoadedFamilySymbol(projectDocument, family, place);
             var placementArguments = new Dictionary<string, object>(place, StringComparer.OrdinalIgnoreCase)
             {
-                { "type_id", symbol.Id.IntegerValue }
+                { "type_id", (int)symbol.Id.Value }
             };
             var context = new PlanExecutionContext(uiApplication, projectDocument, false);
             var step = new PlanStep
@@ -857,7 +857,7 @@ namespace RevitCommandBridge
             {
                 FamilySymbol byId = document.GetElement(
                     new ElementId(RevitLookups.ParsePositiveId(rawTypeId, "place.type_id"))) as FamilySymbol;
-                if (byId == null || byId.Family == null || byId.Family.Id.IntegerValue != family.Id.IntegerValue)
+                if (byId == null || byId.Family == null || (int)byId.Family.Id.Value != (int)family.Id.Value)
                 {
                     throw new BridgeCommandException("place.type_id 不属于新创建的族“" + family.Name + "”。");
                 }

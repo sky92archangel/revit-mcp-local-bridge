@@ -218,7 +218,7 @@ namespace RevitCommandBridge
             try
             {
                 BridgeRuntime.Start();
-                TaskDialog.Show(
+                Autodesk.Revit.UI.TaskDialog.Show(
                     "Revit 命令桥",
                     "命令桥已启动。\n\n队列目录：\n" + BridgeFileQueue.RootDirectory +
                     "\n\n现在可使用命令面板、CLI、REST 网关或 MCP 客户端提交命令。");
@@ -259,7 +259,7 @@ namespace RevitCommandBridge
             try
             {
                 BridgeRuntime.Start();
-                TaskDialog.Show(
+                Autodesk.Revit.UI.TaskDialog.Show(
                     "Revit 命令桥",
                     "✓ Revit 这一端已连接。\n\n下一步不是在这里输入命令。请回到 Codex、WorkBuddy 或已连接的 AI 对话框，发送：\n\n请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型。");
                 return Result.Succeeded;
@@ -287,7 +287,7 @@ namespace RevitCommandBridge
                     "generic-mcp-revit-" + version + ".mcp.json");
                 if (!File.Exists(configPath))
                 {
-                    TaskDialog.Show(
+                    Autodesk.Revit.UI.TaskDialog.Show(
                         "Revit 命令桥 - MCP 配置",
                         "未找到当前版本的 MCP 配置。\n\n请重新运行安装器并完成“配置 AI 客户端”，然后再点击此按钮。\n\n预期文件：\n" + configPath);
                     return Result.Cancelled;
@@ -299,7 +299,7 @@ namespace RevitCommandBridge
                     throw new InvalidOperationException("MCP 配置文件为空：" + configPath);
                 }
                 Clipboard.SetText(config);
-                TaskDialog.Show(
+                Autodesk.Revit.UI.TaskDialog.Show(
                     "Revit 命令桥 - MCP 配置",
                     "✓ MCP 配置已复制到剪贴板。\n\n到 Codex、WorkBuddy 或其它 MCP 客户端的配置页面粘贴或导入即可。\n\n配置文件：\n" + configPath);
                 return Result.Succeeded;
@@ -317,7 +317,7 @@ namespace RevitCommandBridge
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            TaskDialog.Show(
+            Autodesk.Revit.UI.TaskDialog.Show(
                 "命令桥 - 使用说明",
                 "只要三步：\n\n" +
                 "1. 保持 Revit 和项目打开。\n\n" +

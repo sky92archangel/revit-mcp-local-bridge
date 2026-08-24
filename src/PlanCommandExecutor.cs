@@ -480,7 +480,7 @@ namespace RevitCommandBridge
             {
                 AddResolvedToken(ids, token);
             }
-            return ids.GroupBy(id => id.IntegerValue).Select(group => group.First()).ToList();
+            return ids.GroupBy(id => (int)id.Value).Select(group => group.First()).ToList();
         }
 
         public ElementId ResolveSingleElementId(IDictionary<string, object> arguments, params string[] fieldNames)

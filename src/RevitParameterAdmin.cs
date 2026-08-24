@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -151,11 +152,10 @@ ForgeTypeId group = ResolveGroup(groupToken);
         {
             var items = new List<Dictionary<string, object>>();
             BindingMap map = context.Document.ParameterBindings;
-            BindingMapIterator iterator = map.ForwardBindings();
-            while (iterator.MoveNext())
+            foreach (DictionaryEntry entry in map)
             {
-                Definition definition = iterator.Key as Definition;
-                ElementBinding binding = iterator.Current as ElementBinding;
+                Definition definition = entry.Key as Definition;
+                ElementBinding binding = entry.Value as ElementBinding;
                 if (definition == null || binding == null)
                 {
                     continue;
@@ -257,7 +257,7 @@ definition = group.Definitions.Create(options) as ExternalDefinition;
                 lookup["category"] = token;
                 ElementId categoryId = RevitLookups.ResolveCategoryId(
                     document, lookup, BuiltInCategory.OST_GenericModel);
-                Category category = document.GetElement(categoryId) as Category;
+Category category = Category.GetCategory(document, categoryId);
                 if (category == null)
                 {
                     throw new BridgeCommandException("找不到类别：“" + token + "”。");
@@ -291,10 +291,9 @@ bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup
 
             Definition matched = null;
             BindingMap map = context.Document.ParameterBindings;
-            BindingMapIterator iterator = map.ForwardBindings();
-            while (iterator.MoveNext())
+            foreach (DictionaryEntry entry in map)
             {
-                Definition definition = iterator.Key as Definition;
+                Definition definition = entry.Key as Definition;
                 if (definition != null &&
                     string.Equals(definition.Name, name, StringComparison.OrdinalIgnoreCase))
                 {

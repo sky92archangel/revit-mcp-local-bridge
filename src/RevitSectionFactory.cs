@@ -44,13 +44,13 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("截面 width_mm / height_mm 必须大于 0。");
             }
             XYZ normal = tangent.Normalize();
-            XYZ axisV = normal.Cross(XYZ.BasisZ);
+            XYZ axisV = normal.CrossProduct(XYZ.BasisZ);
             if (axisV.GetLength() < 1e-9)
             {
-                axisV = normal.Cross(XYZ.BasisX);
+                axisV = normal.CrossProduct(XYZ.BasisX);
             }
             axisV = axisV.Normalize();
-            XYZ axisU = axisV.Cross(normal).Normalize();
+            XYZ axisU = axisV.CrossProduct(normal).Normalize();
 
             string normalized = (shape ?? "rect").Trim().ToLowerInvariant();
             var loops = new List<CurveLoop>();

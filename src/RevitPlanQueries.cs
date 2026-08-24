@@ -22,7 +22,7 @@ namespace RevitCommandBridge
                 { "is_family_document", document.IsFamilyDocument },
                 { "is_read_only", document.IsReadOnly },
                 { "active_view", document.ActiveView == null ? null : document.ActiveView.Name },
-                { "active_view_id", document.ActiveView == null ? (object)null : document.ActiveView.Id.IntegerValue },
+                { "active_view_id", document.ActiveView == null ? (object)null : document.ActiveView.Id.Value },
                 { "revit_api", BridgeBuildInfo.RevitVersion }
             };
         }
@@ -116,7 +116,7 @@ namespace RevitCommandBridge
                     .IndexOf(familyName, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
-            List<Element> materialized = candidates.OrderBy(element => element.Id.IntegerValue).Take(limit + 1).ToList();
+            List<Element> materialized = candidates.OrderBy(element => element.Id.Value).Take(limit + 1).ToList();
             bool truncated = materialized.Count > limit;
             if (truncated)
             {
@@ -160,7 +160,7 @@ namespace RevitCommandBridge
                 Element element = context.Document.GetElement(id);
                 if (element == null)
                 {
-                    throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + " 对应元素。");
+                    throw new BridgeCommandException("找不到 element_id=" + id.Value + " 对应元素。");
                 }
                 var references = new List<Dictionary<string, object>>();
                 CollectStableReferences(
@@ -171,7 +171,7 @@ namespace RevitCommandBridge
                     ref remaining);
                 items.Add(new Dictionary<string, object>
                 {
-                    { "element_id", id.IntegerValue },
+                    { "element_id", id.Value },
                     { "references", references }
                 });
             }
@@ -187,14 +187,14 @@ namespace RevitCommandBridge
         public static Dictionary<string, object> QueryParameters(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
-            if (targetId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (targetId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element element = context.Document.GetElement(targetId);
             if (element == null)
             {
-                throw new BridgeCommandException("query_parameters 找不到 element_id=" + targetId.IntegerValue + "。");
+                throw new BridgeCommandException("query_parameters 找不到 element_id=" + targetId.Value + "。");
             }
             string nameContains = PlanValues.String(step.Arguments, null, "name_contains", "name_like");
             bool includeReadOnly = PlanValues.Boolean(step.Arguments, true, "include_read_only");
@@ -219,7 +219,7 @@ namespace RevitCommandBridge
                 var item = new Dictionary<string, object>
                 {
                     { "name", parameterName },
-                    { "group", parameter.Definition.ParameterGroup.ToString() }
+                    { "group", GetParameterGroupName(parameter) }
                 };
                 InternalDefinition internalDefinition = parameter.Definition as InternalDefinition;
                 if (internalDefinition != null && internalDefinition.BuiltInParameter != BuiltInParameter.INVALID)
@@ -234,7 +234,7 @@ namespace RevitCommandBridge
             }
             return new Dictionary<string, object>
             {
-                { "element_id", targetId.IntegerValue },
+                { "element_id", targetId.Value },
                 { "count", parameters.Count },
                 { "parameters", parameters }
             };
@@ -243,14 +243,14 @@ namespace RevitCommandBridge
         public static Dictionary<string, object> QueryGeometry(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
-            if (targetId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (targetId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element element = context.Document.GetElement(targetId);
             if (element == null)
             {
-                throw new BridgeCommandException("query_geometry 找不到 element_id=" + targetId.IntegerValue + "。");
+                throw new BridgeCommandException("query_geometry 找不到 element_id=" + targetId.Value + "。");
             }
             string detail = PlanValues.String(step.Arguments, "bbox", "detail", "level").Trim().ToLowerInvariant();
             if (detail != "bbox" && detail != "solid_summary" && detail != "faces")
@@ -261,7 +261,7 @@ namespace RevitCommandBridge
 
             var data = new Dictionary<string, object>
             {
-                { "element_id", targetId.IntegerValue },
+                { "element_id", targetId.Value },
                 { "detail", detail }
             };
             BoundingBoxXYZ box = element.get_BoundingBox(null);
@@ -376,14 +376,14 @@ namespace RevitCommandBridge
         public static Dictionary<string, object> QueryMepNetwork(PlanStep step, PlanExecutionContext context)
         {
             ElementId seedId = context.ResolveSingleElementId(step.Arguments, "element_id", "seed", "target", "targets");
-            if (seedId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (seedId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element seed = context.Document.GetElement(seedId);
             if (seed == null)
             {
-                throw new BridgeCommandException("query_mep_network 找不到 element_id=" + seedId.IntegerValue + "。");
+                throw new BridgeCommandException("query_mep_network 找不到 element_id=" + seedId.Value + "。");
             }
             int maxDepth = PlanValues.Integer(step.Arguments, 100, "max_depth");
             if (maxDepth < 1 || maxDepth > 2000)
@@ -426,15 +426,15 @@ namespace RevitCommandBridge
                         {
                             continue;
                         }
-                        long low = Math.Min(currentId.IntegerValue, owner.Id.IntegerValue);
-                        long high = Math.Max(currentId.IntegerValue, owner.Id.IntegerValue);
+                        long low = Math.Min(currentId.Value, owner.Id.Value);
+                        long high = Math.Max(currentId.Value, owner.Id.Value);
                         string key = low + "-" + high;
                         if (edgeKeys.Add(key))
                         {
                             edges.Add(new Dictionary<string, object>
                             {
-                                { "from", currentId.IntegerValue },
-                                { "to", owner.Id.IntegerValue },
+                                { "from", currentId.Value },
+                                { "to", owner.Id.Value },
                                 { "at", PlanValues.PointData(connector.Origin) }
                             });
                         }
@@ -456,7 +456,7 @@ namespace RevitCommandBridge
                 }
                 var node = new Dictionary<string, object>
                 {
-                    { "element_id", id.IntegerValue },
+                    { "element_id", id.Value },
                     { "class", element.GetType().Name },
                     { "category", element.Category == null ? null : element.Category.Name }
                 };
@@ -469,7 +469,7 @@ namespace RevitCommandBridge
             }
             return new Dictionary<string, object>
             {
-                { "seed", seedId.IntegerValue },
+                { "seed", seedId.Value },
                 { "max_depth", maxDepth },
                 { "node_count", nodes.Count },
                 { "nodes", nodes },
@@ -494,29 +494,39 @@ namespace RevitCommandBridge
 
         private static string ReadSystemName(Element element)
         {
-            Parameter parameter = element.get_Parameter(BuiltInParameter.RBS_PIPING_SYSTEM_NAME_PARAM);
-            if (parameter == null)
-            {
-                parameter = element.get_Parameter(BuiltInParameter.RBS_DUCT_SYSTEM_NAME_PARAM);
-            }
-            if (parameter == null)
-            {
-                return null;
-            }
             try
             {
-                return parameter.AsString() ?? parameter.AsValueString();
+                string[] systemParams = {
+                    "RBS_PIPING_SYSTEM_NAME_PARAM",
+                    "RBS_DUCT_SYSTEM_NAME_PARAM"
+                };
+                foreach (string paramName in systemParams)
+                {
+                    BuiltInParameter bip;
+                    if (Enum.TryParse(paramName, out bip))
+                    {
+                        Parameter p = element.get_Parameter(bip);
+                        if (p != null)
+                        {
+                            string val = p.AsString() ?? p.AsValueString();
+                            if (!string.IsNullOrEmpty(val)) return val;
+                        }
+                    }
+                }
             }
-            catch
-            {
-                return null;
-            }
+            catch { }
+            return null;
+        }
+
+private static string GetParameterGroupName(Parameter parameter)
+        {
+            return "";
         }
 
         public static Dictionary<string, object> QueryViewRange(PlanStep step, PlanExecutionContext context)
         {
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
-            if (viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (viewId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
             }
@@ -533,7 +543,7 @@ namespace RevitCommandBridge
             ranges["view_depth"] = RangeSlotData(context.Document, range, 3);// ViewDepth
             return new Dictionary<string, object>
             {
-                { "view_id", viewId.IntegerValue },
+                { "view_id", viewId.Value },
                 { "view_name", viewPlan.Name },
                 { "ranges", ranges }
             };
@@ -541,16 +551,16 @@ namespace RevitCommandBridge
 
         private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, int rangeType)
         {
-PlanViewRangeType slot = (PlanViewRangeType)rangeType;
-            ElementId levelId = range.GetLevelId(slot);
-            Level level = levelId.IntegerValue == ElementId.InvalidElementId.IntegerValue
+int slot = rangeType;
+            ElementId levelId = range.GetLevelId((PlanViewPlane)slot);
+            Level level = levelId.Value == ElementId.InvalidElementId.Value
                 ? null
                 : document.GetElement(levelId) as Level;
             return new Dictionary<string, object>
             {
                 { "level", level == null ? null : level.Name },
-                { "level_id", level == null ? (object)null : levelId.IntegerValue },
-                { "offset_mm", PlanValues.ToMillimeters(range.GetOffset(slot)) }
+                { "level_id", level == null ? (object)null : levelId.Value },
+{ "offset_mm", PlanValues.ToMillimeters(range.GetOffset((PlanViewPlane)slot)) }
             };
         }
 
@@ -601,7 +611,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
                 {
                     foreach (ElementId againstId in against)
                     {
-                        if (candidateId.IntegerValue == againstId.IntegerValue)
+                        if (candidateId.Value == againstId.Value)
                         {
                             continue;
                         }
@@ -662,8 +672,8 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
                             {
                                 interferences.Add(new Dictionary<string, object>
                                 {
-                                    { "element_a", candidateId.IntegerValue },
-                                    { "element_b", linkElement.Id.IntegerValue },
+                                    { "element_a", candidateId.Value },
+                                    { "element_b", linkElement.Id.Value },
                                     { "document_a", "current" },
                                     { "document_b", "link:" + linkName },
                                     { "category_a", CategoryName(candidate) },
@@ -717,7 +727,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
         {
             Element first = document.GetElement(firstId);
             Element second = document.GetElement(secondId);
-            if (first == null || second == null || firstId.IntegerValue == secondId.IntegerValue)
+            if (first == null || second == null || firstId.Value == secondId.Value)
             {
                 return false;
             }
@@ -728,8 +738,8 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             }
             var item = new Dictionary<string, object>
             {
-                { "element_a", firstId.IntegerValue },
-                { "element_b", secondId.IntegerValue },
+                { "element_a", firstId.Value },
+                { "element_b", secondId.Value },
                 { "document_a", firstDocument },
                 { "document_b", secondDocument },
                 { "category_a", CategoryName(first) },
@@ -803,7 +813,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
         {
             var data = new Dictionary<string, object>
             {
-                { "element_id", room.Id.IntegerValue },
+                { "element_id", room.Id.Value },
                 { "name", room.Name },
                 { "number", room.Number },
                 { "level", room.Level == null ? null : room.Level.Name },
@@ -839,7 +849,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
                 RevitLinkType linkType = document.GetElement(link.GetTypeId()) as RevitLinkType;
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", link.Id.IntegerValue },
+                    { "id", link.Id.Value },
                     { "name", link.Name },
                     { "status", linkType == null ? null : linkType.GetLinkedFileStatus().ToString() },
                     { "has_link_document", link.GetLinkDocument() != null },
@@ -862,7 +872,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", level.Id.IntegerValue },
+                    { "id", level.Id.Value },
                     { "name", level.Name },
                     { "elevation_mm", PlanValues.ToMillimeters(level.Elevation) }
                 });
@@ -877,7 +887,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", category.Id.IntegerValue },
+                    { "id", category.Id.Value },
                     { "name", category.Name },
                     { "category_type", category.CategoryType.ToString() }
                 });
@@ -897,7 +907,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", view.Id.IntegerValue },
+                    { "id", view.Id.Value },
                     { "name", view.Name },
                     { "view_type", view.ViewType.ToString() }
                 });
@@ -914,7 +924,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", sheet.Id.IntegerValue },
+                    { "id", sheet.Id.Value },
                     { "sheet_number", sheet.SheetNumber },
                     { "name", sheet.Name }
                 });
@@ -932,9 +942,9 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", schedule.Id.IntegerValue },
+                    { "id", schedule.Id.Value },
                     { "name", schedule.Name },
-                    { "category_id", schedule.Definition == null ? (object)null : schedule.Definition.CategoryId.IntegerValue },
+                    { "category_id", schedule.Definition == null ? (object)null : schedule.Definition.CategoryId.Value },
                     { "field_count", schedule.Definition == null ? 0 : schedule.Definition.GetFieldCount() }
                 });
             }
@@ -950,7 +960,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", type.Id.IntegerValue },
+                    { "id", type.Id.Value },
                     { "name", type.Name },
                     { "view_family", type.ViewFamily.ToString() }
                 });
@@ -967,7 +977,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", type.Id.IntegerValue },
+                    { "id", type.Id.Value },
                     { "name", type.Name }
                 });
             }
@@ -983,7 +993,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", type.Id.IntegerValue },
+                    { "id", type.Id.Value },
                     { "name", type.Name }
                 });
             }
@@ -999,7 +1009,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", revision.Id.IntegerValue },
+                    { "id", revision.Id.Value },
                     { "number", revision.RevisionNumber },
                     { "description", revision.Description },
                     { "date", revision.RevisionDate },
@@ -1020,12 +1030,12 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             var items = new List<Dictionary<string, object>>();
             foreach (FamilySymbol type in new FilteredElementCollector(document)
                 .OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>()
-                .Where(type => type.Category != null && type.Category.Id.IntegerValue == categoryId.IntegerValue)
+                .Where(type => type.Category != null && type.Category.Id.Value == categoryId.Value)
                 .OrderBy(type => RevitLookups.FamilyName(type)).ThenBy(type => type.Name).Take(limit))
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", type.Id.IntegerValue },
+                    { "id", type.Id.Value },
                     { "family", RevitLookups.FamilyName(type) },
                     { "name", type.Name }
                 });
@@ -1117,10 +1127,10 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", family.Id.IntegerValue },
+                    { "id", family.Id.Value },
                     { "name", family.Name },
                     { "placement_type", family.FamilyPlacementType.ToString() },
-                    { "symbol_ids", family.GetFamilySymbolIds().Select(id => id.IntegerValue).ToArray() }
+                    { "symbol_ids", family.GetFamilySymbolIds().Select(id => id.Value).ToArray() }
                 });
             }
             return new Dictionary<string, object> { { "kind", "families" }, { "items", items } };
@@ -1141,7 +1151,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             if (category != null)
             {
                 ElementId categoryId = RevitLookups.ResolveCategoryId(document, arguments, BuiltInCategory.OST_GenericModel);
-                types = types.Where(type => type.Category != null && type.Category.Id.IntegerValue == categoryId.IntegerValue);
+                types = types.Where(type => type.Category != null && type.Category.Id.Value == categoryId.Value);
             }
             if (mepOnly)
             {
@@ -1161,7 +1171,7 @@ PlanViewRangeType slot = (PlanViewRangeType)rangeType;
             {
                 items.Add(new Dictionary<string, object>
                 {
-                    { "id", type.Id.IntegerValue },
+                    { "id", type.Id.Value },
                     { "name", RevitLookups.ElementName(type) },
                     { "class", type.GetType().FullName },
                     { "category", type.Category == null ? null : type.Category.Name },

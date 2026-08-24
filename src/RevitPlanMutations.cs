@@ -30,7 +30,7 @@ namespace RevitCommandBridge
                 Element element = context.Document.GetElement(id);
                 if (element == null)
                 {
-                    throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + " 对应元素。");
+                    throw new BridgeCommandException("找不到 element_id=" + id.Value + " 对应元素。");
                 }
                 var changed = new List<string>();
                 foreach (KeyValuePair<string, object> pair in requested)
@@ -42,7 +42,7 @@ namespace RevitCommandBridge
                         {
                             continue;
                         }
-                        throw new BridgeCommandException("元素 " + id.IntegerValue + " 找不到参数“" + pair.Key + "”。");
+                        throw new BridgeCommandException("元素 " + id.Value + " 找不到参数“" + pair.Key + "”。");
                     }
                     if (parameter.IsReadOnly)
                     {
@@ -50,7 +50,7 @@ namespace RevitCommandBridge
                         {
                             continue;
                         }
-                        throw new BridgeCommandException("元素 " + id.IntegerValue + " 的参数“" + pair.Key + "”是只读。");
+                        throw new BridgeCommandException("元素 " + id.Value + " 的参数“" + pair.Key + "”是只读。");
                     }
 
                     ValidateParameterValue(parameter, pair.Value, pair.Key);
@@ -62,14 +62,14 @@ namespace RevitCommandBridge
                 }
                 changes.Add(new Dictionary<string, object>
                 {
-                    { "element_id", id.IntegerValue },
+                    { "element_id", id.Value },
                     { "parameters", changed.ToArray() }
                 });
             }
 
             return new Dictionary<string, object>
             {
-                { "element_ids", ids.Select(id => id.IntegerValue).ToArray() },
+                { "element_ids", ids.Select(id => id.Value).ToArray() },
                 { "changes", changes },
                 { "preview", context.Preview }
             };
@@ -86,19 +86,19 @@ namespace RevitCommandBridge
             {
                 if (context.Document.GetElement(id) == null)
                 {
-                    throw new BridgeCommandException("找不到待删除 element_id=" + id.IntegerValue + "。");
+                    throw new BridgeCommandException("找不到待删除 element_id=" + id.Value + "。");
                 }
             }
             var data = new Dictionary<string, object>
             {
-                { "requested_element_ids", ids.Select(id => id.IntegerValue).ToArray() }
+                { "requested_element_ids", ids.Select(id => id.Value).ToArray() }
             };
             if (context.Preview)
             {
                 return data;
             }
             ICollection<ElementId> deleted = context.Document.Delete(ids);
-            data["deleted_element_ids"] = deleted.Select(id => id.IntegerValue).ToArray();
+            data["deleted_element_ids"] = deleted.Select(id => id.Value).ToArray();
             return data;
         }
 
@@ -113,7 +113,7 @@ namespace RevitCommandBridge
             {
                 if (context.Document.GetElement(id) == null)
                 {
-                    throw new BridgeCommandException("找不到待选择 element_id=" + id.IntegerValue + "。");
+                    throw new BridgeCommandException("找不到待选择 element_id=" + id.Value + "。");
                 }
             }
             bool show = PlanValues.Boolean(step.Arguments, true, "show", "zoom");
@@ -123,7 +123,7 @@ namespace RevitCommandBridge
             }
             return new Dictionary<string, object>
             {
-                { "element_ids", ids.Select(id => id.IntegerValue).ToArray() },
+                { "element_ids", ids.Select(id => id.Value).ToArray() },
                 { "show", show },
                 { "preview", context.Preview }
             };
@@ -133,7 +133,7 @@ namespace RevitCommandBridge
         {
             ElementId sourceId = context.ResolveSingleElementId(
                 step.Arguments, "type_id", "source_type_id", "element_id", "target");
-            if (sourceId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (sourceId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置类型引用尚无真实 ID。" } };
             }
@@ -150,7 +150,7 @@ namespace RevitCommandBridge
             Dictionary<string, object> requested = PlanValues.Dictionary(step.Arguments, "parameters", false);
             var data = new Dictionary<string, object>
             {
-                { "source_type_id", sourceId.IntegerValue },
+                { "source_type_id", sourceId.Value },
                 { "source_name", sourceType.Name },
                 { "new_name", newName },
                 { "parameter_count", requested.Count }
@@ -161,11 +161,11 @@ namespace RevitCommandBridge
                 Parameter parameter = FindParameter(sourceType, pair.Key);
                 if (parameter == null)
                 {
-                    throw new BridgeCommandException("类型 " + sourceId.IntegerValue + " 找不到参数“" + pair.Key + "”。");
+                    throw new BridgeCommandException("类型 " + sourceId.Value + " 找不到参数“" + pair.Key + "”。");
                 }
                 if (parameter.IsReadOnly)
                 {
-                    throw new BridgeCommandException("类型 " + sourceId.IntegerValue + " 的参数“" + pair.Key + "”是只读。");
+                    throw new BridgeCommandException("类型 " + sourceId.Value + " 的参数“" + pair.Key + "”是只读。");
                 }
                 ValidateParameterValue(parameter, pair.Value, pair.Key);
             }
@@ -177,7 +177,7 @@ namespace RevitCommandBridge
             ElementId newTypeId;
             try
             {
-                newTypeId = sourceType.Duplicate(newName);
+                newTypeId = sourceType.Duplicate(newName).Id;
             }
             catch (Exception ex)
             {
@@ -192,8 +192,8 @@ namespace RevitCommandBridge
             {
                 SetParameterValue(FindParameter(newType, pair.Key), pair.Value, pair.Key);
             }
-            data["element_id"] = newTypeId.IntegerValue;
-            data["element_ids"] = new[] { newTypeId.IntegerValue };
+            data["element_id"] = newTypeId.Value;
+            data["element_ids"] = new[] { newTypeId.Value };
             data["new_name"] = newType.Name;
             return data;
         }
@@ -229,7 +229,7 @@ namespace RevitCommandBridge
             if (action == "transport")
             {
                 sourceId = context.ResolveSingleElementId(step.Arguments, "source_element_id", "source");
-                if (sourceId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                if (sourceId.Value == ElementId.InvalidElementId.Value)
                 {
                     return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
                 }
@@ -240,7 +240,7 @@ namespace RevitCommandBridge
             if (single)
             {
                 ElementId id = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "target");
-                if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                if (id.Value == ElementId.InvalidElementId.Value)
                 {
                     return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
                 }
@@ -274,12 +274,12 @@ namespace RevitCommandBridge
                 Element source = context.Document.GetElement(sourceId);
                 if (source == null)
                 {
-                    throw new BridgeCommandException("找不到 source_element_id=" + sourceId.IntegerValue + "。");
+                    throw new BridgeCommandException("找不到 source_element_id=" + sourceId.Value + "。");
                 }
                 values = BridgeSchemas.ReadMap(source);
                 if (values == null || values.Count == 0)
                 {
-                    throw new BridgeCommandException("源元素没有可搬运的扩展数据：" + sourceId.IntegerValue);
+                    throw new BridgeCommandException("源元素没有可搬运的扩展数据：" + sourceId.Value);
                 }
                 data["values"] = values;
             }
@@ -293,7 +293,7 @@ namespace RevitCommandBridge
                         Element element = context.Document.GetElement(id);
                         if (element == null)
                         {
-                            throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + "。");
+                            throw new BridgeCommandException("找不到 element_id=" + id.Value + "。");
                         }
                         BridgeSchemas.WriteMap(element, values);
                     }
@@ -304,7 +304,7 @@ namespace RevitCommandBridge
                     Element element = context.Document.GetElement(targets[0]);
                     if (element == null)
                     {
-                        throw new BridgeCommandException("找不到 element_id=" + targets[0].IntegerValue + "。");
+                        throw new BridgeCommandException("找不到 element_id=" + targets[0].Value + "。");
                     }
                     data["values"] = BridgeSchemas.ReadMap(element);
                     break;
@@ -315,21 +315,21 @@ namespace RevitCommandBridge
                         Element element = context.Document.GetElement(id);
                         if (element == null)
                         {
-                            throw new BridgeCommandException("找不到 element_id=" + id.IntegerValue + "。");
+                            throw new BridgeCommandException("找不到 element_id=" + id.Value + "。");
                         }
                         element.DeleteEntity(BridgeSchemas.AiMetadata);
                     }
                     data["cleared"] = targets.Count;
                     break;
             }
-            data["element_ids"] = targets.Select(id => id.IntegerValue).ToArray();
+            data["element_ids"] = targets.Select(id => id.Value).ToArray();
             return data;
         }
 
         public static Dictionary<string, object> ManageFamilyParameters(PlanStep step, PlanExecutionContext context)
         {
             ElementId familyId = context.ResolveSingleElementId(step.Arguments, "family_id", "family", "target");
-            if (familyId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (familyId.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置族引用尚无真实 ID。" } };
             }
@@ -384,7 +384,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "family", family.Name },
-                { "family_id", familyId.IntegerValue },
+                { "family_id", familyId.Value },
                 { "actions", described.ToArray() }
             };
             if (context.Preview)
@@ -427,7 +427,7 @@ namespace RevitCommandBridge
                                     manager.RemoveParameter(manager.get_Parameter(name));
                                     break;
                                 case "set_formula":
-                                    manager.get_Parameter(name).Formula = PlanValues.String(item, null, "formula");
+                                    manager.SetFormula(manager.get_Parameter(name), PlanValues.String(item, null, "formula"));
                                     break;
                             }
                         }
@@ -451,13 +451,14 @@ namespace RevitCommandBridge
                     throw;
                 }
             }
-            if (!familyDocument.LoadFamily(context.Document, new BridgeFamilyLoadOptions()))
+Family loadedFamilyResult;
+            if (!context.Document.LoadFamily(familyDocument.PathName, new BridgeFamilyLoadOptions(), out loadedFamilyResult))
             {
                 throw new BridgeCommandException("族“" + family.Name + "”回载到项目失败。");
             }
             data["applied"] = actions.Count;
-            data["element_id"] = familyId.IntegerValue;
-            data["element_ids"] = new[] { familyId.IntegerValue };
+            data["element_id"] = familyId.Value;
+            data["element_ids"] = new[] { familyId.Value };
             return data;
         }
 
@@ -472,7 +473,7 @@ namespace RevitCommandBridge
             {
                 if (context.Document.GetElement(id) == null)
                 {
-                    throw new BridgeCommandException("找不到待变换 element_id=" + id.IntegerValue + "。");
+                    throw new BridgeCommandException("找不到待变换 element_id=" + id.Value + "。");
                 }
             }
             string mode = PlanValues.String(step.Arguments, null, "mode").Trim().ToLowerInvariant();
@@ -480,7 +481,7 @@ namespace RevitCommandBridge
             {
                 { "mode", mode },
                 { "target_count", ids.Count },
-                { "element_ids", ids.Select(id => id.IntegerValue).ToArray() }
+                { "element_ids", ids.Select(id => id.Value).ToArray() }
             };
             if (context.Preview)
             {
@@ -507,7 +508,7 @@ namespace RevitCommandBridge
                     }
                     ICollection<ElementId> copied = ElementTransformUtils.CopyElements(document, ids, offset);
                     data["copied_count"] = copied.Count;
-                    data["element_ids"] = copied.Select(id => id.IntegerValue).ToArray();
+                    data["element_ids"] = copied.Select(id => id.Value).ToArray();
                     break;
                 case "rotate":
                     XYZ origin = ReadPoint(step.Arguments, "axis_origin", "origin");
@@ -532,7 +533,7 @@ namespace RevitCommandBridge
                     Plane plane = Plane.CreateByNormalAndOrigin(normal.Normalize(), planePoint);
                     ICollection<ElementId> mirrored = ElementTransformUtils.MirrorElements(document, ids, plane, true);
                     data["mirrored_count"] = mirrored.Count;
-                    data["element_ids"] = mirrored.Select(id => id.IntegerValue).ToArray();
+                    data["element_ids"] = mirrored.Select(id => id.Value).ToArray();
                     break;
                 default:
                     throw new BridgeCommandException("transform_elements.mode 仅支持 move、copy、rotate、mirror。");
@@ -579,12 +580,12 @@ namespace RevitCommandBridge
                 Element element = context.Document.GetElement(id);
                 if (element == null)
                 {
-                    throw new BridgeCommandException("找不到待重命名 element_id=" + id.IntegerValue + "。");
+                    throw new BridgeCommandException("找不到待重命名 element_id=" + id.Value + "。");
                 }
                 string oldName = RevitLookups.ElementName(element);
                 string newName = string.IsNullOrWhiteSpace(prefix)
                     ? name
-                    : (withIdSuffix ? prefix + id.IntegerValue : prefix + oldName);
+                    : (withIdSuffix ? prefix + id.Value : prefix + oldName);
                 try
                 {
                     element.Name = newName;
@@ -592,24 +593,24 @@ namespace RevitCommandBridge
                 catch (Exception ex)
                 {
                     throw new BridgeCommandException(
-                        "重命名 element_id=" + id.IntegerValue + "（" + oldName + " → " + newName + "）失败：" + ex.Message);
+                        "重命名 element_id=" + id.Value + "（" + oldName + " → " + newName + "）失败：" + ex.Message);
                 }
                 renamed.Add(new Dictionary<string, object>
                 {
-                    { "element_id", id.IntegerValue },
+                    { "element_id", id.Value },
                     { "old_name", oldName },
                     { "new_name", RevitLookups.ElementName(element) }
                 });
             }
             data["renamed"] = renamed;
-            data["element_ids"] = ids.Select(id => id.IntegerValue).ToArray();
+            data["element_ids"] = ids.Select(id => id.Value).ToArray();
             return data;
         }
 
         public static Dictionary<string, object> SetElementCurve(PlanStep step, PlanExecutionContext context)
         {
             ElementId id = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "target");
-            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (id.Value == ElementId.InvalidElementId.Value)
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
@@ -627,7 +628,7 @@ namespace RevitCommandBridge
             }
             var data = new Dictionary<string, object>
             {
-                { "element_id", id.IntegerValue },
+                { "element_id", id.Value },
                 { "start", PlanValues.PointData(start) },
                 { "end", PlanValues.PointData(end) }
             };
@@ -642,7 +643,7 @@ namespace RevitCommandBridge
             {
                 data["length_mm"] = PlanValues.ToMillimeters(location.Curve.Length);
             }
-            data["element_ids"] = new[] { id.IntegerValue };
+            data["element_ids"] = new[] { id.Value };
             return data;
         }
 
@@ -694,7 +695,7 @@ namespace RevitCommandBridge
             Element element = document.GetElement(id);
             if (element == null)
             {
-                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.IntegerValue + " 对应元素。");
+                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.Value + " 对应元素。");
             }
             return element;
         }

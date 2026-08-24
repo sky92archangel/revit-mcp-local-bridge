@@ -19,11 +19,6 @@ namespace RevitCommandBridge
 
         public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
         {
-            if (!failuresAccessor.HasFailures())
-            {
-                return FailureProcessingResult.Continue;
-            }
-
             bool hasUnresolvedError = false;
             foreach (FailureMessageAccessor failure in failuresAccessor.GetFailureMessages().ToList())
             {
@@ -39,12 +34,6 @@ namespace RevitCommandBridge
 
                 if (severity == FailureSeverity.Error || severity == FailureSeverity.DocumentCorruption)
                 {
-                    FailureResolutionId resolution = failure.GetDefaultResolutionTypeId();
-                    if (resolution != null && failuresAccessor.IsFailureResolutionPermitted(failure, resolution))
-                    {
-                        failuresAccessor.ResolveFailure(failure, resolution);
-                        continue;
-                    }
                     hasUnresolvedError = true;
                 }
             }
