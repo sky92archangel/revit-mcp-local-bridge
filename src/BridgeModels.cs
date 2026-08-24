@@ -2,7 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+#if REVIT_NET8
+using System.Text.Json;
+using System.Text.Json.Serialization;
+#else
 using System.Web.Script.Serialization;
+#endif
 
 namespace RevitCommandBridge
 {
@@ -81,6 +86,98 @@ namespace RevitCommandBridge
 
     internal static class BridgeJson
     {
+#if REVIT_NET8
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            MaxDepth = 10,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new DictionaryConverter() }
+        };
+
+        private sealed class DictionaryConverter : JsonConverter<Dictionary<string, object>>
+        {
+            public override Dictionary<string, object> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+            {
+                return ReadDictionary(ref reader);
+            }
+
+            private static Dictionary<string, object> ReadDictionary(ref Utf8JsonReader reader)
+            {
+                var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                while (reader.Read())
+                {
+                    if (reader.TokenType == JsonTokenType.EndObject) return result;
+                    if (reader.TokenType != JsonTokenType.PropertyName) continue;
+                    string key = reader.GetString();
+                    reader.Read();
+                    result[key] = ReadValue(ref reader);
+                }
+                return result;
+            }
+
+            private static object ReadValue(ref Utf8JsonReader reader)
+            {
+                switch (reader.TokenType)
+                {
+                    case JsonTokenType.StartObject:
+                        return ReadDictionary(ref reader);
+                    case JsonTokenType.StartArray:
+                        var list = new List<object>();
+                        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                            list.Add(ReadValue(ref reader));
+                        return list;
+                    case JsonTokenType.True:
+                        return true;
+                    case JsonTokenType.False:
+                        return false;
+                    case JsonTokenType.Null:
+                        return null;
+                    case JsonTokenType.Number:
+                        if (reader.TryGetInt64(out long l)) return l;
+                        return reader.GetDouble();
+                    case JsonTokenType.String:
+                        return reader.GetString();
+                    default:
+                        return reader.GetString();
+                }
+            }
+
+            public override void Write(Utf8JsonWriter writer, Dictionary<string, object> value, JsonSerializerOptions options)
+            {
+                JsonSerializer.Serialize(writer, value, options);
+            }
+        }
+
+        public static BridgeRequest ParseRequest(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                throw new BridgeCommandException("命令请求为空。");
+            }
+
+            Dictionary<string, object> root;
+            try
+            {
+                root = JsonSerializer.Deserialize<Dictionary<string, object>>(json, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                throw new BridgeCommandException("命令 JSON 无法解析：" + ex.Message);
+            }
+
+            if (root == null)
+            {
+                throw new BridgeCommandException("命令 JSON 顶层必须是对象。");
+            }
+
+            return BuildRequest(root);
+        }
+
+        public static string Serialize(object value)
+        {
+            return JsonSerializer.Serialize(value, JsonOptions);
+        }
+#else
         private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer
         {
             MaxJsonLength = 1024 * 1024
@@ -109,6 +206,17 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("命令 JSON 顶层必须是对象。");
             }
 
+            return BuildRequest(root);
+        }
+
+        public static string Serialize(object value)
+        {
+            return Serializer.Serialize(value);
+        }
+#endif
+
+        private static BridgeRequest BuildRequest(IDictionary<string, object> root)
+        {
             var request = new BridgeRequest();
             string id = ReadString(root, "id");
             if (!string.IsNullOrWhiteSpace(id))
@@ -147,11 +255,6 @@ namespace RevitCommandBridge
         public static string SerializeResponse(string requestId, BridgeResponse response)
         {
             return Serialize(response.ToDictionary(requestId));
-        }
-
-        public static string Serialize(object value)
-        {
-            return Serializer.Serialize(value);
         }
 
         public static string ReadString(IDictionary<string, object> values, params string[] names)

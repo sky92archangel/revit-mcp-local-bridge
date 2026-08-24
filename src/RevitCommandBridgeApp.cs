@@ -26,7 +26,7 @@ namespace RevitCommandBridge
 {
     public class RevitCommandBridgeApp : IExternalApplication
     {
-        public Result OnStartup(UIControlledApplication application)
+        public virtual Result OnStartup(UIControlledApplication application)
         {
             try
             {
@@ -84,7 +84,7 @@ namespace RevitCommandBridge
             }
         }
 
-        public Result OnShutdown(UIControlledApplication application)
+        public virtual Result OnShutdown(UIControlledApplication application)
         {
             CommandPanelManager.Close();
             BridgeRuntime runtime = BridgeRuntime.Current;

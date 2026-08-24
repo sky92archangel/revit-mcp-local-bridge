@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Text;
+#if !REVIT_NET8
 using System.Web.Script.Serialization;
+#endif
 using System.Windows.Forms;
 namespace RevitCommandBridge
 {
@@ -71,7 +73,12 @@ namespace RevitCommandBridge
             if (!File.Exists(BridgeFileQueue.StatusFilePath)) return "正在连接 Revit…";
             try
             {
+#if REVIT_NET8
+                string raw = File.ReadAllText(BridgeFileQueue.StatusFilePath, Encoding.UTF8);
+                var status = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(raw);
+#else
                 var status = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(BridgeFileQueue.StatusFilePath, Encoding.UTF8)) as IDictionary<string, object>;
+#endif
                 if (status == null) return "Revit 命令桥状态无效。";
                 string state = Value(status, "state", "unknown");
                 var data = Dictionary(status, "data");

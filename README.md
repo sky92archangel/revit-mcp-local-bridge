@@ -116,20 +116,98 @@ revit-mcp-local-bridge/
 
 更多构建管道细节见 [plans/BUILD-PIPELINE.md](./plans/BUILD-PIPELINE.md)。
 
+## 安装
+
+构建和安装工具的产出位置：
+
+| 脚本 | 产出 | 说明 |
+|------|------|------|
+| `build.ps1 -RevitVersion 2020` | `dist\RevitCommandBridge-2020\RevitCommandBridge.dll` | 单版本 DLL + 配套脚本 |
+| `build-all.ps1` | `dist\RevitCommandBridge-202{0..7}\` | 全部版本 DLL |
+| `build-installer.ps1` | `dist\RevitCommandBridgeSetup.exe` | 单文件安装器（内置所有年份 DLL + Node） |
+| `install-revit.ps1` | → `%LOCALAPPDATA%\RevitCommandBridge\{year}\` | 复制文件 + 写 `.addin` 清单 |
+
+### 方式 A：开发者模式（编译 → 安装）
+
+```powershell
+# 0. 先关闭 Revit
+
+# 1. 查看本机安装的 Revit 版本
+.\install-revit.ps1 -ListDetected
+
+# 2. 构建指定版本（编译 DLL + 打包安装器）
+.\build.ps1 -RevitVersion 2020
+
+# 3. 安装到本机 Revit
+.\install-revit.ps1 -RevitVersion 2020
+```
+
+`build.ps1` 产出：
+```
+dist\RevitCommandBridge-2020\
+├── RevitCommandBridge.dll
+├── RevitCommandBridge.pdb
+├── bridge.config.json
+├── scripts\          ← MCP Server、REST 网关、CLI 发送器
+├── examples\         ← JSON 请求模板
+├── deploy\           ← .addin 模板
+├── schemas\          ← JSON Schema
+├── install-revit.ps1
+├── uninstall-revit.ps1
+├── PROTOCOL.md 等文档
+```
+
+`install-revit.ps1` 自动完成：
+1. 检测本机 Revit 安装路径（注册表 + `C:\Program Files\Autodesk`）
+2. 匹配 `dist\RevitCommandBridge-{year}\` 包
+3. 复制所有文件至 `%LOCALAPPDATA%\RevitCommandBridge\{year}\`
+4. 写入 `%APPDATA%\Autodesk\Revit\Addins\{year}\RevitCommandBridge.addin`
+5. 清理旧版本残留文件（对比 `install-manifest.json`）
+6. 可选配置 AI 客户端连接（`-Connector`）
+
+> 安装前确保 Revit 已关闭。`install-revit.ps1` 支持 `-WhatIf` 预览安装位置不实际写入。
+
+### 方式 B：最终用户模式（单文件安装器）
+
+```powershell
+# 构建全部版本 + 打包安装器
+.\build-all.ps1
+
+# 产出
+dist\
+├── RevitCommandBridgeSetup.exe          ← 双击或命令行运行
+├── RevitCommandBridge-2020\
+├── RevitCommandBridge-2021\
+├── ...
+└── RevitCommandBridge-2027\
+```
+
+`RevitCommandBridgeSetup.exe` 内置了所有年份 DLL 和 Node.js 运行时，可分发到没有开发环境的机器：
+- 自动扫描本机 Revit
+- 检测到预编译包直接使用
+- 没有对应包时用本机 Revit API 现场编译适配 DLL
+- 自动配置已识别的 MCP 客户端（Codex、WorkBuddy、Claude Desktop、Cursor、Windsurf、Cline、Roo Code）
+
+### 验证安装
+
+启动 Revit 并打开项目后，桥接自动启动。运行健康检查：
+
+```powershell
+& "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\send-revit-command.ps1" `
+  -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2020\examples\health.json"
+```
+
+返回 `"status": "ok"` 即安装成功。功能区"Revit 命令桥"选项卡的"启动桥接"按钮也可确认连接信息。
+
+### 卸载
+
+```powershell
+.\uninstall-revit.ps1 -RevitVersion 2020
+```
+
+卸载程序会移除桥接文件、`.addin` 注册清单和队列目录。不同年份的桥接互不干扰，只卸载指定版本。
+
 ## 快速开始
-
-先查看可安装的 Revit：
-
-~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -ListDetected
-~~~
-
-普通用户直接运行成品包中的 `RevitCommandBridgeSetup.exe`。开发者关闭目标 Revit 后，可构建并安装指定版本：
-
-~~~powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -RevitVersion 2020
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -RevitVersion 2020
-~~~
 
 启动中文 Revit 2020：
 

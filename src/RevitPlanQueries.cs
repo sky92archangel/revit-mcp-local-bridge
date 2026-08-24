@@ -527,10 +527,10 @@ namespace RevitCommandBridge
             }
             PlanViewRange range = viewPlan.GetViewRange();
             var ranges = new Dictionary<string, object>();
-            ranges["top"] = RangeSlotData(context.Document, range, PlanViewRangeType.Top);
-            ranges["cut_plane"] = RangeSlotData(context.Document, range, PlanViewRangeType.CutPlane);
-            ranges["bottom"] = RangeSlotData(context.Document, range, PlanViewRangeType.Bottom);
-            ranges["view_depth"] = RangeSlotData(context.Document, range, PlanViewRangeType.ViewDepth);
+            ranges["top"] = RangeSlotData(context.Document, range, 0);       // Top
+            ranges["cut_plane"] = RangeSlotData(context.Document, range, 1); // CutPlane
+            ranges["bottom"] = RangeSlotData(context.Document, range, 2);    // Bottom
+            ranges["view_depth"] = RangeSlotData(context.Document, range, 3);// ViewDepth
             return new Dictionary<string, object>
             {
                 { "view_id", viewId.IntegerValue },
@@ -539,9 +539,14 @@ namespace RevitCommandBridge
             };
         }
 
-        private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, PlanViewRangeType rangeType)
+        private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, int rangeType)
         {
-            ElementId levelId = range.GetLevelId(rangeType);
+#if REVIT_NET8
+            PlanViewRangeType slot = (PlanViewRangeType)rangeType;
+#else
+            PlanViewPlane slot = (PlanViewPlane)rangeType;
+#endif
+            ElementId levelId = range.GetLevelId(slot);
             Level level = levelId.IntegerValue == ElementId.InvalidElementId.IntegerValue
                 ? null
                 : document.GetElement(levelId) as Level;
@@ -549,7 +554,7 @@ namespace RevitCommandBridge
             {
                 { "level", level == null ? null : level.Name },
                 { "level_id", level == null ? (object)null : levelId.IntegerValue },
-                { "offset_mm", PlanValues.ToMillimeters(range.GetOffset(rangeType)) }
+                { "offset_mm", PlanValues.ToMillimeters(range.GetOffset(slot)) }
             };
         }
 

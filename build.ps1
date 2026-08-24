@@ -128,8 +128,9 @@ switch ($versionConfig.compiler) {
 
         Write-Host "[dotnet] 编译 Revit $RevitVersion ($($versionConfig.runtime)) ..."
         Write-Host "[dotnet] symbols: $($versionConfig.define_symbols -join ';')"
+        $constantsValue = ($versionConfig.define_symbols -join ';').Replace(';', '%3B')
         dotnet build $projectFile --configuration Release `
-            -p:DefineConstants="$($versionConfig.define_symbols -join ';')" `
+            -p:DefineConstants="$constantsValue" `
             -p:RevitAPI="$revitApi" `
             -p:RevitAPIUI="$revitApiUi" `
             -p:OutputPath="$outputDir" `
