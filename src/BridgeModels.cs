@@ -166,7 +166,8 @@ public override void Write(Utf8JsonWriter writer, Dictionary<string, object> val
                     writer.WriteEndObject();
                     return;
                 }
-                if (value is IList<object> list)
+                // if (value is IList<object> list)
+                if (value is System.Collections.IList list)
                 {
                     writer.WriteStartArray();
                     foreach (object item in list)

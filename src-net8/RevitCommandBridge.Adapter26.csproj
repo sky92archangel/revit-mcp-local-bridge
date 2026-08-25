@@ -29,8 +29,4 @@
     </Reference>
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy &quot;$(TargetDir)$(TargetFileName)&quot; &quot;C:\ProgramData\Autodesk\Revit\Addins\2026\&quot; /Y&#xA;copy &quot;$(ProjectDir)RevitCommandBridge.2026.addin&quot; &quot;C:\ProgramData\Autodesk\Revit\Addins\2026\&quot; /Y&#xA;" />
-  </Target>
-
 </Project>

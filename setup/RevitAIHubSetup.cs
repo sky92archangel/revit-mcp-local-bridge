@@ -140,7 +140,7 @@ namespace RevitAIHubSetup
                 Dock = DockStyle.Fill,
                 Font = new Font("Microsoft YaHei UI", 9.0f),
                 ForeColor = Color.FromArgb(222, 235, 249),
-                Text = "支持 Revit 2020–2024 · 自动识别本机版本并生成适配插件"
+                Text = "支持 Revit 2025–2027 · 自动识别本机版本并生成适配插件"
             };
             header.Controls.Add(productSubtitle);
             header.Controls.Add(productTitle);
@@ -576,35 +576,17 @@ namespace RevitAIHubSetup
                     throw new InvalidOperationException("安装包中没有有效的 Revit 适配包。 ");
                 }
 
-                PackageInfo templatePackage = null;
-                foreach (PackageInfo bundled in _bundledPackages.Values)
-                {
-                    if (Directory.Exists(Path.Combine(bundled.Directory, "src")) &&
-                        File.Exists(Path.Combine(bundled.Directory, "build-revit-adapter.ps1")))
-                    {
-                        templatePackage = bundled;
-                        break;
-                    }
-                }
-                Dictionary<string, string> detectedInstallations = DetectAllRevitInstallations();
-                // Registry/standard paths are fast and deterministic. Only scan
-                // shortcuts for versions that were not found there; scanning a
-                // large redirected Desktop before the registry made first launch
-                // look frozen on some machines.
-                for (int year = 2020; year <= 2024; year++)
+Dictionary<string, string> detectedInstallations = DetectAllRevitInstallations();
+                for (int year = 2025; year <= 2027; year++)
                 {
                     string version = year.ToString();
                     string detectedDirectory;
                     detectedInstallations.TryGetValue(version, out detectedDirectory);
-                    PackageInfo bundled;
+PackageInfo bundled;
                     if (_bundledPackages.TryGetValue(version, out bundled))
                     {
                         bundled.DetectedRevitDirectory = detectedDirectory;
                         _packages.Add(bundled);
-                    }
-                    else if (templatePackage != null)
-                    {
-                        _packages.Add(PackageInfo.CreateLocalBuild(version, templatePackage.Directory, detectedDirectory));
                     }
                 }
                 foreach (PackageInfo detectedPackage in _packages)
@@ -691,7 +673,7 @@ namespace RevitAIHubSetup
                 if (!IsRevitDirectory(selectedDirectory) || !IsSupportedRevitVersion(detectedVersion))
                 {
                     MessageBox.Show(this,
-                        "所选文件没有指向受支持的 Revit 2020–2024。请重新选择 Revit 图标或应用。",
+                        "所选文件没有指向受支持的 Revit 2025–2027。请重新选择 Revit 图标或应用。",
                         "未识别到 Revit",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
@@ -1711,7 +1693,7 @@ namespace RevitAIHubSetup
         private static bool IsSupportedRevitVersion(string version)
         {
             int value;
-            return Int32.TryParse(version, out value) && value >= 2020 && value <= 2024;
+            return Int32.TryParse(version, out value) && value >= 2025 && value <= 2027;
         }
 
         private static bool IsRevitDirectoryForVersion(string directory, string version)
@@ -2036,18 +2018,7 @@ namespace RevitAIHubSetup
         public string DetectedRevitDirectory { get; set; }
         public bool RequiresLocalBuild { get; private set; }
 
-        public static PackageInfo CreateLocalBuild(string version, string templateDirectory, string detectedRevitDirectory)
-        {
-            return new PackageInfo
-            {
-                RevitVersion = version,
-                Directory = templateDirectory,
-                DetectedRevitDirectory = detectedRevitDirectory,
-                RequiresLocalBuild = true
-            };
-        }
-
-        public static PackageInfo Read(string directory)
+public static PackageInfo Read(string directory)
         {
             string metadataPath = Path.Combine(directory, "bridge.config.json");
             string assemblyPath = Path.Combine(directory, "RevitCommandBridge.dll");

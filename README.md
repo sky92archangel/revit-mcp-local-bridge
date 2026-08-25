@@ -2,9 +2,9 @@
 
 面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、空间、出图、参数和选中显示，而不是为每一种构件增加一个插件命令。
 
-> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。本交付包支持 Revit 2020–2027+；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
+> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个“万能 DLL”。本交付包支持 Revit 2025–2027；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
-单文件安装器会自动扫描本机 Revit 2020–2027+。检测到内置适配包时直接使用；没有对应预编译包时，安装器使用该电脑对应年份的 Revit API 自动生成匹配 DLL。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。2020–2024 使用 Windows 内置 csc.exe 编译；2025+ 需 .NET SDK（安装器会提示）。每个年份仍需在装有对应 Revit 的机器上完成加载和建模回归。
+单文件安装器会自动扫描本机 Revit 2025–2027，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit 和 .NET 8/10 SDK。
 
 ## 目录结构
 
@@ -35,11 +35,8 @@ revit-mcp-local-bridge/
 │   ├── BridgeBuildInfo.cs
 │   └── PlanValues.cs
 │
-├── build/                             ← 版本矩阵 & 编译属性
-│   ├── version-manifest.json
-│   └── props/
-│       ├── net48.common.props
-│       └── net8.common.props
+├── build/                             ← 版本矩阵
+│   └── version-manifest.json
 │
 ├── src-net8/                          ← .NET 8 项目族（Revit 2025–2026）
 │   ├── Directory.Build.props
@@ -99,9 +96,7 @@ revit-mcp-local-bridge/
 ├── build.ps1                          ← 单版本编译
 ├── build-all.ps1                      ← 全版本批量编译
 ├── build-installer.ps1                ← 安装器打包
-├── build-revit-adapter.ps1
 ├── install-revit.ps1                  ← 安装/检测
-├── install-revit2020.ps1
 ├── uninstall-revit.ps1
 ├── PROTOCOL.md
 ├── ARCHITECTURE.md
@@ -122,9 +117,10 @@ revit-mcp-local-bridge/
 
 | 脚本 | 产出 | 说明 |
 |------|------|------|
-| `build.ps1 -RevitVersion 2020` | `dist\RevitCommandBridge-2020\RevitCommandBridge.dll` | 单版本 DLL + 配套脚本 |
-| `build-all.ps1` | `dist\RevitCommandBridge-202{0..7}\` | 全部版本 DLL |
+| `build.ps1 -RevitVersion 2026` | `dist\RevitCommandBridge-2026\RevitCommandBridge.dll` | 单版本 DLL + 配套脚本 |
+| `build-all.ps1` | `dist\RevitCommandBridge-202{5..7}\` | 全部版本 DLL |
 | `build-installer.ps1` | `dist\RevitCommandBridgeSetup.exe` | 单文件安装器（内置所有年份 DLL + Node） |
+| `build-installer.ps1 -OutputPath "dist\RevitCommandBridgeSetup-2026.exe"` | 自定义输出文件名 | 单版本安装器，方便版本区分 |
 | `install-revit.ps1` | → `%LOCALAPPDATA%\RevitCommandBridge\{year}\` | 复制文件 + 写 `.addin` 清单 |
 
 ### 方式 A：开发者模式（编译 → 安装）
@@ -136,15 +132,15 @@ revit-mcp-local-bridge/
 .\install-revit.ps1 -ListDetected
 
 # 2. 构建指定版本（编译 DLL + 打包安装器）
-.\build.ps1 -RevitVersion 2020
+.\build.ps1 -RevitVersion 2026
 
 # 3. 安装到本机 Revit
-.\install-revit.ps1 -RevitVersion 2020
+.\install-revit.ps1 -RevitVersion 2026
 ```
 
 `build.ps1` 产出：
 ```
-dist\RevitCommandBridge-2020\
+dist\RevitCommandBridge-2026\
 ├── RevitCommandBridge.dll
 ├── RevitCommandBridge.pdb
 ├── bridge.config.json
@@ -170,22 +166,34 @@ dist\RevitCommandBridge-2020\
 ### 方式 B：最终用户模式（单文件安装器）
 
 ```powershell
-# 构建全部版本 + 打包安装器
-.\build-all.ps1
+# 步骤 1：编译指定版本
+.\build.ps1 -RevitVersion 2026
 
-# 产出
+# 步骤 2：打包安装器（默认输出 dist\RevitCommandBridgeSetup.exe）
+.\build-installer.ps1
+
+# 也可指定版本号后缀的输出文件名：
+.\build-installer.ps1 -OutputPath "dist\RevitCommandBridgeSetup-2026.exe"
+```
+
+打包多个版本到同一个安装器：
+```powershell
+.\build.ps1 -RevitVersion 2026
+.\build.ps1 -RevitVersion 2027
+.\build-installer.ps1 -RevitVersion 2026,2027 -OutputPath "dist\RevitCommandBridgeSetup-2026-2027.exe"
+```
+
+产出文件可分发到没有开发环境的机器：
+```
 dist\
 ├── RevitCommandBridgeSetup.exe          ← 双击或命令行运行
-├── RevitCommandBridge-2020\
-├── RevitCommandBridge-2021\
-├── ...
+├── RevitCommandBridge-2026\
 └── RevitCommandBridge-2027\
 ```
 
-`RevitCommandBridgeSetup.exe` 内置了所有年份 DLL 和 Node.js 运行时，可分发到没有开发环境的机器：
+`RevitCommandBridgeSetup.exe` 内置了 DLL 和 Node.js 运行时：
 - 自动扫描本机 Revit
-- 检测到预编译包直接使用
-- 没有对应包时用本机 Revit API 现场编译适配 DLL
+- 使用内置预编译适配包
 - 自动配置已识别的 MCP 客户端（Codex、WorkBuddy、Claude Desktop、Cursor、Windsurf、Cline、Roo Code）
 
 ### 验证安装
@@ -193,8 +201,8 @@ dist\
 启动 Revit 并打开项目后，桥接自动启动。运行健康检查：
 
 ```powershell
-& "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\send-revit-command.ps1" `
-  -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2020\examples\health.json"
+& "$env:LOCALAPPDATA\RevitCommandBridge\2026\scripts\send-revit-command.ps1" `
+  -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2026\examples\health.json"
 ```
 
 返回 `"status": "ok"` 即安装成功。功能区"Revit 命令桥"选项卡的"启动桥接"按钮也可确认连接信息。
@@ -202,29 +210,29 @@ dist\
 ### 卸载
 
 ```powershell
-.\uninstall-revit.ps1 -RevitVersion 2020
+.\uninstall-revit.ps1 -RevitVersion 2026
 ```
 
 卸载程序会移除桥接文件、`.addin` 注册清单和队列目录。不同年份的桥接互不干扰，只卸载指定版本。
 
 ## 快速开始
 
-启动中文 Revit 2020：
+启动 Revit（以 2026 为例）：
 
 ~~~powershell
-& 'C:\Program Files\Autodesk\Revit 2020\Revit.exe' /language CHS
+& 'C:\Program Files\Autodesk\Revit 2026\Revit.exe'
 ~~~
 
 打开 Revit 后，桥接会自动启动；功能区“Revit 命令桥”的“启动桥接”按钮可用于确认连接信息。随后执行一次只读健康检查：
 
 ~~~powershell
-& "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\send-revit-command.ps1" -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2020\examples\health.json"
+& "$env:LOCALAPPDATA\RevitCommandBridge\2026\scripts\send-revit-command.ps1" -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2026\examples\health.json"
 ~~~
 
 预览一个通用建模计划，不修改模型：
 
 ~~~powershell
-& "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\send-revit-command.ps1" -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2020\examples\preview-universal-plan.json"
+& "$env:LOCALAPPDATA\RevitCommandBridge\2026\scripts\send-revit-command.ps1" -RequestPath "$env:LOCALAPPDATA\RevitCommandBridge\2026\examples\preview-universal-plan.json"
 ~~~
 
 确认预览返回正确后，把请求中的 preview 改为 false 再提交。实际写入使用 Revit Transaction，可在 Revit 中用原生撤销命令回退。
@@ -255,8 +263,8 @@ dist\
 
 ~~~toml
 [mcp_servers.revit]
-command = "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\runtime\\node.exe"
-args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"]
+command = "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\runtime\\node.exe"
+args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\scripts\\revit-mcp-server.mjs"]
 ~~~
 
 重新启动 Codex 任务后，客户端可发现 `revit_execute_plan`。这是长期主入口；旧的 `revit_create_wall` 等工具仅为兼容已有脚本保留。
@@ -286,9 +294,9 @@ args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scrip
 {
   "mcpServers": {
     "revit": {
-      "command": "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\runtime\\node.exe",
+      "command": "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\runtime\\node.exe",
       "args": [
-        "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scripts\\revit-mcp-server.mjs"
+        "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\scripts\\revit-mcp-server.mjs"
       ]
     }
   }
@@ -300,7 +308,7 @@ args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2020\\scrip
 启动仅监听本机的 REST 网关：
 
 ~~~powershell
-node "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\revit-http-gateway.mjs"
+node "$env:LOCALAPPDATA\RevitCommandBridge\2026\scripts\revit-http-gateway.mjs"
 ~~~
 
 查询状态：
@@ -357,3 +365,117 @@ flowchart LR
 | 其它年份 Revit 不加载 | 为对应年份重新引用 RevitAPI.dll / RevitAPIUI.dll 并编译适配包 |
 
 完整请求、响应和操作参数见 [PROTOCOL.md](./PROTOCOL.md)；任意 Harness 可直接采用 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json) 做 Function Calling / 请求校验；长期扩展原则与覆盖边界见 [ARCHITECTURE.md](./ARCHITECTURE.md)。更多常见问题见 [plans/FAQ.md](./plans/FAQ.md)。
+
+## 原子操作一览
+
+所有顶层 `operation` 和 `execute_plan` 中的 `steps[].operation` 均由以下注册表调度。
+
+### 顶层操作（直接传入 `operation` 字段）
+
+| 操作名称 | 功能 |
+|---|---|
+| `health` | 桥接健康检查，返回状态、文档信息 |
+| `execute_plan` | **主入口**。执行多步骤建模/出图计划，写步骤合并为一个事务 |
+| `new_project` | 创建新项目（可选 .rte 样板），可选保存为 .rvt |
+| `create_family` | 从 .rft 样板创建 .rfa 族，支持参数/类型/几何 |
+| `load_family` | 载入已有 .rfa 到当前项目 |
+| `list_family_templates` | 列出本机 Revit 族样板路径 |
+| `list_levels` | 列出项目标高（兼容旧入口） |
+| `list_wall_types` | 列出基本墙类型（兼容旧入口） |
+| `create_level` | 创建标高（兼容旧入口） |
+| `create_grid` | 创建轴网（兼容旧入口） |
+| `create_wall` | 创建直墙（兼容旧入口） |
+| `create_rectangle_walls` | 创建四面闭合矩形墙（兼容旧入口） |
+
+### execute_plan 原子步骤
+
+#### 查询类
+
+| 操作名称 | 功能 |
+|---|---|
+| `query_document` | 返回当前文档信息（标题、路径、活动视图等） |
+| `query_catalog` | 项目资源目录：标高、类别、视图、图纸、明细表、族类型、MEP 类型、链接等 |
+| `query_elements` | 按类别/名称/族名/ID 过滤查询元素及其参数 |
+| `query_references` | 返回元素的稳定几何引用（面/边） |
+| `query_parameters` | 列出单个元素的所有参数 |
+| `query_geometry` | 返回元素包围盒、实体摘要或面信息 |
+| `query_room` | 查询房间/空间，支持按点查找或全量列出 |
+| `check_interferences` | 两组元素之间的碰撞检测 |
+| `query_mep_network` | 从种子元素遍历 MEP 连接拓扑 |
+| `query_view_range` | 返回平面视图范围（顶/剖切面/底/视图深度） |
+
+#### 创建类
+
+| 操作名称 | 功能 |
+|---|---|
+| `create_level` | 创建标高 |
+| `create_grid` | 创建轴网 |
+| `create_wall` | 创建直墙，支持新墙类型克隆 |
+| `create_floor` | 从闭合轮廓创建楼板 |
+| `create_room` | 创建房间 |
+| `create_space` | 创建 MEP 空间 |
+| `create_model_curve` | 创建模型线 |
+| `create_direct_shape` | 从几何图元（box/cylinder/sphere 等）创建 DirectShape |
+| `create_swept_shape` | 沿路径扫掠创建实体（矩形/圆形/管道截面） |
+| `create_mep_curve` | 创建 MEP 管线（管道/风管/线管/桥架） |
+| `connect_mep` | 连接 MEP 元素，支持直连/弯头/三通/变径/四通 |
+| `create_mep_system` | 创建管道或风管系统 |
+| `create_insulation` | 添加管道/风管保温层 |
+| `place_family_instance` | 放置族实例，支持多种放置方式 |
+| `load_family` | 载入 .rfa 到项目 |
+| `create_structural_member` | 创建结构构件（梁/斜撑/柱） |
+| `create_view` | 创建 3D/平面/天花/结构平面视图 |
+| `create_sheet` | 创建图纸（可选标题栏） |
+| `place_view_on_sheet` | 将视图放置到图纸 |
+| `create_opening` | 创建洞口（墙/楼板/竖井） |
+| `create_drafting_view` | 创建绘图视图 |
+| `create_section_view` | 创建剖面/详图视图 |
+| `create_elevation_view` | 创建立面视图 |
+| `create_callout` | 创建详图索引视图 |
+| `duplicate_view` | 复制视图，可选应用视图样板 |
+| `create_view_template` | 从现有视图创建视图样板 |
+| `create_detail_curve` | 创建详图线 |
+| `create_text_note` | 创建文字注释 |
+| `create_dimension` | 创建尺寸标注 |
+| `create_tag` | 创建独立标记 |
+| `create_filled_region` | 创建填充区域 |
+| `create_revision` | 创建修订 |
+| `create_revision_cloud` | 创建修订云线 |
+| `create_schedule` | 创建明细表（常规/材质提取/关键字/视图列表/图纸列表/修订） |
+| `place_schedule_on_sheet` | 将明细表放置到图纸 |
+
+#### 视图属性与覆盖
+
+| 操作名称 | 功能 |
+|---|---|
+| `set_view_properties` | 设置视图属性（比例、裁剪框、样板、详细程度、规程等） |
+| `set_element_overrides` | 设置元素图形覆盖（颜色、线宽、半色调等） |
+| `set_category_overrides` | 设置类别图形覆盖 |
+| `manage_view_filters` | 管理视图过滤器（添加/删除，支持规则与覆盖） |
+| `set_view_range` | 设置平面视图范围（顶/剖切面/底/视图深度） |
+| `manage_schedule_fields` | 管理明细表字段（添加/删除/隐藏/排序/过滤） |
+| `manage_graphics_resources` | 管理图形资源（线样式子类别/填充图案） |
+
+#### 编辑与变更
+
+| 操作名称 | 功能 |
+|---|---|
+| `set_parameters` | 批量设置元素参数值 |
+| `manage_schema_data` | 扩展数据读写与搬运 |
+| `manage_family_parameters` | 编辑族参数（添加/重命名/删除/设公式） |
+| `manage_project_parameters` | 管理项目参数 |
+| `duplicate_type` | 复制 ElementType，可选覆盖参数 |
+| `transform_elements` | 移动/复制/旋转/镜像元素 |
+| `rename_element` | 重命名元素（单个或批量前缀模式） |
+| `set_element_curve` | 修改线性元素的 LocationCurve |
+| `delete_elements` | 删除元素 |
+| `select_elements` | 选中并显示/缩放至元素 |
+
+#### 外部操作（需单独执行，不能与其他步骤混合）
+
+| 操作名称 | 功能 |
+|---|---|
+| `export` | 导出视图（PNG/JPG/DWG/DXF/IFC/明细表 CSV） |
+| `save_document` | 保存当前文档 |
+
+> 全部操作共约 65 个原子步骤。新增能力以受控原子步骤加入此表，不开放任意 C# 执行。完整参数定义见 [PROTOCOL.md](./PROTOCOL.md) 和 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json)。
