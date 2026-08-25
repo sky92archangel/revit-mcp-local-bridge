@@ -293,7 +293,7 @@ args = ["C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\scrip
 ~~~json
 {
   "mcpServers": {
-    "revit": {
+    "revit-command-bridge": {
       "command": "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\runtime\\node.exe",
       "args": [
         "C:\\Users\\<用户名>\\AppData\\Local\\RevitCommandBridge\\2026\\scripts\\revit-mcp-server.mjs"
