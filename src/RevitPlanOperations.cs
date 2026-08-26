@@ -28,6 +28,8 @@ namespace RevitCommandBridge
                     return RevitPlanQueries.QueryMepNetwork(step, context);
                 case "query_view_range":
                     return RevitPlanQueries.QueryViewRange(step, context);
+                case "query_selection":
+                    return RevitPlanQueries.QuerySelection(step, context);
                 case "create_level":
                     return RevitPlanCreations.CreateLevel(step, context);
                 case "create_grid":

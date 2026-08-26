@@ -400,7 +400,7 @@ flowchart LR
 | `query_parameters` | 列出单个元素的所有参数 |
 | `query_geometry` | 返回元素包围盒、实体摘要或面信息 |
 | `query_room` | 查询房间/空间，支持按点查找或全量列出 |
-| `check_interferences` | 两组元素之间的碰撞检测 |
+| `query_selection` | 读取 Revit 界面当前选中的图元 ID、名称、类别 |
 | `query_mep_network` | 从种子元素遍历 MEP 连接拓扑 |
 | `query_view_range` | 返回平面视图范围（顶/剖切面/底/视图深度） |
 

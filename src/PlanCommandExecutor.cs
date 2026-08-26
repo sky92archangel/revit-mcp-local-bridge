@@ -28,6 +28,7 @@ namespace RevitCommandBridge
             "check_interferences",
             "query_mep_network",
             "query_view_range",
+            "query_selection",
             "create_level",
             "create_grid",
             "create_wall",
@@ -348,6 +349,8 @@ namespace RevitCommandBridge
                 case "碰撞检查": return "check_interferences";
                 case "查询管网": return "query_mep_network";
                 case "查询视图范围": return "query_view_range";
+                case "查询选中":
+                case "查询选择": return "query_selection";
                 case "创建标高": return "create_level";
                 case "创建轴网": return "create_grid";
                 case "创建墙":

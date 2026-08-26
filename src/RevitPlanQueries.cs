@@ -7,6 +7,7 @@ using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.DB.Plumbing;
+using Autodesk.Revit.UI;
 
 namespace RevitCommandBridge
 {
@@ -1215,6 +1216,44 @@ int slot = rangeType;
                 throw new BridgeCommandException("limit 必须在 1 到 500 之间。");
             }
             return limit;
+        }
+
+public static Dictionary<string, object> QuerySelection(PlanStep step, PlanExecutionContext context)
+        {
+            UIDocument uiDoc = context.UiApplication.ActiveUIDocument;
+            if (uiDoc == null || context.Document == null)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "selected_ids", Array.Empty<long>() },
+                    { "count", 0 },
+                    { "elements", Array.Empty<object>() }
+                };
+            }
+
+            ICollection<ElementId> ids = uiDoc.Selection.GetElementIds();
+            var elements = new List<Dictionary<string, object>>();
+            foreach (ElementId id in ids)
+            {
+                Element e = context.Document.GetElement(id);
+                if (e == null) continue;
+
+                elements.Add(new Dictionary<string, object>
+                {
+                    { "element_id", id.Value },
+                    { "unique_id", e.UniqueId },
+                    { "category", e.Category?.Name },
+                    { "name", RevitLookups.ElementName(e) },
+                    { "type", e.GetType().Name }
+                });
+            }
+
+            return new Dictionary<string, object>
+            {
+                { "selected_ids", ids.Select(id => (long)id.Value).ToArray() },
+                { "count", ids.Count },
+                { "elements", elements }
+            };
         }
 
         private static List<string> ReadStringList(object value)
