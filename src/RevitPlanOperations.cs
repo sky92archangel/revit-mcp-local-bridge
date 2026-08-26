@@ -2,12 +2,21 @@ using System.Collections.Generic;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// PlanStep 操作调度器。根据 step.Operation 分发到对应实现类。
+    /// PlanStep operation dispatcher. Routes to the appropriate implementation class based on step.Operation.
+    /// </summary>
     internal static class RevitPlanOperations
     {
+        /// <summary>
+        /// 执行一步计划原子操作。根据操作名称路由到 RevitPlanQueries、RevitPlanCreations、RevitPlanMutations 或 RevitOutputOperations。
+        /// Execute a single plan step operation. Routes to RevitPlanQueries, RevitPlanCreations, RevitPlanMutations, or RevitOutputOperations by operation name.
+        /// </summary>
         public static Dictionary<string, object> Execute(PlanStep step, PlanExecutionContext context)
         {
             switch (step.Operation)
             {
+                // === 查询操作 Query Operations ===
                 case "query_document":
                     return RevitPlanQueries.QueryDocument(context);
                 case "query_catalog":
@@ -30,6 +39,8 @@ namespace RevitCommandBridge
                     return RevitPlanQueries.QueryViewRange(step, context);
                 case "query_selection":
                     return RevitPlanQueries.QuerySelection(step, context);
+
+                // === 创建操作 Creation Operations ===
                 case "create_level":
                     return RevitPlanCreations.CreateLevel(step, context);
                 case "create_grid":
@@ -114,6 +125,8 @@ namespace RevitCommandBridge
                     return RevitOutputOperations.ManageGraphicsResources(step, context);
                 case "create_opening":
                     return RevitPlanCreations.CreateOpening(step, context);
+
+                // === 编辑操作 Mutation / Editing Operations ===
                 case "set_parameters":
                     return RevitPlanMutations.SetParameters(step, context);
                 case "manage_schema_data":
@@ -134,6 +147,8 @@ namespace RevitCommandBridge
                     return RevitPlanMutations.DeleteElements(step, context);
                 case "select_elements":
                     return RevitPlanMutations.SelectElements(step, context);
+
+                // === 输出/文件操作 Output / File Operations ===
                 case "export":
                     return RevitOutputOperations.Export(step, context);
                 case "save_document":

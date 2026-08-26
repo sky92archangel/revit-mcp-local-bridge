@@ -9,11 +9,21 @@ using Autodesk.Revit.UI;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 族操作：列出族样板、载入族、创建族。
+    /// Family operations: list family templates, load family, create family.
+    /// </summary>
     internal static class RevitFamilyOperations
     {
+        /// <summary>默认样板列表最大返回数 / Default template list limit.</summary>
         private const int DefaultTemplateLimit = 200;
+        /// <summary>样板列表最大返回数上限 / Maximum template list limit.</summary>
         private const int MaximumTemplateLimit = 1000;
 
+        /// <summary>
+        /// 列出族样板目录下的 .rft 文件。
+        /// List .rft files in the family template directory.
+        /// </summary>
         public static BridgeResponse ListFamilyTemplates(UIApplication uiApplication, BridgeRequest request)
         {
             string requestedRoot = BridgeArguments.GetString(request, null, "template_root", "root", "path");
@@ -40,6 +50,10 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "读取到 " + templates.Count + " 个族样板。", data);
         }
 
+        /// <summary>
+        /// 将 .rfa 族文件载入当前项目文档。
+        /// Load a .rfa family file into the current project document.
+        /// </summary>
         public static BridgeResponse LoadFamily(UIApplication uiApplication, Document projectDocument, BridgeRequest request)
         {
             EnsureProjectDocument(projectDocument);
@@ -100,6 +114,10 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已载入族“" + family.Name + "”。", data);
         }
 
+        /// <summary>
+        /// 从样板创建新族：添加参数、类型、几何，保存并可选载入项目。
+        /// Create a new family from template: add parameters, types, geometry, save, and optionally load into project.
+        /// </summary>
         public static BridgeResponse CreateFamily(UIApplication uiApplication, Document projectDocument, BridgeRequest request)
         {
             EnsureProjectDocument(projectDocument);
@@ -302,6 +320,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 确认当前文档是有效项目文档（非族文档）。
+        /// Ensure the current document is a valid project document (not a family document).
+        /// </summary>
         private static void EnsureProjectDocument(Document document)
         {
             if (document == null || !document.IsValidObject)
@@ -314,6 +336,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 恢复并激活指定路径的项目文档（创建族后切回项目）。
+        /// Restore and activate the project document at the given path (switch back after family creation).
+        /// </summary>
         private static void RestoreProjectDocument(UIApplication uiApplication, string projectPath)
         {
             if (uiApplication == null || string.IsNullOrWhiteSpace(projectPath) || !File.Exists(projectPath))
@@ -336,6 +362,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 解析族样板根目录：使用请求路径或 Revit 默认路径。
+        /// Resolve the family template root: use the requested path or Revit's default template path.
+        /// </summary>
         private static string ResolveTemplateRoot(UIApplication uiApplication, string requestedRoot)
         {
             string root = string.IsNullOrWhiteSpace(requestedRoot)
@@ -348,6 +378,10 @@ namespace RevitCommandBridge
             return Path.GetFullPath(root);
         }
 
+        /// <summary>
+        /// 解析族样板路径：显式路径或默认公制常规模型样板。
+        /// Resolve the family template path: explicit path or default Metric Generic Model template.
+        /// </summary>
         private static string ResolveTemplatePath(UIApplication uiApplication, string requestedTemplate)
         {
             if (!string.IsNullOrWhiteSpace(requestedTemplate))
@@ -374,6 +408,10 @@ namespace RevitCommandBridge
             return resolved;
         }
 
+        /// <summary>
+        /// 尝试在根目录下查找默认公制常规模型族样板。
+        /// Try to find the default "Metric Generic Model" family template in the root directory.
+        /// </summary>
         private static string TryResolveDefaultTemplate(string root)
         {
             string[] exactPatterns =
@@ -395,6 +433,10 @@ namespace RevitCommandBridge
             return null;
         }
 
+        /// <summary>
+        /// 解析族保存路径：默认为 Documents/RevitCommandBridge/Families/ 目录。
+        /// Resolve the family save path: defaults to Documents/RevitCommandBridge/Families/.
+        /// </summary>
         private static string ResolveSavePath(string requestedPath, string familyName)
         {
             string path = requestedPath;
@@ -422,6 +464,10 @@ namespace RevitCommandBridge
             return path;
         }
 
+        /// <summary>
+        /// 规范化族文件路径，确保为 .rfa 后缀。
+        /// Normalize the family file path and ensure it has a .rfa extension.
+        /// </summary>
         private static string NormalizeFamilyPath(string path)
         {
             string normalized = Path.GetFullPath(path.Trim());
@@ -432,6 +478,10 @@ namespace RevitCommandBridge
             return normalized;
         }
 
+        /// <summary>
+        /// 校验族名称是否合法（无非法字符、长度不超过 180）。
+        /// Validate the family name (no invalid path characters, max 180 characters).
+        /// </summary>
         private static string ValidateFamilyName(string name)
         {
             if (name.Length > 180 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
@@ -441,6 +491,10 @@ namespace RevitCommandBridge
             return name;
         }
 
+        /// <summary>
+        /// 从参数字典中解析可选的字典列表。
+        /// Parse an optional list of dictionaries from the arguments.
+        /// </summary>
         private static List<Dictionary<string, object>> ParseOptionalDictionaryList(
             IDictionary<string, object> values,
             params string[] names)
@@ -451,6 +505,10 @@ namespace RevitCommandBridge
                 : PlanValues.DictionaryList(raw, names[0]);
         }
 
+        /// <summary>
+        /// 从参数字典中解析可选的嵌套字典。
+        /// Parse an optional nested dictionary from the arguments.
+        /// </summary>
         private static Dictionary<string, object> ParseOptionalDictionary(
             IDictionary<string, object> values,
             params string[] names)
@@ -461,6 +519,10 @@ namespace RevitCommandBridge
                 : PlanValues.Dictionary(raw, names[0]);
         }
 
+        /// <summary>
+        /// 描述族几何的摘要信息（原语类型列表）。
+        /// Describe the family geometry summary (list of primitive kinds).
+        /// </summary>
         private static Dictionary<string, object> DescribeFamilyGeometry(
             IList<Dictionary<string, object>> geometry)
         {
@@ -481,6 +543,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 在族文档中设置族类别。
+        /// Set the family category in the family document.
+        /// </summary>
         private static void ApplyFamilyCategory(Document familyDocument, string requestedCategory)
         {
             if (string.IsNullOrWhiteSpace(requestedCategory))
@@ -495,16 +561,20 @@ namespace RevitCommandBridge
                 .FirstOrDefault(candidate => candidate.Id.Value == categoryId.Value);
             if (category == null)
             {
-                throw new BridgeCommandException("族样板不支持类别：“" + requestedCategory + "”。");
+                throw new BridgeCommandException("族样板不支持类别：" + requestedCategory + "。");
             }
             Family owner = familyDocument.OwnerFamily;
             if (owner == null || !owner.IsAppropriateCategoryId(categoryId))
             {
-                throw new BridgeCommandException("当前族样板不支持设置为类别：“" + requestedCategory + "”。");
+                throw new BridgeCommandException("当前族样板不支持设置为类别：" + requestedCategory + "。");
             }
             owner.FamilyCategory = category;
         }
 
+        /// <summary>
+        /// 解析族参数规格说明列表。
+        /// Parse the list of family parameter specifications.
+        /// </summary>
         private static List<FamilyParameterSpec> ParseParameterSpecs(IDictionary<string, object> values)
         {
             List<Dictionary<string, object>> raw = ParseOptionalDictionaryList(values, "parameters", "family_parameters");
@@ -539,6 +609,10 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 解析族类型规格列表，若未指定则创建默认类型。
+        /// Parse the list of family type specifications; creates a default type if none specified.
+        /// </summary>
         private static List<FamilyTypeSpec> ParseTypeSpecs(IDictionary<string, object> values)
         {
             List<Dictionary<string, object>> raw = ParseOptionalDictionaryList(values, "types", "family_types");
@@ -572,6 +646,10 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 向族文档添加参数（跳过已有同名参数）。
+        /// Add parameters to the family document (skip existing parameters with the same name).
+        /// </summary>
         private static List<FamilyParameterSpec> AddFamilyParameters(
             Document familyDocument,
             IList<FamilyParameterSpec> requested)
@@ -593,6 +671,10 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 通过 Revit API 反射调用 ForgeTypeId 重载添加族参数。
+        /// Use Revit API reflection to call the ForgeTypeId overload for adding a family parameter.
+        /// </summary>
         private static FamilyParameter AddFamilyParameter(FamilyManager manager, FamilyParameterSpec spec)
         {
             Assembly assembly = manager.GetType().Assembly;
@@ -628,6 +710,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将简写类型名映射到 Revit SpecTypeId ForgeTypeId 实例。
+        /// Map shorthand type names to Revit SpecTypeId ForgeTypeId instances.
+        /// </summary>
         private static object ResolveForgeSpecTypeId(Assembly assembly, string type)
         {
             switch (type)
@@ -646,6 +732,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 通过反射从 Revit DB 程序集解析 ForgeTypeId 静态属性/字段。
+        /// Resolve a ForgeTypeId static property/field from the Revit DB assembly via reflection.
+        /// </summary>
         private static object ResolveForgeTypeId(Assembly assembly, string typeName, string memberName)
         {
             Type type = assembly.GetType("Autodesk.Revit.DB." + typeName, false);
@@ -666,6 +756,10 @@ namespace RevitCommandBridge
             throw new BridgeCommandException("当前 Revit API 缺少 ForgeTypeId 成员：" + typeName + "." + memberName);
         }
 
+        /// <summary>
+        /// 将简写分组名映射到 Forge GroupTypeId 成员名。
+        /// Map shorthand group names to Forge GroupTypeId member names.
+        /// </summary>
         private static string ForgeGroupMember(string group)
         {
             switch (group)
@@ -680,6 +774,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 向族文档添加类型（跳过已有同名类型）。
+        /// Add types to the family document (skip existing types with the same name).
+        /// </summary>
         private static List<FamilyTypeSpec> AddFamilyTypes(
             Document familyDocument,
             IList<FamilyTypeSpec> requested)
@@ -696,6 +794,10 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 将默认值和类型特定值写入族参数。
+        /// Write default values and type-specific values to family parameters.
+        /// </summary>
         private static void ApplyFamilyValues(
             Document familyDocument,
             IList<FamilyParameterSpec> parameters,
@@ -734,6 +836,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 按参数类型设置族参数值（支持单位转换）。
+        /// Set a family parameter value by type (with unit conversion support).
+        /// </summary>
         private static void SetFamilyParameterValue(
             FamilyManager manager,
             FamilyParameterSpec spec,
@@ -780,6 +886,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将对象解析为布尔值（支持 true/false 字符串和 0/1 整数）。
+        /// Parse an object as a boolean (supports true/false strings and 0/1 integers).
+        /// </summary>
         private static bool ReadBooleanValue(object value)
         {
             if (value is bool)
@@ -800,6 +910,10 @@ namespace RevitCommandBridge
             throw new BridgeCommandException("布尔参数必须是 true/false 或 0/1：" + value);
         }
 
+        /// <summary>
+        /// 将几何原语列表转换为 FreeFormElement 添加到族文档。
+        /// Convert geometry primitives into FreeFormElements in the family document.
+        /// </summary>
         private static int AddFamilyGeometry(
             Document familyDocument,
             IList<Dictionary<string, object>> geometry)
@@ -826,6 +940,10 @@ namespace RevitCommandBridge
             return count;
         }
 
+        /// <summary>
+        /// 将新创建的族实例放置到项目文档中。
+        /// Place the newly created family instance into the project document.
+        /// </summary>
         private static Dictionary<string, object> PlaceCreatedFamily(
             UIApplication uiApplication,
             Document projectDocument,
@@ -847,6 +965,10 @@ namespace RevitCommandBridge
             return RevitPlanCreations.PlaceFamilyInstance(step, context);
         }
 
+        /// <summary>
+        /// 在已载入的族中解析要放置的 FamilySymbol（通过 type_id 或 type_name）。
+        /// Resolve the FamilySymbol to place within the loaded family (by type_id or type_name).
+        /// </summary>
         private static FamilySymbol ResolveLoadedFamilySymbol(
             Document document,
             Family family,
@@ -882,6 +1004,10 @@ namespace RevitCommandBridge
             return symbols[0];
         }
 
+        /// <summary>
+        /// 规范化参数类型名称（支持中英文别名）。
+        /// Normalize parameter type names (supports Chinese and English aliases).
+        /// </summary>
         private static string NormalizeParameterType(string value)
         {
             string type = (value ?? string.Empty).Trim().ToLowerInvariant()
@@ -917,6 +1043,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 规范化参数分组名称（支持中英文别名）。
+        /// Normalize parameter group names (supports Chinese and English aliases).
+        /// </summary>
         private static string NormalizeParameterGroup(string value)
         {
             string group = (value ?? string.Empty).Trim().ToLowerInvariant()
@@ -942,6 +1072,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 族参数规格：名称、类型、分组、实例/类型、默认值、公式。
+        /// Family parameter specification: name, type, group, instance/type, default value, formula.
+        /// </summary>
         private sealed class FamilyParameterSpec
         {
             public string Name { get; set; }
@@ -954,6 +1088,10 @@ namespace RevitCommandBridge
             public FamilyParameter Parameter { get; set; }
         }
 
+        /// <summary>
+        /// 族类型规格：名称、参数值、对应的 FamilyType 对象。
+        /// Family type specification: name, parameter values, and the corresponding FamilyType object.
+        /// </summary>
         private sealed class FamilyTypeSpec
         {
             public string Name { get; set; }
@@ -961,6 +1099,10 @@ namespace RevitCommandBridge
             public FamilyType Type { get; set; }
         }
 
+        /// <summary>
+        /// 族载入回调：控制是否覆盖已有参数值。
+        /// Family load callback: controls whether to overwrite existing parameter values.
+        /// </summary>
         private sealed class RcbFamilyLoadOptions : IFamilyLoadOptions
         {
             private readonly bool _overwriteParameterValues;

@@ -15,6 +15,9 @@ namespace RevitCommandBridge
     /// </summary>
     internal static class RevitParameterAdmin
     {
+        /// <summary>
+        /// 将参数规格（spec）的中英文标记归一化。 / Normalizes spec tokens from English or Chinese to a canonical form.
+        /// </summary>
         public static string NormalizeSpecToken(string token)
         {
             string value = (token ?? string.Empty).Trim().ToLowerInvariant();
@@ -43,6 +46,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将参数分组（group）的中英文标记归一化。 / Normalizes group tokens from English or Chinese to a canonical form.
+        /// </summary>
         private static string NormalizeGroupToken(string token)
         {
             string value = (token ?? "data").Trim().ToLowerInvariant();
@@ -82,6 +88,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将归一化的规格标记解析为 ForgeTypeId。 / Resolves a normalized spec token to a ForgeTypeId.
+        /// </summary>
         public static ForgeTypeId ResolveSpec(string token)
         {
             switch (NormalizeSpecToken(token))
@@ -97,6 +106,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将归一化的分组标记解析为 ForgeTypeId。 / Resolves a normalized group token to a ForgeTypeId.
+        /// </summary>
         private static ForgeTypeId ResolveGroup(string token)
         {
             switch (NormalizeGroupToken(token))
@@ -118,6 +130,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 向族管理器添加族参数。 / Adds a family parameter to the FamilyManager.
+        /// </summary>
         public static FamilyParameter AddFamilyParameter(
             FamilyManager manager,
             string name,
@@ -130,6 +145,9 @@ ForgeTypeId group = ResolveGroup(groupToken);
             return manager.AddParameter(name, group, spec, isInstance);
         }
 
+        /// <summary>
+        /// 管理项目参数入口：支持 list / add_shared / delete 三种 action。 / Entry point for managing project parameters: supports list, add_shared, and delete actions.
+        /// </summary>
         public static Dictionary<string, object> ManageProjectParameters(PlanStep step, PlanExecutionContext context)
         {
             string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
@@ -148,6 +166,9 @@ ForgeTypeId group = ResolveGroup(groupToken);
             }
         }
 
+        /// <summary>
+        /// 列出当前项目所有绑定的项目参数。 / Lists all bound project parameters in the current document.
+        /// </summary>
         private static Dictionary<string, object> ListProjectParameters(PlanExecutionContext context)
         {
             var items = new List<Dictionary<string, object>>();
@@ -183,6 +204,9 @@ ForgeTypeId group = ResolveGroup(groupToken);
             };
         }
 
+        /// <summary>
+        /// 添加共享参数到项目：创建或复用外部定义，绑定到指定类别。 / Adds a shared parameter to the project: creates or reuses an external definition and binds it to specified categories.
+        /// </summary>
         private static Dictionary<string, object> AddSharedParameter(PlanStep step, PlanExecutionContext context)
         {
             Application application = context.UiApplication.Application;
@@ -215,6 +239,8 @@ ForgeTypeId group = ResolveGroup(groupToken);
                 return data;
             }
 
+            // 验证共享参数文件路径是否已配置
+            // Verify that the shared parameter file path is configured
             if (string.IsNullOrWhiteSpace(application.SharedParametersFilename))
             {
                 throw new BridgeCommandException(
@@ -225,6 +251,8 @@ ForgeTypeId group = ResolveGroup(groupToken);
             {
                 throw new BridgeCommandException("无法打开共享参数文件。");
             }
+            // 查找或创建共享参数分组
+            // Find or create the shared parameter group
             DefinitionGroup group = null;
             foreach (DefinitionGroup candidate in definitionFile.Groups)
             {
@@ -238,6 +266,8 @@ ForgeTypeId group = ResolveGroup(groupToken);
             {
                 group = definitionFile.Groups.Create(sharedGroupName);
             }
+            // 查找或创建参数定义（复用同名的现有定义）
+            // Find or create the parameter definition (reuse an existing definition with the same name)
             ExternalDefinition definition = group.Definitions.get_Item(name) as ExternalDefinition;
             if (definition == null)
             {
@@ -250,6 +280,8 @@ definition = group.Definitions.Create(options) as ExternalDefinition;
                 throw new BridgeCommandException("在共享参数文件中创建定义失败：" + name);
             }
 
+            // 构建类别集合并绑定参数
+            // Build the category set and bind the parameter
             CategorySet categorySet = application.Create.NewCategorySet();
             foreach (string token in categoryTokens)
             {
@@ -272,6 +304,9 @@ bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup
             return data;
         }
 
+        /// <summary>
+        /// 删除项目参数（从参数绑定映射中移除）。 / Deletes a project parameter (removes it from the parameter binding map).
+        /// </summary>
         private static Dictionary<string, object> DeleteProjectParameter(PlanStep step, PlanExecutionContext context)
         {
             string name = PlanValues.String(step.Arguments, null, "name", "parameter_name");
@@ -309,6 +344,9 @@ bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup
             return data;
         }
 
+        /// <summary>
+        /// 从参数字典读取类别列表。 / Reads the category list from the arguments dictionary.
+        /// </summary>
         private static List<string> ReadCategoryTokens(IDictionary<string, object> arguments)
         {
             object raw = PlanValues.Get(arguments, "categories", "category");

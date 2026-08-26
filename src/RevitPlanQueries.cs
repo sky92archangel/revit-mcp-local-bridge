@@ -11,8 +11,16 @@ using Autodesk.Revit.UI;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 所有 Revit 查询操作的实现。
+    /// Implementation of all Revit query operations.
+    /// </summary>
     internal static class RevitPlanQueries
     {
+        /// <summary>
+        /// 查询当前文档基本信息（标题、路径、是否族文档等）。
+        /// Query basic document information (title, path, is family document, etc.).
+        /// </summary>
         public static Dictionary<string, object> QueryDocument(PlanExecutionContext context)
         {
             Document document = context.Document;
@@ -28,6 +36,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 查询项目目录（标高、类别、视图、图纸、明细表、族、类型等）。
+        /// Query the project catalog (levels, categories, views, sheets, schedules, families, types, etc.).
+        /// </summary>
         public static Dictionary<string, object> QueryCatalog(PlanStep step, PlanExecutionContext context)
         {
             string kind = PlanValues.String(step.Arguments, "types", "kind").ToLowerInvariant();
@@ -68,6 +80,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 查询元素列表。支持按 ID、类别、名称、族名称、类型名称过滤。
+        /// Query a list of elements. Supports filtering by ID, category, name, family name, type name.
+        /// </summary>
         public static Dictionary<string, object> QueryElements(PlanStep step, PlanExecutionContext context)
         {
             Document document = context.Document;
@@ -82,11 +98,13 @@ namespace RevitCommandBridge
             IEnumerable<Element> candidates;
             if (requestedIds != null)
             {
+                // 按指定 ID 列表查询
                 IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "ids");
                 candidates = ids.Select(document.GetElement).Where(element => element != null);
             }
             else
             {
+                // 使用收集器遍历文档
                 FilteredElementCollector collector = new FilteredElementCollector(document);
                 object category = PlanValues.Get(step.Arguments, "category", "category_id");
                 if (category != null)
@@ -117,6 +135,7 @@ namespace RevitCommandBridge
                     .IndexOf(familyName, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
+            // 限制数量并判断是否截断
             List<Element> materialized = candidates.OrderBy(element => element.Id.Value).Take(limit + 1).ToList();
             bool truncated = materialized.Count > limit;
             if (truncated)
@@ -137,6 +156,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 查询元素的几何引用（面/边/全部）。返回持久化引用（stable representation）。
+        /// Query geometric references of elements (faces/edges/all). Returns stable reference representations.
+        /// </summary>
         public static Dictionary<string, object> QueryReferences(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "ids", "targets");
@@ -185,6 +208,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 查询元素的参数列表（支持按名称过滤和只读筛选）。
+        /// Query the parameter list of an element (supports name filtering and read-only filter).
+        /// </summary>
         public static Dictionary<string, object> QueryParameters(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
@@ -241,6 +268,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 查询元素的几何信息（包围盒、实体摘要或面详情）。
+        /// Query geometric information of an element (bounding box, solid summary, or face details).
+        /// </summary>
         public static Dictionary<string, object> QueryGeometry(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
@@ -265,6 +296,7 @@ namespace RevitCommandBridge
                 { "element_id", targetId.Value },
                 { "detail", detail }
             };
+            // 获取包围盒信息
             BoundingBoxXYZ box = element.get_BoundingBox(null);
             if (box != null)
             {
@@ -302,6 +334,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            // 面级别详情
             var faces = new List<Dictionary<string, object>>();
             bool truncated = false;
             foreach (Solid solid in solids)
@@ -336,6 +369,10 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 查询房间。支持按点查询或列出所有房间。
+        /// Query rooms. Supports point-based lookup or listing all rooms.
+        /// </summary>
         public static Dictionary<string, object> QueryRoom(PlanStep step, PlanExecutionContext context)
         {
             Document document = context.Document;
@@ -343,6 +380,7 @@ namespace RevitCommandBridge
             object rawPoint = PlanValues.Get(step.Arguments, "point");
             if (rawPoint != null)
             {
+                // 按指定坐标点查询该位置的房间
                 XYZ point = PlanValues.Point(step.Arguments, "point");
                 Room roomAtPoint = document.GetRoomAtPoint(point);
                 var pointData = new Dictionary<string, object>
@@ -354,6 +392,7 @@ namespace RevitCommandBridge
                 return pointData;
             }
 
+            // 列出所有房间
             var rooms = new FilteredElementCollector(document)
                 .OfClass(typeof(Room))
                 .Cast<Room>()
@@ -374,6 +413,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 查询 MEP 网络拓扑。从种子元素 BFS 遍历连接器图。
+        /// Query MEP network topology. BFS traversal of the connector graph from a seed element.
+        /// </summary>
         public static Dictionary<string, object> QueryMepNetwork(PlanStep step, PlanExecutionContext context)
         {
             ElementId seedId = context.ResolveSingleElementId(step.Arguments, "element_id", "seed", "target", "targets");
@@ -401,6 +444,7 @@ namespace RevitCommandBridge
             var edgeKeys = new HashSet<string>(StringComparer.Ordinal);
             var queue = new Queue<ElementId>();
             queue.Enqueue(seedId);
+            // BFS 遍历连接器网络
             while (queue.Count > 0 && visited.Count < maxDepth)
             {
                 ElementId currentId = queue.Dequeue();
@@ -427,6 +471,7 @@ namespace RevitCommandBridge
                         {
                             continue;
                         }
+                        // 使用有序 pair 去重边
                         long low = Math.Min(currentId.Value, owner.Id.Value);
                         long high = Math.Max(currentId.Value, owner.Id.Value);
                         string key = low + "-" + high;
@@ -478,6 +523,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 获取元素的 MEP ConnectorManager（MEPCurve 或 FamilyInstance）。
+        /// Get the MEP ConnectorManager for an element (MEPCurve or FamilyInstance).
+        /// </summary>
         private static ConnectorManager GetConnectorManager(Element element)
         {
             MEPCurve curve = element as MEPCurve;
@@ -493,6 +542,10 @@ namespace RevitCommandBridge
             return null;
         }
 
+        /// <summary>
+        /// 读取元素所属的系统名称（管道系统或风管系统）。
+        /// Read the system name of an element (piping or duct system).
+        /// </summary>
         private static string ReadSystemName(Element element)
         {
             try
@@ -519,11 +572,19 @@ namespace RevitCommandBridge
             return null;
         }
 
-private static string GetParameterGroupName(Parameter parameter)
+        /// <summary>
+        /// 获取参数分组名称（当前简化实现返回空字符串）。
+        /// Get the parameter group name (currently simplified, returns empty string).
+        /// </summary>
+        private static string GetParameterGroupName(Parameter parameter)
         {
             return "";
         }
 
+        /// <summary>
+        /// 查询平面视图的视图范围（顶/剖切面/底/视图深度）。
+        /// Query the view range of a plan view (top/cut plane/bottom/view depth).
+        /// </summary>
         public static Dictionary<string, object> QueryViewRange(PlanStep step, PlanExecutionContext context)
         {
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
@@ -538,10 +599,10 @@ private static string GetParameterGroupName(Parameter parameter)
             }
             PlanViewRange range = viewPlan.GetViewRange();
             var ranges = new Dictionary<string, object>();
-            ranges["top"] = RangeSlotData(context.Document, range, 0);       // Top
-            ranges["cut_plane"] = RangeSlotData(context.Document, range, 1); // CutPlane
-            ranges["bottom"] = RangeSlotData(context.Document, range, 2);    // Bottom
-            ranges["view_depth"] = RangeSlotData(context.Document, range, 3);// ViewDepth
+            ranges["top"] = RangeSlotData(context.Document, range, 0);       // 顶部 Top
+            ranges["cut_plane"] = RangeSlotData(context.Document, range, 1); // 剖切面 CutPlane
+            ranges["bottom"] = RangeSlotData(context.Document, range, 2);    // 底部 Bottom
+            ranges["view_depth"] = RangeSlotData(context.Document, range, 3);// 视图深度 ViewDepth
             return new Dictionary<string, object>
             {
                 { "view_id", viewId.Value },
@@ -550,9 +611,13 @@ private static string GetParameterGroupName(Parameter parameter)
             };
         }
 
+        /// <summary>
+        /// 获取视图范围中单个槽位的数据（标高和偏移）。
+        /// Get data for a single plan view range slot (level and offset).
+        /// </summary>
         private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, int rangeType)
         {
-int slot = rangeType;
+            int slot = rangeType;
             ElementId levelId = range.GetLevelId((PlanViewPlane)slot);
             Level level = levelId.Value == ElementId.InvalidElementId.Value
                 ? null
@@ -561,10 +626,14 @@ int slot = rangeType;
             {
                 { "level", level == null ? null : level.Name },
                 { "level_id", level == null ? (object)null : levelId.Value },
-{ "offset_mm", PlanValues.ToMillimeters(range.GetOffset((PlanViewPlane)slot)) }
+                { "offset_mm", PlanValues.ToMillimeters(range.GetOffset((PlanViewPlane)slot)) }
             };
         }
 
+        /// <summary>
+        /// 检查元素碰撞。支持在候选集合内两两比较，或与指定集合交叉比较，以及链接文件碰撞。
+        /// Check interferences between elements. Supports pairwise within candidates, cross-comparison with a set, and link document interference.
+        /// </summary>
         public static Dictionary<string, object> CheckInterferences(PlanStep step, PlanExecutionContext context)
         {
             Document document = context.Document;
@@ -591,6 +660,7 @@ int slot = rangeType;
 
             if (against == null)
             {
+                // 候选集合内两两碰撞检测
                 for (int i = 0; i < candidates.Count && !truncated; i++)
                 {
                     for (int j = i + 1; j < candidates.Count; j++)
@@ -608,6 +678,7 @@ int slot = rangeType;
             }
             else
             {
+                // 候选集与对照集交叉碰撞检测
                 foreach (ElementId candidateId in candidates)
                 {
                     foreach (ElementId againstId in against)
@@ -633,6 +704,7 @@ int slot = rangeType;
             }
 
             var linkDocuments = new List<Dictionary<string, object>>();
+            // 链接文件碰撞检测：将候选元素转换到链接文档坐标系后检查
             if (includeLinks)
             {
                 foreach (RevitLinkInstance link in new FilteredElementCollector(document)
@@ -718,6 +790,10 @@ int slot = rangeType;
             };
         }
 
+        /// <summary>
+        /// 添加一条碰撞记录（含可选的相交体积）。
+        /// Add an interference record (with optional overlap volume).
+        /// </summary>
         private static bool AddInterference(
             Document document,
             ElementId firstId,
@@ -748,6 +824,7 @@ int slot = rangeType;
             };
             try
             {
+                // 尝试通过布尔求交计算重叠体积
                 Solid firstSolid = FindPrimarySolid(first);
                 Solid secondSolid = FindPrimarySolid(second);
                 if (firstSolid != null && secondSolid != null)
@@ -770,6 +847,10 @@ int slot = rangeType;
             return true;
         }
 
+        /// <summary>
+        /// 查找元素的主实体（体积最大的 Solid）。
+        /// Find the primary solid of an element (the one with the largest volume).
+        /// </summary>
         private static Solid FindPrimarySolid(Element element)
         {
             var options = new Options
@@ -783,6 +864,10 @@ int slot = rangeType;
             return solids.OrderByDescending(solid => solid.Volume).FirstOrDefault();
         }
 
+        /// <summary>
+        /// 递归收集几何中的实体（Solid），跳过被实例化几何中的递归。
+        /// Recursively collect solids from geometry, descending into instances.
+        /// </summary>
         private static void CollectSolids(GeometryElement geometry, ICollection<Solid> target)
         {
             if (geometry == null)
@@ -805,11 +890,19 @@ int slot = rangeType;
             }
         }
 
+        /// <summary>
+        /// 获取元素的类别名称。
+        /// Get the category name of an element.
+        /// </summary>
         private static string CategoryName(Element element)
         {
             return element.Category == null ? null : element.Category.Name;
         }
 
+        /// <summary>
+        /// 构造房间数据字典（含边界）。
+        /// Build a room data dictionary (including boundary segments).
+        /// </summary>
         private static Dictionary<string, object> RoomData(Room room)
         {
             var data = new Dictionary<string, object>
@@ -841,6 +934,10 @@ int slot = rangeType;
             return data;
         }
 
+        /// <summary>
+        /// 查询链接文件（RevitLinkInstance）。
+        /// Query linked files (RevitLinkInstance).
+        /// </summary>
         private static Dictionary<string, object> QueryLinks(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -860,6 +957,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "links" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的标高列表。
+        /// Query the list of levels in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryLevels(Document document, int limit)
         {
             List<Level> levels = new FilteredElementCollector(document)
@@ -881,6 +982,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "levels" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的类别列表。
+        /// Query the list of categories in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryCategories(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -896,6 +1001,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "categories" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的视图列表（非样板）。
+        /// Query the list of views in the project (non-template).
+        /// </summary>
         private static Dictionary<string, object> QueryViews(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -916,6 +1025,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "views" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的图纸列表。
+        /// Query the list of sheets in the project.
+        /// </summary>
         private static Dictionary<string, object> QuerySheets(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -933,6 +1046,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "sheets" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的明细表列表。
+        /// Query the list of schedules in the project.
+        /// </summary>
         private static Dictionary<string, object> QuerySchedules(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -952,6 +1069,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "schedules" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的视图族类型。
+        /// Query the list of view family types in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryViewTypes(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -969,6 +1090,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "view_types" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的文字类型。
+        /// Query the list of text note types in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryTextTypes(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -985,6 +1110,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "text_types" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的填充区域类型。
+        /// Query the list of filled region types in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryFilledRegionTypes(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -1001,6 +1130,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "filled_region_types" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的修订列表。
+        /// Query the list of revisions in the project.
+        /// </summary>
         private static Dictionary<string, object> QueryRevisions(Document document, int limit)
         {
             var items = new List<Dictionary<string, object>>();
@@ -1021,6 +1154,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "revisions" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 按 BuiltInCategory 查询族符号。
+        /// Query family symbols by BuiltInCategory.
+        /// </summary>
         private static Dictionary<string, object> QueryFamilySymbolsByCategory(
             Document document,
             BuiltInCategory category,
@@ -1044,6 +1181,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", kind }, { "items", items } };
         }
 
+        /// <summary>
+        /// 递归收集几何中的稳定引用（面/边）。
+        /// Recursively collect stable references (faces/edges) from geometry.
+        /// </summary>
         private static void CollectStableReferences(
             Document document,
             GeometryElement geometry,
@@ -1084,6 +1225,10 @@ int slot = rangeType;
             }
         }
 
+        /// <summary>
+        /// 添加一个稳定引用记录。
+        /// Add a stable reference record.
+        /// </summary>
         private static void AddStableReference(
             Document document,
             Reference reference,
@@ -1109,6 +1254,10 @@ int slot = rangeType;
             }
         }
 
+        /// <summary>
+        /// 查询项目中的族列表（按名称筛选可选）。
+        /// Query the list of families in the project (optional name filter).
+        /// </summary>
         private static Dictionary<string, object> QueryFamilies(
             Document document,
             IDictionary<string, object> arguments,
@@ -1137,6 +1286,10 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", "families" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 查询项目中的类型列表（按名称、族名称、类别过滤），可选仅 MEP 类型。
+        /// Query the list of types in the project (filtered by name, family, category), optionally MEP-only.
+        /// </summary>
         private static Dictionary<string, object> QueryTypes(
             Document document,
             IDictionary<string, object> arguments,
@@ -1182,12 +1335,20 @@ int slot = rangeType;
             return new Dictionary<string, object> { { "kind", mepOnly ? "mep_types" : "types" }, { "items", items } };
         }
 
+        /// <summary>
+        /// 判断 ElementType 是否为 MEP 类型。
+        /// Check if an ElementType is an MEP type.
+        /// </summary>
         private static bool IsMepType(ElementType type)
         {
             return type is PipeType || type is DuctType || type is ConduitType || type is CableTrayType ||
                    type is PipingSystemType || type is MechanicalSystemType;
         }
 
+        /// <summary>
+        /// 获取元素的类型名称。
+        /// Get the type name of an element.
+        /// </summary>
         private static string TypeName(Document document, Element element)
         {
             if (element is ElementType)
@@ -1198,6 +1359,10 @@ int slot = rangeType;
             return RevitLookups.ElementName(type);
         }
 
+        /// <summary>
+        /// 获取元素的族名称。
+        /// Get the family name of an element.
+        /// </summary>
         private static string FamilyName(Document document, Element element)
         {
             if (element is ElementType)
@@ -1208,6 +1373,10 @@ int slot = rangeType;
             return RevitLookups.FamilyName(type);
         }
 
+        /// <summary>
+        /// 读取 limit 参数（范围 1-500，默认 100）。
+        /// Read the limit parameter (range 1-500, default 100).
+        /// </summary>
         private static int ReadLimit(IDictionary<string, object> arguments)
         {
             int limit = PlanValues.Integer(arguments, 100, "limit");
@@ -1218,7 +1387,11 @@ int slot = rangeType;
             return limit;
         }
 
-public static Dictionary<string, object> QuerySelection(PlanStep step, PlanExecutionContext context)
+        /// <summary>
+        /// 查询当前 Revit 用户选中的元素。
+        /// Query the currently selected elements in the Revit UI.
+        /// </summary>
+        public static Dictionary<string, object> QuerySelection(PlanStep step, PlanExecutionContext context)
         {
             UIDocument uiDoc = context.UiApplication.ActiveUIDocument;
             if (uiDoc == null || context.Document == null)
@@ -1256,6 +1429,10 @@ public static Dictionary<string, object> QuerySelection(PlanStep step, PlanExecu
             };
         }
 
+        /// <summary>
+        /// 读取字符串列表参数（支持单个字符串或字符串数组）。
+        /// Read a string list parameter (supports single string or string array).
+        /// </summary>
         private static List<string> ReadStringList(object value)
         {
             var result = new List<string>();

@@ -8,9 +8,16 @@ namespace RevitCommandBridge
     /// create_swept_shape 的截面轮廓工厂：矩形 / 圆形 / 马蹄形及其环版。
     /// 输入为 mm 规格 + 放样路径起点的局部坐标系，输出可直接交给
     /// GeometryCreationUtilities.CreateSweptGeometry 的 CurveLoop 列表。
+    /// Section profile factory for create_swept_shape: rect / circle / horseshoe and their ring variants.
+    /// Inputs are mm dimensions + local coordinate system at the sweep path start.
+    /// Output is a list of CurveLoops ready for GeometryCreationUtilities.CreateSweptGeometry.
     /// </summary>
     internal static class RevitSectionFactory
     {
+        /// <summary>
+        /// 由点列表构建放样路径 CurveLoop。
+        /// Build a sweep path CurveLoop from a list of points.
+        /// </summary>
         public static CurveLoop BuildPath(List<XYZ> points, string fieldName)
         {
             if (points == null || points.Count < 2)
@@ -31,6 +38,10 @@ namespace RevitCommandBridge
             return loop;
         }
 
+        /// <summary>
+        /// 创建截面轮廓 CurveLoop 列表（支持 rect、rect_ring、circle、circle_ring、horseshoe）。
+        /// Create a list of section profile CurveLoops (supports rect, rect_ring, circle, circle_ring, horseshoe).
+        /// </summary>
         public static IList<CurveLoop> CreateSectionLoops(
             string shape,
             double widthMm,
@@ -90,6 +101,10 @@ namespace RevitCommandBridge
             return loops;
         }
 
+        /// <summary>
+        /// 将局部坐标 (xMm, yMm) 映射到世界坐标。
+        /// Map local coordinates (xMm, yMm) to world coordinates.
+        /// </summary>
         private static XYZ Map(XYZ origin, XYZ axisU, XYZ axisV, double xMm, double yMm)
         {
             return origin

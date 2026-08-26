@@ -7,8 +7,18 @@ using Autodesk.Revit.DB;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 平面步骤中的变更操作：设置参数、删除元素、选择元素、复制类型、管理扩展数据、管理族参数、变换、重命名、设置曲线。
+    /// Mutation operations for plan steps: set parameters, delete/select/duplicate elements, manage schema data, manage family parameters, transform, rename, set curve.
+    /// </summary>
     internal static class RevitPlanMutations
     {
+        /// <summary>
+        /// 为指定元素批量设置参数值。
+        /// Batch-set parameter values on specified elements.
+        /// </summary>
+        /// <param name="step">计划步骤 / The plan step.</param>
+        /// <param name="context">执行上下文 / The execution context.</param>
         public static Dictionary<string, object> SetParameters(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
@@ -75,6 +85,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 从文档中删除指定元素。
+        /// Delete specified elements from the document.
+        /// </summary>
         public static Dictionary<string, object> DeleteElements(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
@@ -102,6 +116,10 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 在 Revit UI 中选择指定元素。
+        /// Select specified elements in the Revit UI.
+        /// </summary>
         public static Dictionary<string, object> SelectElements(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
@@ -129,6 +147,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 复制元素类型（ElementType）并可选设置新类型的参数。
+        /// Duplicate an element type (ElementType) and optionally set parameters on the new type.
+        /// </summary>
         public static Dictionary<string, object> DuplicateType(PlanStep step, PlanExecutionContext context)
         {
             ElementId sourceId = context.ResolveSingleElementId(
@@ -198,6 +220,10 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 管理元素上的扩展架构数据（set / get / clear / transport）。
+        /// Manage extended schema data on elements (set / get / clear / transport).
+        /// </summary>
         public static Dictionary<string, object> ManageSchemaData(PlanStep step, PlanExecutionContext context)
         {
             string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
@@ -326,6 +352,10 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 管理族参数：添加、重命名、移除、设置公式。
+        /// Manage family parameters: add, rename, remove, set formula.
+        /// </summary>
         public static Dictionary<string, object> ManageFamilyParameters(PlanStep step, PlanExecutionContext context)
         {
             ElementId familyId = context.ResolveSingleElementId(step.Arguments, "family_id", "family", "target");
@@ -462,6 +492,10 @@ Family loadedFamilyResult;
             return data;
         }
 
+        /// <summary>
+        /// 对元素执行变换：移动、复制、旋转、镜像。
+        /// Apply geometric transforms to elements: move, copy, rotate, mirror.
+        /// </summary>
         public static Dictionary<string, object> TransformElements(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
@@ -541,6 +575,10 @@ Family loadedFamilyResult;
             return data;
         }
 
+        /// <summary>
+        /// 重命名元素（单目标用 name，批量用 prefix）。
+        /// Rename elements (single target via name, batch via prefix).
+        /// </summary>
         public static Dictionary<string, object> RenameElement(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets", "element_id");
@@ -607,6 +645,10 @@ Family loadedFamilyResult;
             return data;
         }
 
+        /// <summary>
+        /// 设置线状图元（墙/管道等）的起点和终点曲线。
+        /// Set the start/end curve for a linear element (wall, pipe, etc.).
+        /// </summary>
         public static Dictionary<string, object> SetElementCurve(PlanStep step, PlanExecutionContext context)
         {
             ElementId id = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "target");
@@ -647,6 +689,12 @@ Family loadedFamilyResult;
             return data;
         }
 
+        /// <summary>
+        /// 从参数字典中读取一个点（XYZ），搜索多个字段名。
+        /// Read a point (XYZ) from the arguments dictionary, trying multiple field names.
+        /// </summary>
+        /// <param name="arguments">参数字典 / The arguments dictionary.</param>
+        /// <param name="fieldNames">备选字段名列表 / Candidate field names.</param>
         private static XYZ ReadPoint(IDictionary<string, object> arguments, params string[] fieldNames)
         {
             foreach (string fieldName in fieldNames)
@@ -659,6 +707,10 @@ Family loadedFamilyResult;
             throw new BridgeCommandException("缺少参数：" + string.Join("/", fieldNames));
         }
 
+        /// <summary>
+        /// 读取旋转轴方向：支持 x/y/z 字符串或 {x,y,z} 向量对象，默认 BasisZ。
+        /// Read rotation axis direction: supports "x"/"y"/"z" strings or {x,y,z} vector object, defaults to BasisZ.
+        /// </summary>
         private static XYZ ReadAxisDirection(IDictionary<string, object> arguments)
         {
             object raw = PlanValues.Get(arguments, "axis_direction", "axis");
@@ -690,6 +742,10 @@ Family loadedFamilyResult;
             return direction.Normalize();
         }
 
+        /// <summary>
+        /// 获取指定 ID 的元素，找不到则报错。
+        /// Get the element by ID, or throw if not found.
+        /// </summary>
         private static Element RequireElement(Document document, ElementId id, string fieldName)
         {
             Element element = document.GetElement(id);
@@ -700,6 +756,10 @@ Family loadedFamilyResult;
             return element;
         }
 
+        /// <summary>
+        /// 在元素上按名称查找参数，支持 "BIP:" 前缀引用 BuiltInParameter。
+        /// Find a parameter by name on the element; supports "BIP:" prefix for BuiltInParameter.
+        /// </summary>
         private static Parameter FindParameter(Element element, string requestedName)
         {
             const string prefix = "BIP:";
@@ -715,6 +775,10 @@ Family loadedFamilyResult;
             return element.LookupParameter(requestedName);
         }
 
+        /// <summary>
+        /// 校验参数值能否转换为对应的存储类型。
+        /// Validate that a parameter value can be converted to its storage type.
+        /// </summary>
         private static void ValidateParameterValue(Parameter parameter, object value, string name)
         {
             switch (parameter.StorageType)
@@ -739,6 +803,10 @@ Family loadedFamilyResult;
             }
         }
 
+        /// <summary>
+        /// 设置参数值，按 StorageType 分发到对应 Set 方法。
+        /// Set a parameter value, dispatching by StorageType to the appropriate Set method.
+        /// </summary>
         private static void SetParameterValue(Parameter parameter, object value, string name)
         {
             switch (parameter.StorageType)
@@ -760,6 +828,10 @@ Family loadedFamilyResult;
             }
         }
 
+        /// <summary>
+        /// 解析双精度参数值，支持单位转换（mm、m、ft、deg、rad）。
+        /// Parse a double parameter value with unit conversion support (mm, m, ft, deg, rad).
+        /// </summary>
         private static double ReadDoubleValue(object raw, string name)
         {
             IDictionary<string, object> objectValue = raw as IDictionary<string, object>;
@@ -802,6 +874,10 @@ Family loadedFamilyResult;
             }
         }
 
+        /// <summary>
+        /// 解析整数参数值，支持布尔值转换为 0/1。
+        /// Parse an integer parameter value; supports bool-to-0/1 conversion.
+        /// </summary>
         private static int ReadIntegerValue(object raw, string name)
         {
             if (raw is bool)
@@ -816,6 +892,10 @@ Family loadedFamilyResult;
             return value;
         }
 
+        /// <summary>
+        /// 解析 ElementId 参数值，支持 {element_id / id / value} 对象语法。
+        /// Parse an ElementId parameter value; supports {element_id / id / value} object syntax.
+        /// </summary>
         private static ElementId ReadElementIdValue(object raw, string name)
         {
             IDictionary<string, object> objectValue = raw as IDictionary<string, object>;

@@ -1,4 +1,6 @@
-﻿[CmdletBinding()]
+﻿# 连接器配置工具 —— 为指定 AI 客户端或平台生成 MCP / REST / AI 配置文件
+# Connector configurator — generates MCP / REST / AI profile files for a specified client or platform
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('codex', 'workbuddy', 'deepseek', 'function-api', 'openai-compatible', 'generic-mcp', 'rest')]
@@ -10,9 +12,13 @@ param(
     [string]$NodePath
 )
 
+# 启用严格模式与错误停止
+# Enable strict mode and stop-on-error
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 设置控制台为 UTF-8 输出
+# Set console output to UTF-8
 try {
     $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $utf8OutputEncoding
@@ -20,11 +26,15 @@ try {
 }
 catch { }
 
+# 转义 TOML 字符串中的特殊字符
+# Escape special characters in TOML strings
 function Escape-TomlString {
     param([string]$Value)
     return ($Value -replace '\\', '\\' -replace '"', '\\"')
 }
 
+# 读取安装元数据（bridge.config.json），获取 Revit 版本等信息
+# Read installation metadata (bridge.config.json) to get Revit version, etc.
 $installDirectory = Split-Path -Parent $PSScriptRoot
 $metadataPath = Join-Path $installDirectory 'bridge.config.json'
 $metadata = $null

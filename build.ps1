@@ -1,17 +1,21 @@
-﻿[CmdletBinding()]
+﻿# build.ps1 — 单一 Revit 版本编译脚本
+# build.ps1 — Single Revit version build script
+
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^20\d{2}$')]
-    [string]$RevitVersion,
-    [string]$RevitInstallDirectory,
-    [string]$OutputDirectory,
-    [switch]$SkipInstaller
+    [string]$RevitVersion,  # Revit 版本年份，如 2025 / Revit version year, e.g. 2025
+    [string]$RevitInstallDirectory,  # Revit 安装目录（含 RevitAPI.dll）/ Revit installation directory (containing RevitAPI.dll)
+    [string]$OutputDirectory,  # 输出目录 / Output directory
+    [switch]$SkipInstaller  # 跳过安装器打包 / Skip installer packaging
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ── 1. 加载版本清单 ──
+# ── 1. Load version manifest ──
 $manifestPath = Join-Path $PSScriptRoot 'build\version-manifest.json'
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "版本清单未找到: $manifestPath。"
@@ -23,6 +27,7 @@ if ($null -eq $versionConfig) {
 }
 
 # 处理继承：若 inherits_from 存在，从父版本复制 references
+# Handle inheritance: if inherits_from exists, copy references from parent version
 $inheritsFrom = $null
 if (Get-Member -InputObject $versionConfig -Name 'inherits_from' -MemberType Properties) {
     $inheritsFrom = $versionConfig.inherits_from
@@ -40,6 +45,7 @@ if ($inheritsFrom) {
 }
 
 # ── 2. 解析 RevitAPI 路径 ──
+# ── 2. Resolve RevitAPI path ──
 if ([string]::IsNullOrWhiteSpace($RevitInstallDirectory)) {
     $standardDirectory = Join-Path $env:ProgramFiles "Autodesk\Revit $RevitVersion"
     if (Test-Path -LiteralPath (Join-Path $standardDirectory 'RevitAPI.dll')) {
@@ -56,6 +62,7 @@ New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 $assemblyPath = Join-Path $outputDir 'RevitCommandBridge.dll'
 
 # ── 3. 按编译器分派 ──
+# ── 3. Dispatch by compiler type ──
 switch ($versionConfig.compiler) {
     'dotnet' {
         $projectFile = Join-Path $PSScriptRoot $versionConfig.project_file
@@ -88,6 +95,7 @@ switch ($versionConfig.compiler) {
 }
 
 # ── 4. 公共打包步骤 ──
+# ── 4. Common packaging steps ──
 foreach ($directoryName in @('scripts', 'examples', 'deploy', 'schemas', 'src', 'verification')) {
     $source = Join-Path $PSScriptRoot $directoryName
     if (Test-Path -LiteralPath $source) {
@@ -108,6 +116,7 @@ foreach ($fileName in @('README.md', 'PROTOCOL.md', 'ARCHITECTURE.md',
 }
 
 # ── 5. 版本元数据 ──
+# ── 5. Version metadata ──
 $entryClass = 'RevitCommandBridge.RevitCommandBridgeApp'
 if (Get-Member -InputObject $versionConfig -Name 'entry_class' -MemberType Properties -ErrorAction SilentlyContinue) {
     $entryClass = 'RevitCommandBridge.' + $versionConfig.entry_class
@@ -123,6 +132,7 @@ $metadata = [ordered]@{
 $metadata | ConvertTo-Json | Set-Content (Join-Path $outputDir 'bridge.config.json') -Encoding UTF8
 
 # ── 6. 可选安装器 ──
+# ── 6. Optional installer ──
 if (-not $SkipInstaller.IsPresent) {
     & (Join-Path $PSScriptRoot 'build-installer.ps1') -DistDirectory (Join-Path $PSScriptRoot 'dist') | Out-Host
 }

@@ -6,8 +6,14 @@ using Autodesk.Revit.DB;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 提供 Revit 元素查找、解析和元数据提取的静态工具方法。 / Provides static utility methods for Revit element lookup, resolution, and metadata extraction.
+    /// </summary>
     internal static class RevitLookups
     {
+        /// <summary>
+        /// 按 level_id、level 名称或默认（第一个）解析标高。 / Resolves a level by level_id, level name, or defaults to the first level.
+        /// </summary>
         public static Level ResolveLevel(Document document, IDictionary<string, object> arguments)
         {
             object idValue = PlanValues.Get(arguments, "level_id");
@@ -46,6 +52,9 @@ namespace RevitCommandBridge
             return match;
         }
 
+        /// <summary>
+        /// 按 type_id、family/type 名称解析元素类型，支持默认值。 / Resolves an ElementType by type_id or family/type name, with optional default fallback.
+        /// </summary>
         public static ElementType ResolveElementType(
             Document document,
             Type expectedType,
@@ -99,11 +108,17 @@ namespace RevitCommandBridge
             return candidates[0];
         }
 
+        /// <summary>
+        /// 按参数解析 FamilySymbol。 / Resolves a FamilySymbol from arguments.
+        /// </summary>
         public static FamilySymbol ResolveFamilySymbol(Document document, IDictionary<string, object> arguments)
         {
             return (FamilySymbol)ResolveElementType(document, typeof(FamilySymbol), arguments, false);
         }
 
+        /// <summary>
+        /// 按 BuiltInCategory 枚举、数字 ID 或类别名称解析类别。 / Resolves a category by BuiltInCategory enum, numeric ID, or category name.
+        /// </summary>
         public static ElementId ResolveCategoryId(
             Document document,
             IDictionary<string, object> arguments,
@@ -138,6 +153,9 @@ namespace RevitCommandBridge
             throw new BridgeCommandException("找不到类别“" + text + "”。可传 OST_*、类别 ID 或当前 Revit 的类别名称。");
         }
 
+        /// <summary>
+        /// 按名称查找材质，未找到或名称为空时返回 null。 / Finds a material by name; returns null if not found or name is empty.
+        /// </summary>
         public static Material FindMaterial(Document document, string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -150,6 +168,9 @@ namespace RevitCommandBridge
                 .FirstOrDefault(material => string.Equals(material.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// 安全获取元素名称，异常时返回空字符串。 / Safely gets an element's name, returning an empty string on failure.
+        /// </summary>
         public static string ElementName(Element element)
         {
             if (element == null)
@@ -166,6 +187,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 安全获取元素族名称。 / Safely gets an element's family name.
+        /// </summary>
         public static string FamilyName(Element element)
         {
             FamilySymbol symbol = element as FamilySymbol;
@@ -185,6 +209,9 @@ namespace RevitCommandBridge
             return string.Empty;
         }
 
+        /// <summary>
+        /// 提取元素的基本数据：ID、名称、类别、位置、边界框和指定参数。 / Extracts basic element data: ID, name, category, location, bounding box, and specified parameters.
+        /// </summary>
         public static Dictionary<string, object> ElementData(Document document, Element element, IEnumerable<string> parameterNames)
         {
             var data = new Dictionary<string, object>
@@ -246,6 +273,9 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 提取参数的数据：存储类型、只读标志、显示值和内部值。 / Extracts parameter data: storage type, read-only flag, display value, and internal value.
+        /// </summary>
         public static Dictionary<string, object> ParameterData(Parameter parameter)
         {
             var data = new Dictionary<string, object>
@@ -273,6 +303,9 @@ data["display_unit_type"] = parameter.GetUnitTypeId().TypeId;
             return data;
         }
 
+        /// <summary>
+        /// 将值解析为正整数元素 ID。 / Parses a value as a positive integer element ID.
+        /// </summary>
         public static int ParsePositiveId(object value, string fieldName)
         {
             int parsed;

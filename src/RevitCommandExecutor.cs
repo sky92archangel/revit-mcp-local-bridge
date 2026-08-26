@@ -8,10 +8,16 @@ using Autodesk.Revit.UI;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 兼容操作模式的命令执行器：处理 health、list_levels、create_wall 等单步命令。 / Legacy command executor handling single-step operations such as health, list_levels, create_wall, etc.
+    /// </summary>
     internal static class RevitCommandExecutor
     {
         private const double FeetPerMillimeter = 1.0 / 304.8;
 
+        /// <summary>
+        /// 按 operation 分派到对应的处理函数。 / Dispatches to the appropriate handler based on the operation name.
+        /// </summary>
         public static BridgeResponse Execute(UIApplication uiApplication, BridgeRequest request)
         {
             if (uiApplication == null)
@@ -86,6 +92,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 健康检查：返回桥接状态、Revit 版本、文档信息等。 / Health check: returns bridge status, Revit version, document info, etc.
+        /// </summary>
         private static BridgeResponse Health(UIApplication uiApplication, string expectedDocumentTitle)
         {
             var data = new Dictionary<string, object>
@@ -133,6 +142,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "桥接已连接到当前 Revit 文档。", data);
         }
 
+        /// <summary>
+        /// 创建并可选地保存新 Revit 项目。 / Creates and optionally saves a new Revit project.
+        /// </summary>
         private static BridgeResponse CreateProject(UIApplication uiApplication, BridgeRequest request)
         {
             if (!string.IsNullOrWhiteSpace(request.DocumentTitle))
@@ -210,6 +222,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已创建未保存的新项目“" + created.Title + "”。", plan);
         }
 
+        /// <summary>
+        /// 列出项目中所有标高及其高程（mm）。 / Lists all levels in the project with their elevations (mm).
+        /// </summary>
         private static BridgeResponse ListLevels(Document document)
         {
             List<Level> levels = new FilteredElementCollector(document)
@@ -235,6 +250,9 @@ namespace RevitCommandBridge
                 new Dictionary<string, object> { { "levels", items } });
         }
 
+        /// <summary>
+        /// 列出项目中所有基本墙类型。 / Lists all basic wall types in the project.
+        /// </summary>
         private static BridgeResponse ListWallTypes(Document document)
         {
             List<WallType> wallTypes = BasicWallTypes(document).OrderBy(type => type.Name).ToList();
@@ -255,6 +273,9 @@ namespace RevitCommandBridge
                 new Dictionary<string, object> { { "wall_types", items } });
         }
 
+        /// <summary>
+        /// 创建新标高。 / Creates a new level.
+        /// </summary>
         private static BridgeResponse CreateLevel(Document document, BridgeRequest request)
         {
             double elevationMm = BridgeArguments.RequireMillimeters(request, "elevation_mm", "elevation", "标高");
@@ -288,6 +309,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已创建标高“" + created.Name + "”。", plan);
         }
 
+        /// <summary>
+        /// 创建新轴网。 / Creates a new grid line.
+        /// </summary>
         private static BridgeResponse CreateGrid(Document document, BridgeRequest request)
         {
             double x1Mm = BridgeArguments.RequireMillimeters(request, "x1_mm", "x1");
@@ -327,6 +351,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已创建轴网“" + created.Name + "”。", plan);
         }
 
+        /// <summary>
+        /// 创建 4 面闭合的矩形墙。 / Creates 4 closed walls forming a rectangle.
+        /// </summary>
         private static BridgeResponse CreateRectangleWalls(Document document, BridgeRequest request)
         {
             double widthMm = BridgeArguments.RequireMillimeters(request, "width_mm", "width", "宽");
@@ -396,6 +423,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已创建 4 面矩形墙。", plan);
         }
 
+        /// <summary>
+        /// 创建单面墙。 / Creates a single wall.
+        /// </summary>
         private static BridgeResponse CreateWall(Document document, BridgeRequest request)
         {
             double x1Mm = BridgeArguments.RequireMillimeters(request, "x1_mm", "x1");
@@ -457,6 +487,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success("completed", "已创建墙体。", plan);
         }
 
+        /// <summary>
+        /// 底层 Wall.Create 调用封装。 / Low-level Wall.Create call wrapper.
+        /// </summary>
         private static Wall CreateWall(Document document, XYZ start, XYZ end, WallType wallType, Level level, double heightMm)
         {
             return Wall.Create(
@@ -470,6 +503,9 @@ namespace RevitCommandBridge
                 false);
         }
 
+        /// <summary>
+        /// 按名称或默认解析标高。 / Resolves a level by name or returns the first available level.
+        /// </summary>
         private static Level ResolveLevel(Document document, string requestedName)
         {
             List<Level> levels = new FilteredElementCollector(document)
@@ -497,6 +533,9 @@ namespace RevitCommandBridge
             return level;
         }
 
+        /// <summary>
+        /// 按名称或默认解析基本墙类型。 / Resolves a wall type by name or returns the first available type.
+        /// </summary>
         private static WallType ResolveWallType(Document document, string requestedName)
         {
             List<WallType> types = BasicWallTypes(document).OrderBy(type => type.Name).ToList();
@@ -520,6 +559,9 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 查找或创建指定厚度的墙类型。 / Finds or creates a wall type of the specified thickness.
+        /// </summary>
         private static WallType ResolveOrCreateWallType(Document document, WallType sourceType, string targetName, double thicknessMm)
         {
             WallType existing = BasicWallTypes(document).FirstOrDefault(type =>
@@ -535,12 +577,16 @@ namespace RevitCommandBridge
                 return existing;
             }
 
+            // 复制源墙类型作为新类型的基础
+            // Duplicate the source wall type as the base for the new type
             WallType duplicate = sourceType.Duplicate(targetName) as WallType;
             if (duplicate == null)
             {
                 throw new BridgeCommandException("无法复制墙类型“" + sourceType.Name + "”。");
             }
 
+            // 调整复合结构的厚度：将厚度差值分配到可变层（或第 0 层）
+            // Adjust compound structure thickness: distribute the delta to the variable layer (or layer 0)
             CompoundStructure structure = duplicate.GetCompoundStructure();
             if (structure == null || structure.LayerCount < 1)
             {
@@ -561,12 +607,18 @@ namespace RevitCommandBridge
             return duplicate;
         }
 
+        /// <summary>
+        /// 查找复合结构中的可变层，如果没有则返回第 0 层。 / Finds the variable-width layer in a compound structure, or returns layer 0.
+        /// </summary>
         private static int FindVariableOrFirstLayer(CompoundStructure structure)
         {
             int variableLayerIndex = structure.VariableLayerIndex;
             return variableLayerIndex >= 0 ? variableLayerIndex : 0;
         }
 
+        /// <summary>
+        /// 枚举项目中所有基本墙类型。 / Enumerates all basic wall types in the project.
+        /// </summary>
         private static IEnumerable<WallType> BasicWallTypes(Document document)
         {
             return new FilteredElementCollector(document)
@@ -575,6 +627,9 @@ namespace RevitCommandBridge
                 .Where(type => type.Kind == WallKind.Basic);
         }
 
+        /// <summary>
+        /// 将 x/y 毫米坐标转为字典。 / Converts x/y millimeter coordinates to a dictionary.
+        /// </summary>
         private static Dictionary<string, object> PointData(double xMm, double yMm)
         {
             return new Dictionary<string, object>
@@ -584,26 +639,41 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 将 x/y 毫米坐标转为 Revit XYZ（Z=0）。 / Converts x/y millimeter coordinates to a Revit XYZ (Z=0).
+        /// </summary>
         private static XYZ ToXyz(double xMm, double yMm)
         {
             return new XYZ(ToFeet(xMm), ToFeet(yMm), 0.0);
         }
 
+        /// <summary>
+        /// 将 x/y 毫米坐标和标高（英尺）转为 Revit XYZ。 / Converts x/y millimeter coordinates and elevation (feet) to a Revit XYZ.
+        /// </summary>
         private static XYZ ToXyzAtElevation(double xMm, double yMm, double elevationFeet)
         {
             return new XYZ(ToFeet(xMm), ToFeet(yMm), elevationFeet);
         }
 
+        /// <summary>
+        /// 毫米转英尺（Revit 内部单位）。 / Converts millimeters to feet (Revit internal unit).
+        /// </summary>
         private static double ToFeet(double millimeters)
         {
             return millimeters * FeetPerMillimeter;
         }
 
+        /// <summary>
+        /// 英尺转毫米并四舍五入。 / Converts feet to millimeters and rounds.
+        /// </summary>
         private static double RoundMillimeters(double feet)
         {
             return Math.Round(feet / FeetPerMillimeter, 3, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// 确保两点不重合（防止创建零长度图元）。 / Ensures two points are not coincident (prevents zero-length elements).
+        /// </summary>
         private static void EnsureDistinctPoints(double x1, double y1, double x2, double y2, string message)
         {
             if (Math.Abs(x1 - x2) < 0.0001 && Math.Abs(y1 - y2) < 0.0001)
@@ -612,11 +682,17 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 生成墙类型的标准名称。 / Generates a standardized wall type name.
+        /// </summary>
         private static string EnsureWallTypeName(WallType sourceType, double thicknessMm)
         {
             return "RCB_" + sourceType.Name + "_" + thicknessMm.ToString("0.###", CultureInfo.InvariantCulture) + "mm";
         }
 
+        /// <summary>
+        /// 判断操作是否为写操作。 / Determines whether the operation is a write operation.
+        /// </summary>
         private static bool IsWriteOperation(string operation, BridgeRequest request)
         {
             switch (operation)
@@ -636,6 +712,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将中文操作名标准化为英文操作名。 / Normalizes Chinese operation names to their English equivalents.
+        /// </summary>
         private static string NormalizeOperation(string operation)
         {
             string value = (operation ?? string.Empty).Trim().ToLowerInvariant();

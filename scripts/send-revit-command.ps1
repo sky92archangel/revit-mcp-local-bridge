@@ -1,4 +1,6 @@
-﻿[CmdletBinding(DefaultParameterSetName = 'Json')]
+﻿# Revit 命令发送器（CLI）—— 将 JSON 命令请求写入桥接文件队列，可选等待执行结果
+# Revit command sender (CLI) — writes JSON command requests to the bridge file queue, optionally waits for execution results
+[CmdletBinding(DefaultParameterSetName = 'Json')]
 param(
     [Parameter(Mandatory = $true, Position = 0, ParameterSetName = 'Json')]
     [string]$Json,
@@ -17,9 +19,13 @@ param(
     [string]$RootDirectory
 )
 
+# 启用严格模式与错误停止
+# Enable strict mode and stop-on-error
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 设置控制台输出编码为 UTF-8（无 BOM）
+# Set console output encoding to UTF-8 (no BOM)
 try {
     $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $utf8OutputEncoding
@@ -27,6 +33,8 @@ try {
 }
 catch { }
 
+# 从安装目录推断 Revit 版本
+# Infer Revit version from the installation directory
 if ([string]::IsNullOrWhiteSpace($RevitVersion)) {
     $packageDirectory = Split-Path -Parent $PSScriptRoot
     $candidateVersion = Split-Path -Leaf $packageDirectory
@@ -40,6 +48,8 @@ if ([string]::IsNullOrWhiteSpace($RootDirectory)) {
     ) $RevitVersion
 }
 
+# 安全地从对象中按多个候选字段名取值
+# Safely get a value from an object by trying multiple candidate property names
 function Get-Value {
     param([object]$Object, [string[]]$Names)
     foreach ($name in $Names) {
@@ -51,6 +61,8 @@ function Get-Value {
     return $null
 }
 
+# 验证请求 ID 格式：1-128 字符，仅含字母、数字、.、_、-
+# Validate request ID format: 1-128 chars, only letters, digits, ., _, -
 function Test-ValidRequestId {
     param([string]$Value)
     return -not [string]::IsNullOrWhiteSpace($Value) -and
@@ -58,6 +70,8 @@ function Test-ValidRequestId {
         $Value -match '^[A-Za-z0-9._-]+$'
 }
 
+# 检查 Revit 桥接是否在运行（状态 + 5 秒新鲜度）
+# Check whether the Revit bridge is running (state + 5-second freshness)
 function Test-BridgeRunning {
     param([object]$Status)
     if ($null -eq $Status -or @('running', 'busy') -notcontains [string]$Status.state) {
@@ -71,10 +85,14 @@ function Test-BridgeRunning {
     }
 }
 
+# 从文件读取 JSON，或直接使用传入的 JSON 字符串
+# Read JSON from file, or use the passed JSON string directly
 if ($PSCmdlet.ParameterSetName -eq 'File') {
     $Json = Get-Content -LiteralPath $RequestPath -Raw -Encoding UTF8
 }
 
+# 解析输入 JSON
+# Parse input JSON
 try {
     $inputRequest = $Json | ConvertFrom-Json
 }
@@ -86,11 +104,15 @@ if ($null -eq $inputRequest -or $inputRequest -is [Array]) {
     throw 'The command request must be a JSON object.'
 }
 
+# 提取 operation 字段，同时支持 operation 和 command 两种命名
+# Extract the operation field, supporting both "operation" and "command" names
 $operation = [string](Get-Value $inputRequest @('operation', 'command'))
 if ([string]::IsNullOrWhiteSpace($operation)) {
     throw 'Missing operation.'
 }
 
+# 提取 args 参数，支持 args 和 arguments 两种命名
+# Extract args, supporting both "args" and "arguments" names
 $arguments = Get-Value $inputRequest @('args', 'arguments')
 if ($null -eq $arguments) {
     $arguments = [ordered]@{}

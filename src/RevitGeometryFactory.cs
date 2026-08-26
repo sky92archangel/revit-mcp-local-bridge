@@ -4,8 +4,16 @@ using Autodesk.Revit.DB;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 几何工厂：根据结构化参数创建 Solid（box、cylinder、extrusion）。
+    /// Geometry factory: creates Solid objects from structured parameters (box, cylinder, extrusion).
+    /// </summary>
     internal static class RevitGeometryFactory
     {
+        /// <summary>
+        /// 从参数列表创建多个几何对象。
+        /// Create multiple geometry objects from a list of parameters.
+        /// </summary>
         public static IList<GeometryObject> CreateGeometry(
             IDictionary<string, object> arguments,
             SolidOptions options)
@@ -49,6 +57,10 @@ namespace RevitCommandBridge
             return geometry;
         }
 
+        /// <summary>
+        /// 描述几何参数的结构（不实际创建，只返回摘要）。
+        /// Describe the geometry parameter structure (without actually creating objects).
+        /// </summary>
         public static Dictionary<string, object> DescribeGeometry(IDictionary<string, object> arguments)
         {
             object rawGeometry = PlanValues.Get(arguments, "geometry", "solids", "primitives");
@@ -71,6 +83,10 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 创建长方体 Solid（通过 min/max 对角点定义）。
+        /// Create a box/cuboid Solid defined by min/max corner points.
+        /// </summary>
         private static Solid CreateBox(IDictionary<string, object> values, SolidOptions options)
         {
             XYZ min = PlanValues.Point(values, "min");
@@ -95,6 +111,10 @@ namespace RevitCommandBridge
                 options);
         }
 
+        /// <summary>
+        /// 创建圆柱体 Solid（通过起点、终点和直径定义）。
+        /// Create a cylinder Solid defined by start point, end point, and diameter.
+        /// </summary>
         private static Solid CreateCylinder(IDictionary<string, object> values, SolidOptions options)
         {
             XYZ start = PlanValues.Point(values, "start");
@@ -107,6 +127,10 @@ namespace RevitCommandBridge
             return CreateCylinder(start, end, PlanValues.ToFeet(diameterMm / 2.0), options);
         }
 
+        /// <summary>
+        /// 创建拉伸体 Solid（通过轮廓点列表和拉伸方向/长度定义）。
+        /// Create an extrusion Solid defined by profile points, direction, and length.
+        /// </summary>
         private static Solid CreateExtrusion(IDictionary<string, object> values, SolidOptions options)
         {
             List<Dictionary<string, object>> rawProfile = PlanValues.DictionaryList(
@@ -146,6 +170,10 @@ namespace RevitCommandBridge
                 options);
         }
 
+        /// <summary>
+        /// 通过圆形截面沿轴线拉伸创建圆柱体 Solid。
+        /// Create a cylinder Solid by extruding a circular cross-section along an axis.
+        /// </summary>
         private static Solid CreateCylinder(XYZ start, XYZ end, double radiusFeet, SolidOptions options)
         {
             XYZ vector = end - start;
@@ -165,6 +193,10 @@ namespace RevitCommandBridge
                 new List<CurveLoop> { profile }, direction, length, options);
         }
 
+        /// <summary>
+        /// 校验几何原语参数的合法性（不在预览时实际创建）。
+        /// Validate geometry primitive parameters without actually creating the solids (used in preview).
+        /// </summary>
         private static void ValidatePrimitive(IDictionary<string, object> values, string kind)
         {
             switch (kind.Trim().ToLowerInvariant())
@@ -210,6 +242,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 从字典中解析 XYZ 点（各分量以 mm 为单位）。
+        /// Parse an XYZ point from a dictionary (components in mm).
+        /// </summary>
         private static XYZ PointFromDictionary(IDictionary<string, object> values, string fieldName)
         {
             double x = PlanValues.RequireMillimeters(values, "x", "x_mm");
@@ -218,6 +254,10 @@ namespace RevitCommandBridge
             return new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(z));
         }
 
+        /// <summary>
+        /// 从字典中读取拉伸方向向量并归一化。
+        /// Read and normalize the extrusion direction vector from a dictionary.
+        /// </summary>
         private static XYZ ReadDirection(IDictionary<string, object> values)
         {
             Dictionary<string, object> direction = PlanValues.Dictionary(PlanValues.Get(values, "direction"), "extrusion.direction");
