@@ -1,10 +1,10 @@
-# Revit Command Bridge
+# Revit 命令桥 (Revit Command Bridge)
 
-A local command bridge for Revit. The Revit add-in only executes controlled Revit API commands; Codex, WorkBuddy, any MCP client, any Function Calling Harness, or any OpenAI-compatible model API can invoke it through a unified JSON, CLI, REST, or MCP interface. It does not depend on Dynamo, nor is it tied to any specific model vendor. All new modeling goes through `execute_plan`: a single plan can combine architecture, structure, MEP, spaces, documentation, parameters, and selection display, instead of adding a new add-in command for each element type.
+面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、空间、出图、参数和选中显示，而不是为每一种构件增加一个插件命令。
 
-> Each Revit year must use a DLL compiled against its corresponding API; a single "universal DLL" cannot be shared across versions. This delivery package supports Revit 2025–2027; see [VERSION-SUPPORT.md](./VERSION-SUPPORT.md) for version boundaries.
+> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个"万能 DLL"。本交付包支持 Revit 2025–2027；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
-The single-file installer automatically scans for locally installed Revit 2025–2027 and uses the built-in precompiled adapter packages. End users do not need to select DLLs, install Visual Studio, or manually fill in Revit paths. Build machines must have the corresponding Revit version and .NET 8/10 SDK installed.
+单文件安装器会自动扫描本机 Revit 2025–2027，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit 和 .NET 8/10 SDK。
 
 ## 目录结构
 
