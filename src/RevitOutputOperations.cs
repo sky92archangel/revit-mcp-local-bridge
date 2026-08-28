@@ -1,12 +1,19 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using Autodesk.Revit.DB;
+
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// 常用出图和注释操作。所有入口都只接受结构化参数，避免向 Revit 暴露任意代码执行�?
+    /// 常用出图和注释操作。所有入口都只接受结构化参数，避免向 Revit 暴露任意代码执行。
     /// </summary>
     internal static class RevitOutputOperations
     {
         /// <summary>
-        /// 创建制图视图�?
+        /// 创建制图视图。
         /// Create a drafting view.
         /// </summary>
         public static Dictionary<string, object> CreateDraftingView(PlanStep step, PlanExecutionContext context)
@@ -34,7 +41,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建剖面视图或详图视图�?
+        /// 创建剖面视图或详图视图。
         /// Create a section or detail view.
         /// </summary>
         public static Dictionary<string, object> CreateSectionView(PlanStep step, PlanExecutionContext context)
@@ -44,7 +51,7 @@ namespace RevitCommandBridge
             ViewFamily family = kind == "detail" ? ViewFamily.Detail : ViewFamily.Section;
             if (kind != "section" && kind != "detail")
             {
-                throw new BridgeCommandException("create_section_view.kind 仅支�?section �?detail�?);
+                throw new BridgeCommandException("create_section_view.kind 仅支持 section 或 detail。");
             }
 
             ViewFamilyType type = ResolveViewFamilyType(context.Document, step.Arguments, family);
@@ -57,7 +64,7 @@ namespace RevitCommandBridge
             up = (up - direction.Multiply(up.DotProduct(direction))).Normalize();
             if (up.GetLength() < 1e-8)
             {
-                throw new BridgeCommandException("create_section_view.up 必须�?direction 不平行�?);
+                throw new BridgeCommandException("create_section_view.up 必须与 direction 不平行。");
             }
             XYZ right = direction.CrossProduct(up).Normalize();
             double widthMm = PlanValues.Millimeters(step.Arguments, 3000.0, "width_mm", "width");
@@ -65,7 +72,7 @@ namespace RevitCommandBridge
             double depthMm = PlanValues.Millimeters(step.Arguments, 3000.0, "depth_mm", "depth");
             if (widthMm <= 0.0 || heightMm <= 0.0 || depthMm <= 0.0)
             {
-                throw new BridgeCommandException("create_section_view �?width_mm、height_mm、depth_mm 必须大于 0�?);
+                throw new BridgeCommandException("create_section_view 的 width_mm、height_mm、depth_mm 必须大于 0。");
             }
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
             var data = new Dictionary<string, object>
@@ -86,7 +93,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
-            // 构造剖切包围盒：先定义局部坐标范围，再通过 Transform 放置到世界坐�?
+            // 构造剖切包围盒：先定义局部坐标范围，再通过 Transform 放置到世界坐标
             // Build section bounding box: local extents first, then transform into world space
             var box = new BoundingBoxXYZ
             {
@@ -98,7 +105,7 @@ namespace RevitCommandBridge
             box.Transform.BasisX = right;
             box.Transform.BasisY = up;
             box.Transform.BasisZ = direction;
-            // 根据 kind 选择创建详图剖面或普通剖�?
+            // 根据 kind 选择创建详图剖面或普通剖面
             // Choose between detail section and regular section based on kind
             ViewSection view = kind == "detail"
                 ? ViewSection.CreateDetail(context.Document, type.Id, box)
@@ -111,7 +118,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建立面视图�?
+        /// 创建立面视图。
         /// Create an elevation view.
         /// </summary>
         public static Dictionary<string, object> CreateElevationView(PlanStep step, PlanExecutionContext context)
@@ -120,18 +127,18 @@ namespace RevitCommandBridge
             View planView = ResolveView(context, step.Arguments, true, "plan_view_id", "plan_view", "view_id", "view");
             if (planView == null)
             {
-                throw new BridgeCommandException("create_elevation_view 需要有效的平面视图 plan_view_id�?);
+                throw new BridgeCommandException("create_elevation_view 需要有效的平面视图 plan_view_id。");
             }
             XYZ origin = PlanValues.Point(step.Arguments, "origin");
             int index = PlanValues.Integer(step.Arguments, 0, "index", "direction_index");
             int scale = PlanValues.Integer(step.Arguments, 100, "scale");
             if (index < 0 || index > 3)
             {
-                throw new BridgeCommandException("create_elevation_view.index 必须�?0 �?3 之间�?);
+                throw new BridgeCommandException("create_elevation_view.index 必须在 0 到 3 之间。");
             }
             if (scale <= 0)
             {
-                throw new BridgeCommandException("create_elevation_view.scale 必须大于 0�?);
+                throw new BridgeCommandException("create_elevation_view.scale 必须大于 0。");
             }
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
             var data = new Dictionary<string, object>
@@ -160,7 +167,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建详图索引（大样图）�?
+        /// 创建详图索引（大样图）。
         /// Create a callout view.
         /// </summary>
         public static Dictionary<string, object> CreateCallout(PlanStep step, PlanExecutionContext context)
@@ -171,7 +178,7 @@ namespace RevitCommandBridge
             XYZ end = PlanValues.Point(step.Arguments, "end");
             if (start.DistanceTo(end) < 1e-8)
             {
-                throw new BridgeCommandException("create_callout.start �?end 不能重合�?);
+                throw new BridgeCommandException("create_callout.start 与 end 不能重合。");
             }
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
             var data = new Dictionary<string, object>
@@ -196,7 +203,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 复制视图（可指定复制方式选项）�?
+        /// 复制视图（可指定复制方式选项）。
         /// Duplicate a view with the specified duplicate option.
         /// </summary>
         public static Dictionary<string, object> DuplicateView(PlanStep step, PlanExecutionContext context)
@@ -204,7 +211,7 @@ namespace RevitCommandBridge
             View source = ResolveView(context, step.Arguments, true, "view_id", "view", "source_view_id", "source_view");
             string optionText = PlanValues.String(step.Arguments, "with_detailing", "option", "duplicate_option")
                 .Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
-            // 将字符串选项映射�?Revit 复制枚举
+            // 将字符串选项映射为 Revit 复制枚举
             // Map string option to Revit ViewDuplicateOption enum
             ViewDuplicateOption option;
             switch (optionText)
@@ -217,7 +224,7 @@ namespace RevitCommandBridge
                 case "as_dependent": option = ViewDuplicateOption.AsDependent; break;
                 case "with_detailing":
                 case "detail": option = ViewDuplicateOption.WithDetailing; break;
-                default: throw new BridgeCommandException("duplicate_view.option 仅支�?duplicate、as_duplicate、without_detailing、as_dependent、with_detailing�?);
+                default: throw new BridgeCommandException("duplicate_view.option 仅支持 duplicate、as_duplicate、without_detailing、as_dependent、with_detailing。");
             }
             string name = PlanValues.String(step.Arguments, null, "name", "view_name");
             object rawTemplateId = PlanValues.Get(step.Arguments, "view_template_id", "template_id");
@@ -239,13 +246,13 @@ namespace RevitCommandBridge
             }
             if (!source.CanViewBeDuplicated(option))
             {
-                throw new BridgeCommandException("当前视图不支持该复制方式�? + option);
+                throw new BridgeCommandException("当前视图不支持该复制方式：" + option);
             }
             ElementId id = source.Duplicate(option);
             View duplicate = context.Document.GetElement(id) as View;
             if (duplicate == null)
             {
-                throw new BridgeCommandException("Revit 未返回复制后的视图�?);
+                throw new BridgeCommandException("Revit 未返回复制后的视图。");
             }
             SetOptionalViewName(duplicate, name);
             ApplyOptionalViewTemplate(context, duplicate, rawTemplateId, templateName);
@@ -256,7 +263,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 从源视图创建视图样板�?
+        /// 从源视图创建视图样板。
         /// Create a view template from a source view.
         /// </summary>
         public static Dictionary<string, object> CreateViewTemplate(PlanStep step, PlanExecutionContext context)
@@ -274,12 +281,12 @@ namespace RevitCommandBridge
             }
             if (source.IsTemplate)
             {
-                throw new BridgeCommandException("create_view_template.source_view 不能是已有视图样板�?);
+                throw new BridgeCommandException("create_view_template.source_view 不能是已有视图样板。");
             }
             View template = source.CreateViewTemplate();
             if (template == null)
             {
-                throw new BridgeCommandException("当前视图类型不支持创建视图样板�?);
+                throw new BridgeCommandException("当前视图类型不支持创建视图样板。");
             }
             SetOptionalViewName(template, name);
             data["element_id"] = template.Id.GetValue();
@@ -289,7 +296,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 在视图中创建详图线�?
+        /// 在视图中创建详图线。
         /// Create a detail curve in the specified view.
         /// </summary>
         public static Dictionary<string, object> CreateDetailCurve(PlanStep step, PlanExecutionContext context)
@@ -299,7 +306,7 @@ namespace RevitCommandBridge
             XYZ end = PlanValues.Point(step.Arguments, "end");
             if (start.DistanceTo(end) < 1e-8)
             {
-                throw new BridgeCommandException("create_detail_curve.start �?end 不能重合�?);
+                throw new BridgeCommandException("create_detail_curve.start 与 end 不能重合。");
             }
             var data = new Dictionary<string, object>
             {
@@ -318,7 +325,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 在视图中创建文字注释�?
+        /// 在视图中创建文字注释。
         /// Create a text note in the specified view.
         /// </summary>
         public static Dictionary<string, object> CreateTextNote(PlanStep step, PlanExecutionContext context)
@@ -328,7 +335,7 @@ namespace RevitCommandBridge
             string text = PlanValues.String(step.Arguments, null, "text", "content");
             if (string.IsNullOrWhiteSpace(text))
             {
-                throw new BridgeCommandException("create_text_note.text 不能为空�?);
+                throw new BridgeCommandException("create_text_note.text 不能为空。");
             }
             TextNoteType type = ResolveTextNoteType(context.Document, step.Arguments);
             var data = new Dictionary<string, object>
@@ -350,7 +357,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建尺寸标注�?
+        /// 创建尺寸标注。
         /// Create a dimension with reference elements.
         /// </summary>
         public static Dictionary<string, object> CreateDimension(PlanStep step, PlanExecutionContext context)
@@ -361,7 +368,7 @@ namespace RevitCommandBridge
             List<string> stableReferences = ReadStringList(step.Arguments, "references", "stable_references");
             if (stableReferences.Count < 2)
             {
-                throw new BridgeCommandException("create_dimension.references 至少需要两个稳定引用字符串�?);
+                throw new BridgeCommandException("create_dimension.references 至少需要两个稳定引用字符串。");
             }
             var data = new Dictionary<string, object>
             {
@@ -384,11 +391,11 @@ namespace RevitCommandBridge
                 }
                 catch (Exception ex)
                 {
-                    throw new BridgeCommandException("无效稳定引用�? + stable + "”：" + ex.Message);
+                    throw new BridgeCommandException("无效稳定引用“" + stable + "”：" + ex.Message);
                 }
                 if (reference == null)
                 {
-                    throw new BridgeCommandException("无法解析稳定引用：�? + stable + "”�?);
+                    throw new BridgeCommandException("无法解析稳定引用：“" + stable + "”。");
                 }
                 references.Append(reference);
             }
@@ -399,7 +406,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建独立标记（标签）�?
+        /// 创建独立标记（标签）。
         /// Create an independent tag on a referenced element.
         /// </summary>
         public static Dictionary<string, object> CreateTag(PlanStep step, PlanExecutionContext context)
@@ -422,7 +429,7 @@ namespace RevitCommandBridge
             };
             if (string.IsNullOrWhiteSpace(stable))
             {
-                throw new BridgeCommandException("create_tag.reference 不能为空�?);
+                throw new BridgeCommandException("create_tag.reference 不能为空。");
             }
             if (view == null || context.Preview)
             {
@@ -431,7 +438,7 @@ namespace RevitCommandBridge
             Reference reference = Reference.ParseFromStableRepresentation(context.Document, stable);
             if (reference == null)
             {
-                throw new BridgeCommandException("无法解析 create_tag.reference�?);
+                throw new BridgeCommandException("无法解析 create_tag.reference。");
             }
             IndependentTag tag = tagTypeId == null
                 ? IndependentTag.Create(context.Document, view.Id, reference, leader, mode, orientation, point)
@@ -442,7 +449,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建填充区域�?
+        /// 创建填充区域。
         /// Create a filled region from a closed boundary.
         /// </summary>
         public static Dictionary<string, object> CreateFilledRegion(PlanStep step, PlanExecutionContext context)
@@ -453,7 +460,7 @@ namespace RevitCommandBridge
                 PlanValues.Get(step.Arguments, "boundary", "points"), "boundary");
             if (points.Count < 3)
             {
-                throw new BridgeCommandException("create_filled_region.boundary 至少需�?3 个点�?);
+                throw new BridgeCommandException("create_filled_region.boundary 至少需要 3 个点。");
             }
             var curves = new List<Curve>();
             for (int index = 0; index < points.Count; index++)
@@ -480,7 +487,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建修订�?
+        /// 创建修订。
         /// Create a revision entry.
         /// </summary>
         public static Dictionary<string, object> CreateRevision(PlanStep step, PlanExecutionContext context)
@@ -509,7 +516,7 @@ namespace RevitCommandBridge
             if (!string.IsNullOrWhiteSpace(revisionDate)) revision.RevisionDate = revisionDate;
             if (!string.IsNullOrWhiteSpace(issuedBy)) revision.IssuedBy = issuedBy;
             if (!string.IsNullOrWhiteSpace(issuedTo)) revision.IssuedTo = issuedTo;
-            // revision.NumberType = numberType; // �?Revit 2026 中已移除
+            // revision.NumberType = numberType; // 在 Revit 2026 中已移除
             revision.Visibility = visibility;
             if (hasIssued) revision.Issued = issued;
             data["element_id"] = revision.Id.GetValue();
@@ -519,7 +526,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建修订云线�?
+        /// 创建修订云线。
         /// Create a revision cloud in the specified view.
         /// </summary>
         public static Dictionary<string, object> CreateRevisionCloud(PlanStep step, PlanExecutionContext context)
@@ -530,37 +537,37 @@ namespace RevitCommandBridge
                 PlanValues.Get(step.Arguments, "boundary", "points"), "boundary");
             if (points.Count < 3)
             {
-                throw new BridgeCommandException("create_revision_cloud.boundary 至少需�?3 个点�?);
+                throw new BridgeCommandException("create_revision_cloud.boundary 至少需要 3 个点。");
             }
             var curves = new List<Curve>();
             for (int index = 0; index < points.Count; index++)
             {
                 XYZ a = ReadPointValue(points[index]);
                 XYZ b = ReadPointValue(points[(index + 1) % points.Count]);
-                // 相邻点不能重合，否则 Revit 会抛出异�?
+                // 相邻点不能重合，否则 Revit 会抛出异常
                 // Adjacent points must not coincide, or Revit will throw an error
                 if (a.DistanceTo(b) < 1e-8)
                 {
-                    throw new BridgeCommandException("create_revision_cloud.boundary 不能存在相邻重合点�?);
+                    throw new BridgeCommandException("create_revision_cloud.boundary 不能存在相邻重合点。");
                 }
                 curves.Add(Line.CreateBound(a, b));
             }
             var data = new Dictionary<string, object>
             {
                 { "view_id", view == null ? (object)null : view.Id.GetValue() },
-                { "revision_id", revisionId == ElementId.InvalidElementId ? (object)null : revisionId.GetValue() },
+                { "revision_id", revisionId.GetValue() == ElementId.InvalidElementId.GetValue() ? (object)null : revisionId.GetValue() },
                 { "point_count", points.Count }
             };
-            if (revisionId == ElementId.InvalidElementId)
+            if (revisionId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 data["deferred"] = true;
-                data["reason"] = "preview 中前置修订引用尚无真�?ID�?;
+                data["reason"] = "preview 中前置修订引用尚无真实 ID。";
                 return data;
             }
             Revision revision = context.Document.GetElement(revisionId) as Revision;
             if (revision == null)
             {
-                throw new BridgeCommandException("create_revision_cloud.revision_id 必须指向有效修订�?);
+                throw new BridgeCommandException("create_revision_cloud.revision_id 必须指向有效修订。");
             }
             if (view == null || context.Preview)
             {
@@ -573,7 +580,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建明细表（常规、材料统计、关键字、视图列表、图纸列表、修订明细表）�?
+        /// 创建明细表（常规、材料统计、关键字、视图列表、图纸列表、修订明细表）。
         /// Create a schedule (regular, material takeoff, key, view list, sheet list, or revision schedule).
         /// </summary>
         public static Dictionary<string, object> CreateSchedule(PlanStep step, PlanExecutionContext context)
@@ -608,7 +615,7 @@ namespace RevitCommandBridge
                 case "sheet_list": schedule = ViewSchedule.CreateSheetList(context.Document); break;
                 case "revision":
                 case "revision_schedule": schedule = ViewSchedule.CreateRevisionSchedule(context.Document); break;
-                default: throw new BridgeCommandException("create_schedule.kind 仅支�?regular、material_takeoff、key、view_list、sheet_list、revision�?);
+                default: throw new BridgeCommandException("create_schedule.kind 仅支持 regular、material_takeoff、key、view_list、sheet_list、revision。");
             }
 
             string name = PlanValues.String(step.Arguments, null, "name", "schedule_name");
@@ -647,7 +654,7 @@ namespace RevitCommandBridge
                 }
                     if (field == null)
                     {
-                        throw new BridgeCommandException("找不到明细表字段：�? + requested + "”�?);
+                        throw new BridgeCommandException("找不到明细表字段：“" + requested + "”。");
                     }
                     ScheduleField added = definition.AddField(field);
                     data["last_field"] = added.GetName();
@@ -661,7 +668,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将明细表实例放置到图纸上�?
+        /// 将明细表实例放置到图纸上。
         /// Place a schedule instance on a sheet.
         /// </summary>
         public static Dictionary<string, object> PlaceScheduleOnSheet(PlanStep step, PlanExecutionContext context)
@@ -669,21 +676,21 @@ namespace RevitCommandBridge
             ElementId sheetId = context.ResolveSingleElementId(step.Arguments, "sheet_id", "sheet", "target_sheet");
             ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "view_id", "view");
             XYZ point = PlanValues.Point(step.Arguments, "point");
-            if (sheetId == ElementId.InvalidElementId ||
-                scheduleId == ElementId.InvalidElementId)
+            if (sheetId.GetValue() == ElementId.InvalidElementId.GetValue() ||
+                scheduleId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return new Dictionary<string, object>
                 {
                     { "deferred", true },
                     { "point", PlanValues.PointData(point) },
-                    { "reason", "preview 中前置图纸或明细表引用尚无真�?ID�? }
+                    { "reason", "preview 中前置图纸或明细表引用尚无真实 ID。" }
                 };
             }
             ViewSheet sheet = context.Document.GetElement(sheetId) as ViewSheet;
             ViewSchedule schedule = context.Document.GetElement(scheduleId) as ViewSchedule;
             if (sheet == null || schedule == null)
             {
-                throw new BridgeCommandException("place_schedule_on_sheet 需要有效的 sheet_id �?schedule_id�?);
+                throw new BridgeCommandException("place_schedule_on_sheet 需要有效的 sheet_id 和 schedule_id。");
             }
             var data = new Dictionary<string, object>
             {
@@ -702,7 +709,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 批量设置视图属性（比例、裁剪、样板、详细程度、规程、显示样式、名称等）�?
+        /// 批量设置视图属性（比例、裁剪、样板、详细程度、规程、显示样式、名称等）。
         /// Set multiple view properties at once (scale, crop box, template, detail level, discipline, display style, name, etc.).
         /// </summary>
         public static Dictionary<string, object> SetViewProperties(PlanStep step, PlanExecutionContext context)
@@ -713,7 +720,7 @@ namespace RevitCommandBridge
             int scale = scaleRaw == null ? 0 : PlanValues.Integer(step.Arguments, 0, "scale");
             if (scaleRaw != null && scale <= 0)
             {
-                throw new BridgeCommandException("set_view_properties.scale 必须大于 0�?);
+                throw new BridgeCommandException("set_view_properties.scale 必须大于 0。");
             }
             bool hasCrop = PlanValues.Get(step.Arguments, "crop_box", "crop") != null;
             BoundingBoxXYZ crop = hasCrop ? ReadBoundingBox(step.Arguments, "crop_box", "crop") : null;
@@ -721,7 +728,7 @@ namespace RevitCommandBridge
             bool clearTemplate = PlanValues.Boolean(step.Arguments, false, "clear_view_template", "clear_template");
             if (clearTemplate && templateId != null)
             {
-                throw new BridgeCommandException("set_view_properties 不能同时�?view_template_id �?clear_view_template=true�?);
+                throw new BridgeCommandException("set_view_properties 不能同时传 view_template_id 和 clear_view_template=true。");
             }
             if (clearTemplate)
             {
@@ -774,7 +781,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 设置指定元素的视图图形替换�?
+        /// 设置指定元素的视图图形替换。
         /// Set graphic overrides for specified elements in a view.
         /// </summary>
         public static Dictionary<string, object> SetElementOverrides(PlanStep step, PlanExecutionContext context)
@@ -782,7 +789,7 @@ namespace RevitCommandBridge
             IList<ElementId> targets = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
             if (targets.Count == 0)
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             View view = ResolveGraphicsView(context, step.Arguments);
             OverrideGraphicSettings overrides = BuildOverrides(step.Arguments);
@@ -805,7 +812,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 设置视图类别图形替换�?
+        /// 设置视图类别图形替换。
         /// Set graphic overrides for a category in a view.
         /// </summary>
         public static Dictionary<string, object> SetCategoryOverrides(PlanStep step, PlanExecutionContext context)
@@ -813,7 +820,7 @@ namespace RevitCommandBridge
             object rawCategory = PlanValues.Get(step.Arguments, "category", "category_id");
             if (rawCategory == null)
             {
-                throw new BridgeCommandException("set_category_overrides 缺少 category�?);
+                throw new BridgeCommandException("set_category_overrides 缺少 category。");
             }
             var lookup = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             lookup["category"] = rawCategory;
@@ -838,7 +845,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 管理视图过滤器（添加、移除、删除、清除）�?
+        /// 管理视图过滤器（添加、移除、删除、清除）。
         /// Manage view filters (add, remove, delete, or clear).
         /// </summary>
         public static Dictionary<string, object> ManageViewFilters(PlanStep step, PlanExecutionContext context)
@@ -853,12 +860,12 @@ namespace RevitCommandBridge
                 case "clear":
                     return ModifyViewFilter(step, context, action);
                 default:
-                    throw new BridgeCommandException("manage_view_filters.action 仅支�?add、remove、delete、clear�?);
+                    throw new BridgeCommandException("manage_view_filters.action 仅支持 add、remove、delete、clear。");
             }
         }
 
         /// <summary>
-        /// 添加视图过滤器（可附带类别、规则和图形替换）�?
+        /// 添加视图过滤器（可附带类别、规则和图形替换）。
         /// Add a view filter with optional categories, rules, and graphic overrides.
         /// </summary>
         private static Dictionary<string, object> AddViewFilter(PlanStep step, PlanExecutionContext context)
@@ -866,7 +873,7 @@ namespace RevitCommandBridge
             string name = PlanValues.String(step.Arguments, null, "name", "filter_name");
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new BridgeCommandException("manage_view_filters.add 需�?name�?);
+                throw new BridgeCommandException("manage_view_filters.add 需要 name。");
             }
             List<string> categoryTokens = new List<string>();
             object rawCategories = PlanValues.Get(step.Arguments, "categories", "category");
@@ -883,7 +890,7 @@ namespace RevitCommandBridge
             }
             if (categoryTokens.Count == 0)
             {
-                throw new BridgeCommandException("manage_view_filters.add 需�?categories 数组�?);
+                throw new BridgeCommandException("manage_view_filters.add 需要 categories 数组。");
             }
             var categoryIds = new List<ElementId>();
             foreach (string token in categoryTokens)
@@ -905,7 +912,7 @@ namespace RevitCommandBridge
             View view = ResolveGraphicsView(context, step.Arguments);
             if (view == null)
             {
-                throw new BridgeCommandException("manage_view_filters 需�?view_id（或存在活动视图）�?);
+                throw new BridgeCommandException("manage_view_filters 需要 view_id（或存在活动视图）。");
             }
             data["view_id"] = view.Id.GetValue();
             data["view_name"] = view.Name;
@@ -943,7 +950,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 修改视图过滤器（�?action 执行移除或删除操作）�?
+        /// 修改视图过滤器（按 action 执行移除或删除操作）。
         /// Modify a view filter (remove or delete by action).
         /// </summary>
         private static Dictionary<string, object> ModifyViewFilter(
@@ -952,7 +959,7 @@ namespace RevitCommandBridge
             View view = ResolveGraphicsView(context, step.Arguments);
             if (view == null)
             {
-                throw new BridgeCommandException("manage_view_filters 需�?view_id（或存在活动视图）�?);
+                throw new BridgeCommandException("manage_view_filters 需要 view_id（或存在活动视图）。");
             }
             var data = new Dictionary<string, object>
             {
@@ -991,7 +998,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 解析过滤�?ID（按 filter_id �?filter_name 查找）�?
+        /// 解析过滤器 ID（按 filter_id 或 filter_name 查找）。
         /// Resolve a filter ElementId by filter_id or filter_name.
         /// </summary>
         private static ElementId ResolveFilterId(PlanStep step, PlanExecutionContext context, View view)
@@ -1009,13 +1016,13 @@ namespace RevitCommandBridge
                     string.Equals(candidate.Name, name, StringComparison.OrdinalIgnoreCase));
             if (filter == null)
             {
-                throw new BridgeCommandException("找不到视图过滤器：�? + name + "”�?);
+                throw new BridgeCommandException("找不到视图过滤器：“" + name + "”。");
             }
             return filter.Id;
         }
 
         /// <summary>
-        /// 根据规则构�?ElementParameterFilter（组合参数相等条件）�?
+        /// 根据规则构造 ElementParameterFilter（组合参数相等条件）。
         /// Build an ElementParameterFilter from rule definitions (parameter equals conditions).
         /// </summary>
         private static ElementFilter BuildElementFilter(
@@ -1029,13 +1036,13 @@ namespace RevitCommandBridge
                 string parameterName = PlanValues.String(rule, null, "parameter", "parameter_name");
                 if (string.IsNullOrWhiteSpace(parameterName))
                 {
-                    throw new BridgeCommandException("rules[].parameter 不能为空�?);
+                    throw new BridgeCommandException("rules[].parameter 不能为空。");
                 }
                 ElementId parameterId = FindParameterIdForCategories(document, categoryIds, parameterName);
                 object equals = PlanValues.Get(rule, "equals", "value");
                 if (equals == null)
                 {
-                    throw new BridgeCommandException("rules[].equals 不能为空�?);
+                    throw new BridgeCommandException("rules[].equals 不能为空。");
                 }
                 filterRules.Add(CreateEqualsRule(parameterId, equals, parameterName));
             }
@@ -1043,7 +1050,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建参数相等过滤器规则（支持布尔、整数、浮点数、字符串类型的值）�?
+        /// 创建参数相等过滤器规则（支持布尔、整数、浮点数、字符串类型的值）。
         /// Create a parameter equals filter rule supporting bool, int, double, and string value types.
         /// </summary>
         private static FilterRule CreateEqualsRule(ElementId parameterId, object value, string parameterName)
@@ -1059,15 +1066,31 @@ namespace RevitCommandBridge
             }
             if (value is double || value is float || value is decimal)
             {
+#if REVIT2022_OR_GREATER
 return ParameterFilterRuleFactory.CreateEqualsRule(
                     parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
+#else
+                return new FilterStringRule(
+                    new ParameterValueProvider(parameterId),
+                    new FilterStringEquals(),
+                    Convert.ToString(value, CultureInfo.InvariantCulture),
+                    false);
+#endif
             }
+#if REVIT2022_OR_GREATER
             return ParameterFilterRuleFactory.CreateEqualsRule(
                 parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
+#else
+            return new FilterStringRule(
+                new ParameterValueProvider(parameterId),
+                new FilterStringEquals(),
+                Convert.ToString(value, CultureInfo.InvariantCulture),
+                false);
+#endif
         }
 
         /// <summary>
-        /// 在给定类别中查找参数 ID（先查实例参数，再查类型参数）�?
+        /// 在给定类别中查找参数 ID（先查实例参数，再查类型参数）。
         /// Find a parameter ElementId across given categories (instance first, then type).
         /// </summary>
         private static ElementId FindParameterIdForCategories(
@@ -1095,26 +1118,26 @@ return ParameterFilterRuleFactory.CreateEqualsRule(
                 }
             }
             throw new BridgeCommandException(
-                "类别元素上找不到参数�? + parameterName + "”，无法构造过滤器规则�?);
+                "类别元素上找不到参数“" + parameterName + "”，无法构造过滤器规则。");
         }
 
         /// <summary>
-        /// 设置平面视图的视图范围（顶部、剖切面、底部、视图深度）�?
+        /// 设置平面视图的视图范围（顶部、剖切面、底部、视图深度）。
         /// Set the view range of a plan view (top, cut plane, bottom, view depth).
         /// </summary>
         public static Dictionary<string, object> SetViewRange(PlanStep step, PlanExecutionContext context)
         {
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
-            if (viewId == ElementId.InvalidElementId)
+            if (viewId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
             }
             ViewPlan viewPlan = context.Document.GetElement(viewId) as ViewPlan;
             if (viewPlan == null || viewPlan.IsTemplate)
             {
-                throw new BridgeCommandException("set_view_range �?view_id 必须指向平面视图�?);
+                throw new BridgeCommandException("set_view_range 的 view_id 必须指向平面视图。");
             }
-            // 视图范围有四个槽位：顶部、剖切面、底部、视图深度，对应 PlanViewPlane 枚举�?
+            // 视图范围有四个槽位：顶部、剖切面、底部、视图深度，对应 PlanViewPlane 枚举值
             // Four view range slots: top, cut plane, bottom, view depth, mapped to PlanViewPlane enum values
             var slots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1139,7 +1162,7 @@ return ParameterFilterRuleFactory.CreateEqualsRule(
             if (slotSpecs.Count == 0)
             {
                 throw new BridgeCommandException(
-                    "set_view_range 至少提供一个槽位：top、cut_plane、bottom、view_depth（{level/level_id, offset_mm}）�?);
+                    "set_view_range 至少提供一个槽位：top、cut_plane、bottom、view_depth（{level/level_id, offset_mm}）。");
             }
             var data = new Dictionary<string, object>
             {
@@ -1183,7 +1206,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 管理明细表字段（添加、移除、隐藏、显示字段；添加过滤器、排序、设置逐项列举）�?
+        /// 管理明细表字段（添加、移除、隐藏、显示字段；添加过滤器、排序、设置逐项列举）。
         /// Manage schedule fields (add, remove, hide, show field; add filter, sort, set itemized).
         /// </summary>
         public static Dictionary<string, object> ManageScheduleFields(PlanStep step, PlanExecutionContext context)
@@ -1191,22 +1214,22 @@ range.SetOffset((PlanViewPlane)slot.Key,
             string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(action))
             {
-                throw new BridgeCommandException("manage_schedule_fields 缺少 action（add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized）�?);
+                throw new BridgeCommandException("manage_schedule_fields 缺少 action（add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized）。");
             }
             ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "target");
-            if (scheduleId == ElementId.InvalidElementId)
+            if (scheduleId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置明细表引用尚无真实 ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置明细表引用尚无真实 ID。" } };
             }
             ViewSchedule schedule = context.Document.GetElement(scheduleId) as ViewSchedule;
             if (schedule == null || schedule.IsTemplate)
             {
-                throw new BridgeCommandException("manage_schedule_fields �?schedule_id 必须指向明细表�?);
+                throw new BridgeCommandException("manage_schedule_fields 的 schedule_id 必须指向明细表。");
             }
             ScheduleDefinition definition = schedule.Definition;
             if (definition == null)
             {
-                throw new BridgeCommandException("明细表没有可编辑的字段定义�?);
+                throw new BridgeCommandException("明细表没有可编辑的字段定义。");
             }
             string fieldName = PlanValues.String(step.Arguments, null, "field", "parameter", "parameter_name", "heading");
             var data = new Dictionary<string, object>
@@ -1226,7 +1249,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 {
                     if (string.IsNullOrWhiteSpace(fieldName))
                     {
-                        throw new BridgeCommandException("add_field 需�?field（参数名）�?);
+                        throw new BridgeCommandException("add_field 需要 field（参数名）。");
                     }
                     bool isInstance = PlanValues.Boolean(step.Arguments, true, "is_instance", "instance");
                     ScheduleField addedField = AddScheduleField(context.Document, definition, fieldName, isInstance);
@@ -1245,7 +1268,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                     int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
                     {
-                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"�?);
+                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"。");
                     }
                     if (action == "remove_field")
                     {
@@ -1261,12 +1284,12 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 {
                     if (string.IsNullOrWhiteSpace(fieldName))
                     {
-                        throw new BridgeCommandException("add_filter 需�?field（参数名）�?);
+                        throw new BridgeCommandException("add_filter 需要 field（参数名）。");
                     }
                     object equals = PlanValues.Get(step.Arguments, "equals", "value");
                     if (equals == null)
                     {
-                        throw new BridgeCommandException("add_filter 需�?equals 值�?);
+                        throw new BridgeCommandException("add_filter 需要 equals 值。");
                     }
                     int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
@@ -1276,7 +1299,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                         index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                         if (index < 0)
                         {
-                            throw new BridgeCommandException("未能定位新增字段�? + fieldName);
+                            throw new BridgeCommandException("未能定位新增字段：" + fieldName);
                         }
                     }
                     ScheduleField field = definition.GetField(index);
@@ -1287,12 +1310,12 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 {
                     if (string.IsNullOrWhiteSpace(fieldName))
                     {
-                        throw new BridgeCommandException("sort 需�?field（参数名）�?);
+                        throw new BridgeCommandException("sort 需要 field（参数名）。");
                     }
                     int index = FindScheduleFieldIndex(context.Document, definition, fieldName);
                     if (index < 0)
                     {
-                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"�?);
+                        throw new BridgeCommandException("明细表中找不到字段\"" + fieldName + "\"。");
                     }
                     definition.AddSortGroupField(new ScheduleSortGroupField(
                         definition.GetField(index).FieldId));
@@ -1303,7 +1326,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                     break;
                 default:
                     throw new BridgeCommandException(
-                        "manage_schedule_fields.action 仅支�?add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized�?);
+                        "manage_schedule_fields.action 仅支持 add_field、remove_field、hide_field、show_field、add_filter、sort、set_itemized。");
             }
             data["field_count"] = definition.GetFieldCount();
             data["element_ids"] = new[] { scheduleId.GetValue() };
@@ -1311,7 +1334,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 添加明细表字段（自动判断实例参数或类型参数）�?
+        /// 添加明细表字段（自动判断实例参数或类型参数）。
         /// Add a schedule field, automatically detecting instance vs. type parameter.
         /// </summary>
         private static ScheduleField AddScheduleField(
@@ -1345,7 +1368,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 if (typeParameter == null)
                 {
                     throw new BridgeCommandException(
-                        "明细表类别元素上找不到参数�? + parameterName + "”�?);
+                        "明细表类别元素上找不到参数“" + parameterName + "”。");
                 }
                 fieldType = ScheduleFieldType.ElementType;
                 parameterId = typeParameter.Id;
@@ -1354,7 +1377,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 按列标题或可调度字段名称查找明细表字段索引�?
+        /// 按列标题或可调度字段名称查找明细表字段索引。
         /// Find the index of a schedule field by column heading or schedulable field name.
         /// </summary>
         private static int FindScheduleFieldIndex(Document document, ScheduleDefinition definition, string fieldName)
@@ -1381,7 +1404,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 构造明细表字段相等过滤器（支持布尔、整数、浮点数、字符串类型）�?
+        /// 构造明细表字段相等过滤器（支持布尔、整数、浮点数、字符串类型）。
         /// Build a schedule filter with equals comparison, supporting multiple value types.
         /// </summary>
         private static ScheduleFilter BuildScheduleFilter(ScheduleField field, object value)
@@ -1405,7 +1428,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 管理图形资源（线样式、填充图案）�?
+        /// 管理图形资源（线样式、填充图案）。
         /// Manage graphics resources (line styles, fill patterns).
         /// </summary>
         public static Dictionary<string, object> ManageGraphicsResources(PlanStep step, PlanExecutionContext context)
@@ -1415,7 +1438,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             string name = PlanValues.String(step.Arguments, null, "name");
             if (string.IsNullOrWhiteSpace(name))
             {
-                throw new BridgeCommandException("manage_graphics_resources 需�?name�?);
+                throw new BridgeCommandException("manage_graphics_resources 需要 name。");
             }
             var data = new Dictionary<string, object>
             {
@@ -1424,7 +1447,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             };
             if (action != "line_style" && action != "fill_pattern")
             {
-                throw new BridgeCommandException("manage_graphics_resources.action 仅支�?line_style、fill_pattern�?);
+                throw new BridgeCommandException("manage_graphics_resources.action 仅支持 line_style、fill_pattern。");
             }
             if (context.Preview)
             {
@@ -1435,12 +1458,12 @@ range.SetOffset((PlanViewPlane)slot.Key,
             {
                 case "line_style":
                 {
-                    // 检查线样式是否已存在，不存在则新建子类�?
+                    // 检查线样式是否已存在，不存在则新建子类别
                     // Check if line style already exists; create new subcategory if not
                     Category lineStyles = context.Document.Settings.Categories.get_Item(BuiltInCategory.OST_Lines);
                     if (lineStyles == null)
                     {
-                        throw new BridgeCommandException("当前项目没有线样式类别�?);
+                        throw new BridgeCommandException("当前项目没有线样式类别。");
                     }
                     Category existing = null;
                     foreach (Category sub in lineStyles.SubCategories)
@@ -1502,7 +1525,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 解析图形视图（排除明细表、浏览器等非图形视图类型）�?
+        /// 解析图形视图（排除明细表、浏览器等非图形视图类型）。
         /// Resolve a graphics view, rejecting non-graphical view types (schedule, browser, etc.).
         /// </summary>
         private static View ResolveGraphicsView(PlanExecutionContext context, IDictionary<string, object> arguments)
@@ -1523,7 +1546,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 从参数字典构造图形替换设置（颜色、线宽、半色调、表面透明度、表面颜色）�?
+        /// 从参数字典构造图形替换设置（颜色、线宽、半色调、表面透明度、表面颜色）。
         /// Build OverrideGraphicSettings from arguments (line color, weight, halftone, surface transparency, surface color).
         /// </summary>
         private static OverrideGraphicSettings BuildOverrides(IDictionary<string, object> arguments)
@@ -1540,7 +1563,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 int weight = PlanValues.Integer(arguments, 1, "line_weight", "projection_line_weight");
                 if (weight < 1 || weight > 16)
                 {
-                    throw new BridgeCommandException("line_weight 必须�?1 �?16 之间�?);
+                    throw new BridgeCommandException("line_weight 必须在 1 到 16 之间。");
                 }
                 overrides.SetProjectionLineWeight(weight);
             }
@@ -1554,7 +1577,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 int transparency = PlanValues.Integer(arguments, 0, "surface_transparency", "transparency");
                 if (transparency < 0 || transparency > 100)
                 {
-                    throw new BridgeCommandException("surface_transparency 必须�?0 �?100 之间�?);
+                    throw new BridgeCommandException("surface_transparency 必须在 0 到 100 之间。");
                 }
                 overrides.SetSurfaceTransparency(transparency);
             }
@@ -1567,7 +1590,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 从字典解�?Color（R/G/B �?0-255）�?
+        /// 从字典解析 Color（R/G/B 值 0-255）。
         /// Parse a Color from a dictionary with r/g/b values (0-255).
         /// </summary>
         private static Color ReadColor(object raw, string fieldName)
@@ -1578,13 +1601,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             int b = PlanValues.Integer(values, 0, "b", "blue");
             if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
             {
-                throw new BridgeCommandException(fieldName + " �?r/g/b 必须�?0 �?255 之间�?);
+                throw new BridgeCommandException(fieldName + " 的 r/g/b 必须在 0 到 255 之间。");
             }
             return new Color((byte)r, (byte)g, (byte)b);
         }
 
         /// <summary>
-        /// 导出视图或明细表为图片、DWG、DXF、IFC、CSV 格式�?
+        /// 导出视图或明细表为图片、DWG、DXF、IFC、CSV 格式。
         /// Export views or schedules to image, DWG, DXF, IFC, or CSV format.
         /// </summary>
         public static Dictionary<string, object> Export(PlanStep step, PlanExecutionContext context)
@@ -1592,13 +1615,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             string format = PlanValues.String(step.Arguments, null, "format", "kind", "export_kind");
             if (string.IsNullOrWhiteSpace(format))
             {
-                throw new BridgeCommandException("export 缺少 format（image、dwg、ifc、schedule_csv）�?);
+                throw new BridgeCommandException("export 缺少 format（image、dwg、ifc、schedule_csv）。");
             }
             format = format.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
             string output = PlanValues.String(step.Arguments, null, "output_path", "path", "file");
             if (string.IsNullOrWhiteSpace(output))
             {
-                throw new BridgeCommandException("export.output_path 不能为空�?);
+                throw new BridgeCommandException("export.output_path 不能为空。");
             }
             string fullOutput = Path.GetFullPath(output);
             var data = new Dictionary<string, object>
@@ -1609,7 +1632,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             if (format == "schedule_csv" || format == "schedule")
             {
                 ElementId scheduleId = context.ResolveSingleElementId(step.Arguments, "schedule_id", "schedule", "view_id", "view");
-                if (scheduleId == ElementId.InvalidElementId)
+                if (scheduleId.GetValue() == ElementId.InvalidElementId.GetValue())
                 {
                     data["deferred"] = true;
                     return data;
@@ -1617,7 +1640,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 ViewSchedule schedule = context.Document.GetElement(scheduleId) as ViewSchedule;
                 if (schedule == null)
                 {
-                    throw new BridgeCommandException("export schedule_csv 需要有效的 schedule_id�?);
+                    throw new BridgeCommandException("export schedule_csv 需要有效的 schedule_id。");
                 }
                 data["schedule_id"] = scheduleId.GetValue();
                 if (context.Preview) return data;
@@ -1641,7 +1664,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             if (format == "image" || format == "png" || format == "jpg" || format == "jpeg")
             {
                 EnsureOutputDirectory(Path.GetDirectoryName(fullOutput));
-                // 配置图片导出选项：自动选择导出范围、缩放方式和分辨�?
+                // 配置图片导出选项：自动选择导出范围、缩放方式和分辨率
                 // Configure image export options: auto-select export range, zoom mode, and resolution
                 var options = new ImageExportOptions
                 {
@@ -1660,7 +1683,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             }
             if (format == "dwg" || format == "dxf")
             {
-                if (viewIds.Count == 0) throw new BridgeCommandException("export dwg/dxf 至少需�?view_ids，或显式�?active_view=true�?);
+                if (viewIds.Count == 0) throw new BridgeCommandException("export dwg/dxf 至少需要 view_ids，或显式传 active_view=true。");
                 string folder = Path.GetDirectoryName(fullOutput);
                 EnsureOutputDirectory(folder);
                 string fileName = Path.GetFileNameWithoutExtension(fullOutput);
@@ -1687,11 +1710,11 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 data["exported"] = true;
                 return data;
             }
-            throw new BridgeCommandException("export.format 仅支�?image、png、jpg、dwg、dxf、ifc、schedule_csv�?);
+            throw new BridgeCommandException("export.format 仅支持 image、png、jpg、dwg、dxf、ifc、schedule_csv。");
         }
 
         /// <summary>
-        /// 保存或另存当�?Revit 项目文档�?
+        /// 保存或另存当前 Revit 项目文档。
         /// Save or save-as the current Revit project document.
         /// </summary>
         public static Dictionary<string, object> SaveDocument(PlanStep step, PlanExecutionContext context)
@@ -1708,18 +1731,18 @@ range.SetOffset((PlanViewPlane)slot.Key,
             };
             if (string.IsNullOrWhiteSpace(target))
             {
-                throw new BridgeCommandException("当前项目尚未保存；请�?save_document.path�?rvt）�?);
+                throw new BridgeCommandException("当前项目尚未保存；请传 save_document.path（.rvt）。");
             }
             if (context.Preview) return data;
             if (!string.IsNullOrWhiteSpace(requestedPath))
             {
                 if (!string.Equals(Path.GetExtension(target), ".rvt", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new BridgeCommandException("save_document.path 必须�?.rvt 结尾�?);
+                    throw new BridgeCommandException("save_document.path 必须以 .rvt 结尾。");
                 }
                 if (File.Exists(target) && !overwrite)
                 {
-                    throw new BridgeCommandException("目标文件已存在；设置 overwrite_file=true 才会覆盖�? + target);
+                    throw new BridgeCommandException("目标文件已存在；设置 overwrite_file=true 才会覆盖：" + target);
                 }
                 EnsureOutputDirectory(Path.GetDirectoryName(target));
                 context.Document.SaveAs(target, new SaveAsOptions { OverwriteExistingFile = overwrite });
@@ -1734,7 +1757,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 解析视图参数（支持按 ID 或者名称查找，可回退到活动视图）�?
+        /// 解析视图参数（支持按 ID 或者名称查找，可回退到活动视图）。
         /// Resolve a view from arguments by ID or name, optionally falling back to the active view.
         /// </summary>
         private static View ResolveView(
@@ -1743,7 +1766,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             bool useActiveWhenMissing,
             params string[] names)
         {
-            // 若参数未提供�?useActiveWhenMissing �?true，回退到活动视�?
+            // 若参数未提供且 useActiveWhenMissing 为 true，回退到活动视图
             // Fall back to active view when arguments are missing and useActiveWhenMissing is true
             object raw = PlanValues.Get(arguments, names);
             if (raw == null && useActiveWhenMissing)
@@ -1751,20 +1774,20 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 return context.Document.ActiveView;
             }
             ElementId id = context.ResolveSingleElementId(arguments, names);
-            if (id == ElementId.InvalidElementId)
+            if (id.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return null;
             }
             View view = context.Document.GetElement(id) as View;
             if (view == null || view.IsTemplate)
             {
-                throw new BridgeCommandException("参数 " + string.Join("/", names) + " 必须指向有效非样板视图�?);
+                throw new BridgeCommandException("参数 " + string.Join("/", names) + " 必须指向有效非样板视图。");
             }
             return view;
         }
 
         /// <summary>
-        /// 解析视图族类型（�?type_id 或�?type_name 查找，匹配指�?ViewFamily）�?
+        /// 解析视图族类型（按 type_id 或者 type_name 查找，匹配指定 ViewFamily）。
         /// Resolve a ViewFamilyType by type_id or type_name, matching the required ViewFamily.
         /// </summary>
         private static ViewFamilyType ResolveViewFamilyType(
@@ -1772,7 +1795,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             IDictionary<string, object> arguments,
             ViewFamily family)
         {
-            // 优先�?type_id 直接查找，否则按 type_name 模糊匹配
+            // 优先按 type_id 直接查找，否则按 type_name 模糊匹配
             // Prefer direct lookup by type_id, then fall back to fuzzy match by type_name
             object rawId = PlanValues.Get(arguments, "type_id", "view_type_id");
             if (rawId != null)
@@ -1781,7 +1804,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
                     new ElementId(RevitLookups.ParsePositiveId(rawId, "view_type_id"))) as ViewFamilyType;
                 if (type == null || type.ViewFamily != family)
                 {
-                    throw new BridgeCommandException("view_type_id 不是 " + family + " 视图类型�?);
+                    throw new BridgeCommandException("view_type_id 不是 " + family + " 视图类型。");
                 }
                 return type;
             }
@@ -1798,13 +1821,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             ViewFamilyType result = candidates.FirstOrDefault();
             if (result == null)
             {
-                throw new BridgeCommandException("当前项目没有可用 " + family + " 视图类型�?);
+                throw new BridgeCommandException("当前项目没有可用 " + family + " 视图类型。");
             }
             return result;
         }
 
         /// <summary>
-        /// 解析文字注释类型（按 text_type_id �?text_type_name 查找）�?
+        /// 解析文字注释类型（按 text_type_id 或 text_type_name 查找）。
         /// Resolve a TextNoteType by text_type_id or text_type_name.
         /// </summary>
         private static TextNoteType ResolveTextNoteType(Document document, IDictionary<string, object> arguments)
@@ -1814,7 +1837,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
             {
                 TextNoteType byId = document.GetElement(
                     new ElementId(RevitLookups.ParsePositiveId(rawId, "text_type_id"))) as TextNoteType;
-                if (byId == null) throw new BridgeCommandException("text_type_id 不是有效文字类型�?);
+                if (byId == null) throw new BridgeCommandException("text_type_id 不是有效文字类型。");
                 return byId;
             }
             string requested = PlanValues.String(arguments, null, "text_type", "text_type_name", "type");
@@ -1825,23 +1848,23 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 types = types.Where(type => string.Equals(type.Name, requested, StringComparison.OrdinalIgnoreCase));
             }
             TextNoteType result = types.FirstOrDefault();
-            if (result == null) throw new BridgeCommandException("当前项目没有可用文字类型�?);
+            if (result == null) throw new BridgeCommandException("当前项目没有可用文字类型。");
             return result;
         }
 
         /// <summary>
-        /// 解析必填的正值元�?ID�?
+        /// 解析必填的正值元素 ID。
         /// Resolve a required positive ElementId from arguments.
         /// </summary>
         private static ElementId ResolvePositiveElementId(IDictionary<string, object> arguments, params string[] names)
         {
             object raw = PlanValues.Get(arguments, names);
-            if (raw == null) throw new BridgeCommandException("缺少参数�? + string.Join("/", names));
+            if (raw == null) throw new BridgeCommandException("缺少参数：" + string.Join("/", names));
             return new ElementId(RevitLookups.ParsePositiveId(raw, names[0]));
         }
 
         /// <summary>
-        /// 解析可选的元素 ID（返�?null 表示未提供）�?
+        /// 解析可选的元素 ID（返回 null 表示未提供）。
         /// Resolve an optional ElementId from arguments (returns null if not provided).
         /// </summary>
         private static ElementId ResolveOptionalElementId(IDictionary<string, object> arguments, params string[] names)
@@ -1851,7 +1874,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 读取向量参数（默认值可选，零向量会抛出异常）�?
+        /// 读取向量参数（默认值可选，零向量会抛出异常）。
         /// Read a vector from arguments with a default value; zero vectors are rejected.
         /// </summary>
         private static XYZ ReadVector(IDictionary<string, object> arguments, string fieldName, XYZ defaultValue)
@@ -1863,12 +1886,12 @@ range.SetOffset((PlanViewPlane)slot.Key,
                 PlanValues.Number(value, 0.0, "x"),
                 PlanValues.Number(value, 0.0, "y"),
                 PlanValues.Number(value, 0.0, "z"));
-            if (vector.GetLength() < 1e-8) throw new BridgeCommandException(fieldName + " 不能为零向量�?);
+            if (vector.GetLength() < 1e-8) throw new BridgeCommandException(fieldName + " 不能为零向量。");
             return vector;
         }
 
         /// <summary>
-        /// 从单点字典解�?XYZ（x/y 必填毫米值，z 可选）�?
+        /// 从单点字典解析 XYZ（x/y 必填毫米值，z 可选）。
         /// Parse an XYZ point from a dictionary (x/y required in mm, z optional).
         /// </summary>
         private static XYZ ReadPointValue(IDictionary<string, object> value)
@@ -1880,7 +1903,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// �?XYZ 向量转换为可序列化的字典（四舍五入到 6 位小数）�?
+        /// 将 XYZ 向量转换为可序列化的字典（四舍五入到 6 位小数）。
         /// Convert an XYZ vector to a serializable dictionary (rounded to 6 decimal places).
         /// </summary>
         private static Dictionary<string, object> VectorData(XYZ value)
@@ -1894,7 +1917,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 读取裁剪�?BoundingBoxXYZ（需�?min �?max 两个点，�?min 须小�?max）�?
+        /// 读取裁剪框 BoundingBoxXYZ（需要 min 和 max 两个点，且 min 须小于 max）。
         /// Read a BoundingBoxXYZ from arguments (requires min and max points; min must be less than max).
         /// </summary>
         private static BoundingBoxXYZ ReadBoundingBox(IDictionary<string, object> arguments, params string[] names)
@@ -1904,13 +1927,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             XYZ max = PlanValues.Point(raw, "max");
             if (min.X >= max.X || min.Y >= max.Y || min.Z >= max.Z)
             {
-                throw new BridgeCommandException("crop_box.min 必须小于 crop_box.max�?);
+                throw new BridgeCommandException("crop_box.min 必须小于 crop_box.max。");
             }
             return new BoundingBoxXYZ { Min = min, Max = max, Transform = Transform.Identity };
         }
 
         /// <summary>
-        /// 解析导出目标视图 ID 列表（支持按 view_ids �?active_view 标记）�?
+        /// 解析导出目标视图 ID 列表（支持按 view_ids 或 active_view 标记）。
         /// Resolve target view IDs for export (by explicit view_ids or active_view flag).
         /// </summary>
         private static List<ElementId> ResolveExportViewIds(PlanStep step, PlanExecutionContext context)
@@ -1925,7 +1948,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 解析图片导出格式（默�?PNG �?JPEGMedium）�?
+        /// 解析图片导出格式（默认 PNG 或 JPEGMedium）。
         /// Parse the image file type for export (defaults to PNG or JPEGMedium).
         /// </summary>
         private static ImageFileType ParseImageFileType(string format, IDictionary<string, object> arguments)
@@ -1938,13 +1961,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             ImageFileType result;
             if (!Enum.TryParse(requested, true, out result))
             {
-                throw new BridgeCommandException("image_type 无效�? + requested);
+                throw new BridgeCommandException("image_type 无效：" + requested);
             }
             return result;
         }
 
         /// <summary>
-        /// 从参数中读取字符串列表（去空、去空白）�?
+        /// 从参数中读取字符串列表（去空、去空白）。
         /// Read a list of strings from arguments (trimmed, empty entries filtered).
         /// </summary>
         private static List<string> ReadStringList(IDictionary<string, object> arguments, params string[] names)
@@ -1962,7 +1985,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 从参数中解析枚举值（不区分大小写），失败时返回默认值�?
+        /// 从参数中解析枚举值（不区分大小写），失败时返回默认值。
         /// Parse an enum value from arguments (case-insensitive), returning a default on missing.
         /// </summary>
         private static T ParseEnum<T>(IDictionary<string, object> arguments, string name, T defaultValue)
@@ -1973,13 +1996,13 @@ range.SetOffset((PlanViewPlane)slot.Key,
             T result;
             if (!Enum.TryParse(Convert.ToString(raw, CultureInfo.InvariantCulture), true, out result))
             {
-                throw new BridgeCommandException(name + " 无效�? + raw);
+                throw new BridgeCommandException(name + " 无效：" + raw);
             }
             return result;
         }
 
         /// <summary>
-        /// 设置视图名称（非空时重命名）�?
+        /// 设置视图名称（非空时重命名）。
         /// Set the view name if the provided name is not null or whitespace.
         /// </summary>
         private static void SetOptionalViewName(View view, string name)
@@ -1988,7 +2011,7 @@ range.SetOffset((PlanViewPlane)slot.Key,
         }
 
         /// <summary>
-        /// 应用可选的视图样板（按 ID 或名称查找）�?
+        /// 应用可选的视图样板（按 ID 或名称查找）。
         /// Apply an optional view template, resolved by ID or name.
         /// </summary>
         private static void ApplyOptionalViewTemplate(PlanExecutionContext context, View view, object rawTemplateId, string templateName)
@@ -2007,29 +2030,29 @@ range.SetOffset((PlanViewPlane)slot.Key,
                         string.Equals(candidate.Name, templateName, StringComparison.OrdinalIgnoreCase));
                 if (template == null)
                 {
-                    throw new BridgeCommandException("找不到视图样板：�? + templateName + "”�?);
+                    throw new BridgeCommandException("找不到视图样板：“" + templateName + "”。");
                 }
                 templateId = template.Id;
             }
-            if (templateId == ElementId.InvalidElementId)
+            if (templateId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return;
             }
             View templateElement = context.Document.GetElement(templateId) as View;
             if (templateElement == null || !templateElement.IsTemplate)
             {
-                throw new BridgeCommandException("view_template_id 必须指向视图样板�?);
+                throw new BridgeCommandException("view_template_id 必须指向视图样板。");
             }
             view.ViewTemplateId = templateId;
         }
 
         /// <summary>
-        /// 确保输出目录存在（不存在则创建）�?
+        /// 确保输出目录存在（不存在则创建）。
         /// Ensure the output directory exists, creating it if necessary.
         /// </summary>
         private static void EnsureOutputDirectory(string directory)
         {
-            if (string.IsNullOrWhiteSpace(directory)) throw new BridgeCommandException("输出路径缺少有效目录�?);
+            if (string.IsNullOrWhiteSpace(directory)) throw new BridgeCommandException("输出路径缺少有效目录。");
             Directory.CreateDirectory(directory);
         }
     }

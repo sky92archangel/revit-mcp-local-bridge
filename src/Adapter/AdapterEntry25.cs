@@ -1,3 +1,5 @@
+using Autodesk.Revit.UI;
+
 namespace RevitCommandBridge
 {
     public sealed class RevitCommandBridgeApp25 : RevitCommandBridgeApp

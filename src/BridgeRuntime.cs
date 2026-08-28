@@ -1,12 +1,17 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using Autodesk.Revit.UI;
+
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// 桥接运行时，管理 Revit 内部的轮询、事件触发、心跳和请求处理生命周期�?
+    /// 桥接运行时，管理 Revit 内部的轮询、事件触发、心跳和请求处理生命周期。
     /// Bridge runtime managing the polling, event triggering, heartbeat, and request processing lifecycle inside Revit.
     /// </summary>
     internal sealed class BridgeRuntime : IDisposable
     {
-        // 轮询间隔 300ms，心跳最小间�?2000ms
+        // 轮询间隔 300ms，心跳最小间隔 2000ms
         // Polling interval 300ms, minimum heartbeat interval 2000ms
         private const int PollIntervalMilliseconds = 300;
         private const int HeartbeatIntervalMilliseconds = 2000;
@@ -24,7 +29,7 @@ namespace RevitCommandBridge
         private int _disposeStarted;
 
         /// <summary>
-        /// 私有构造：初始化文件队列、恢复未完成的请求、启动轮询定时器�?
+        /// 私有构造：初始化文件队列、恢复未完成的请求、启动轮询定时器。
         /// Private constructor: initializes the file queue, recovers unfinished requests, starts the poll timer.
         /// </summary>
         private BridgeRuntime()
@@ -36,20 +41,20 @@ namespace RevitCommandBridge
             _lastHeartbeatUtc = DateTime.MinValue;
             // 发布初始就绪心跳
             // Publish initial ready heartbeat
-            PublishHeartbeat(true, "running", "Revit 命令桥已就绪�?, new Dictionary<string, object>
+            PublishHeartbeat(true, "running", "Revit 命令桥已就绪。", new Dictionary<string, object>
             {
                 { "revit_api", BridgeBuildInfo.RevitVersion },
                 { "protocol", BridgeProtocol.Version },
                 { "recovered_requests", recovered }
             });
-            // 延迟 250ms 后开始定期轮�?
+            // 延迟 250ms 后开始定期轮询
             // Start periodic polling after a 250ms initial delay
             _pollTimer = new Timer(PollQueue, null, 250, PollIntervalMilliseconds);
             BridgeFileQueue.AppendLog("runtime started recovered=" + recovered);
         }
 
         /// <summary>
-        /// 启动运行时（单例模式）�?
+        /// 启动运行时（单例模式）。
         /// Starts the runtime (singleton pattern).
         /// </summary>
         public static BridgeRuntime Start()
@@ -66,7 +71,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取当前运行时实例�?
+        /// 获取当前运行时实例。
         /// Gets the current runtime instance.
         /// </summary>
         public static BridgeRuntime Current
@@ -81,7 +86,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 运行时是否正在运行�?
+        /// 运行时是否正在运行。
         /// Whether the runtime is running.
         /// </summary>
         public static bool IsRunning
@@ -94,7 +99,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 通知队列有新的请求需要处理。若已有待处理请求且无挂起事件，则触�?ExternalEvent�?
+        /// 通知队列有新的请求需要处理。若已有待处理请求且无挂起事件，则触发 ExternalEvent。
         /// Signals the queue that new requests are pending. Raises ExternalEvent if there are pending requests and no event is already pending.
         /// </summary>
         public void SignalQueue()
@@ -104,7 +109,7 @@ namespace RevitCommandBridge
                 return;
             }
 
-            PublishHeartbeat(false, "running", "Revit 命令桥正在等待命令�?, null);
+            PublishHeartbeat(false, "running", "Revit 命令桥正在等待命令。", null);
             if (!BridgeFileQueue.HasPendingRequests())
             {
                 return;
@@ -120,7 +125,7 @@ namespace RevitCommandBridge
                     }
 
                     ExternalEventRequest result = _externalEvent.Raise();
-                    // 仅记录非正常接受的结�?
+                    // 仅记录非正常接受的结果
                     // Only log results that are not accepted or pending
                     if (result != ExternalEventRequest.Accepted && result != ExternalEventRequest.Pending)
                     {
@@ -135,7 +140,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// �?Revit API 上下文中处理一个请求：领取、执行、完成�?
+        /// 在 Revit API 上下文中处理一个请求：领取、执行、完成。
         /// Processes one request in the Revit API context: claim, execute, complete.
         /// </summary>
         public void ProcessOne(UIApplication uiApplication)
@@ -147,9 +152,9 @@ namespace RevitCommandBridge
             }
 
             BridgeResponse response;
-            // 更新心跳为忙碌状�?
+            // 更新心跳为忙碌状态
             // Update heartbeat to busy state
-            PublishHeartbeat(true, "busy", "Revit 正在执行命令�?, new Dictionary<string, object>
+            PublishHeartbeat(true, "busy", "Revit 正在执行命令。", new Dictionary<string, object>
             {
                 { "request_id", request.Id },
                 { "operation", request.Operation },
@@ -161,14 +166,14 @@ namespace RevitCommandBridge
             }
             catch (BridgeCommandException ex)
             {
-                // 业务逻辑异常直接包装为失败响�?
+                // 业务逻辑异常直接包装为失败响应
                 // Wrap business logic exceptions directly into a failure response
                 response = BridgeResponse.Failure(ex.Message, null);
             }
             catch (Exception ex)
             {
                 BridgeFileQueue.AppendLog("execution failed id=" + request.Id + " error=" + ex);
-                response = BridgeResponse.Failure("Revit 执行失败�? + ex.Message, null);
+                response = BridgeResponse.Failure("Revit 执行失败：" + ex.Message, null);
             }
 
             try
@@ -180,9 +185,9 @@ namespace RevitCommandBridge
                 BridgeFileQueue.AppendLog("completion failed id=" + request.Id + " error=" + ex);
             }
 
-            // 执行完成后恢复就绪心�?
+            // 执行完成后恢复就绪心跳
             // Restore ready heartbeat after execution
-            PublishHeartbeat(true, "running", "Revit 命令桥正在等待命令�?, new Dictionary<string, object>
+            PublishHeartbeat(true, "running", "Revit 命令桥正在等待命令。", new Dictionary<string, object>
             {
                 { "last_request_id", request.Id },
                 { "last_operation", request.Operation },
@@ -192,12 +197,12 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 释放运行时资源：停止轮询、销毁外部事件、发布停止状态�?
+        /// 释放运行时资源：停止轮询、销毁外部事件、发布停止状态。
         /// Disposes runtime resources: stops polling, destroys the external event, publishes stopped status.
         /// </summary>
         public void Dispose()
         {
-            // 确保只执行一次释�?
+            // 确保只执行一次释放
             // Ensure disposal runs only once
             if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
             {
@@ -211,7 +216,7 @@ namespace RevitCommandBridge
                 _externalEvent.Dispose();
             }
 
-            BridgeFileQueue.PublishStatus("stopped", "Revit 命令桥已停止�?, new Dictionary<string, object>
+            BridgeFileQueue.PublishStatus("stopped", "Revit 命令桥已停止。", new Dictionary<string, object>
             {
                 { "revit_api", BridgeBuildInfo.RevitVersion },
                 { "protocol", BridgeProtocol.Version }
@@ -229,7 +234,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 定时器回调，触发队列信号检查�?
+        /// 定时器回调，触发队列信号检查。
         /// Timer callback that triggers the queue signal check.
         /// </summary>
         private void PollQueue(object state)
@@ -245,13 +250,13 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 发布心跳状态（含频率控制，force=true 时跳过频率限制）�?
+        /// 发布心跳状态（含频率控制，force=true 时跳过频率限制）。
         /// Publishes heartbeat status with rate limiting; force=true bypasses the rate limit.
         /// </summary>
         private void PublishHeartbeat(bool force, string state, string message, Dictionary<string, object> data, UIApplication uiApplication = null)
         {
             DateTime now = DateTime.UtcNow;
-            // 非强制模式下检查心跳频率限�?
+            // 非强制模式下检查心跳频率限制
             // Check heartbeat rate limit in non-force mode
             if (!force && (now - _lastHeartbeatUtc).TotalMilliseconds < HeartbeatIntervalMilliseconds)
             {
@@ -267,7 +272,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将当前文档状态（标题、路径、只读等）附加到心跳数据中�?
+        /// 将当前文档状态（标题、路径、只读等）附加到心跳数据中。
         /// Attaches the current document status (title, path, read-only, etc.) to the heartbeat data.
         /// </summary>
         private void AddDocumentStatus(Dictionary<string, object> data, UIApplication uiApplication)
@@ -308,7 +313,7 @@ namespace RevitCommandBridge
                     return;
                 }
 
-                // 将缓存的状态合并到心跳数据�?
+                // 将缓存的状态合并到心跳数据中
                 // Merge cached document status into the heartbeat data
                 foreach (KeyValuePair<string, object> pair in _lastDocumentStatus)
                 {
@@ -319,7 +324,7 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// Revit 外部事件处理器，�?Revit API 上下文中调用 BridgeRuntime.ProcessOne�?
+    /// Revit 外部事件处理器，在 Revit API 上下文中调用 BridgeRuntime.ProcessOne。
     /// Revit external event handler that calls BridgeRuntime.ProcessOne within the Revit API context.
     /// </summary>
     internal sealed class BridgeEventHandler : IExternalEventHandler
@@ -327,7 +332,7 @@ namespace RevitCommandBridge
         private readonly BridgeRuntime _runtime;
 
         /// <summary>
-        /// 用运行时引用构造事件处理器�?
+        /// 用运行时引用构造事件处理器。
         /// Constructs the event handler with a reference to the runtime.
         /// </summary>
         public BridgeEventHandler(BridgeRuntime runtime)
@@ -336,7 +341,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// �?Revit 主线程中执行一次请求处理�?
+        /// 在 Revit 主线程中执行一次请求处理。
         /// Executes one request processing cycle on the Revit main thread.
         /// </summary>
         public void Execute(UIApplication app)
@@ -345,7 +350,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 返回事件处理器名称，用于 Revit 内部标识�?
+        /// 返回事件处理器名称，用于 Revit 内部标识。
         /// Returns the event handler name for Revit internal identification.
         /// </summary>
         public string GetName()

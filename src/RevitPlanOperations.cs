@@ -1,12 +1,16 @@
+using System.Collections.Generic;
+
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// PlanStep 操作调度器。根�?step.Operation 分发到对应实现类�?    /// PlanStep operation dispatcher. Routes to the appropriate implementation class based on step.Operation.
+    /// PlanStep 操作调度器。根据 step.Operation 分发到对应实现类。
+    /// PlanStep operation dispatcher. Routes to the appropriate implementation class based on step.Operation.
     /// </summary>
     internal static class RevitPlanOperations
     {
         /// <summary>
-        /// 执行一步计划原子操作。根据操作名称路由到 RevitPlanQueries、RevitPlanCreations、RevitPlanMutations �?RevitOutputOperations�?        /// Execute a single plan step operation. Routes to RevitPlanQueries, RevitPlanCreations, RevitPlanMutations, or RevitOutputOperations by operation name.
+        /// 执行一步计划原子操作。根据操作名称路由到 RevitPlanQueries、RevitPlanCreations、RevitPlanMutations 或 RevitOutputOperations。
+        /// Execute a single plan step operation. Routes to RevitPlanQueries, RevitPlanCreations, RevitPlanMutations, or RevitOutputOperations by operation name.
         /// </summary>
         public static Dictionary<string, object> Execute(PlanStep step, PlanExecutionContext context)
         {

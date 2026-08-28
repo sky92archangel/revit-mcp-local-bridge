@@ -1,9 +1,13 @@
+using System;
+using System.Collections.Generic;
+using Autodesk.Revit.DB;
+
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// create_swept_shape 的截面轮廓工厂：矩形 / 圆形 / 马蹄形及其环版�?
-    /// 输入�?mm 规格 + 放样路径起点的局部坐标系，输出可直接交给
-    /// GeometryCreationUtilities.CreateSweptGeometry �?CurveLoop 列表�?
+    /// create_swept_shape 的截面轮廓工厂：矩形 / 圆形 / 马蹄形及其环版。
+    /// 输入为 mm 规格 + 放样路径起点的局部坐标系，输出可直接交给
+    /// GeometryCreationUtilities.CreateSweptGeometry 的 CurveLoop 列表。
     /// Section profile factory for create_swept_shape: rect / circle / horseshoe and their ring variants.
     /// Inputs are mm dimensions + local coordinate system at the sweep path start.
     /// Output is a list of CurveLoops ready for GeometryCreationUtilities.CreateSweptGeometry.
@@ -11,14 +15,14 @@ namespace RevitCommandBridge
     internal static class RevitSectionFactory
     {
         /// <summary>
-        /// 由点列表构建放样路径 CurveLoop�?
+        /// 由点列表构建放样路径 CurveLoop。
         /// Build a sweep path CurveLoop from a list of points.
         /// </summary>
         public static CurveLoop BuildPath(List<XYZ> points, string fieldName)
         {
             if (points == null || points.Count < 2)
             {
-                throw new BridgeCommandException(fieldName + " 至少需�?2 个点�?);
+                throw new BridgeCommandException(fieldName + " 至少需要 2 个点。");
             }
             var loop = new CurveLoop();
             for (int index = 0; index < points.Count - 1; index++)
@@ -27,7 +31,7 @@ namespace RevitCommandBridge
                 XYZ end = points[index + 1];
                 if (start.DistanceTo(end) < 1e-8)
                 {
-                    throw new BridgeCommandException(fieldName + " 不能包含重合的相邻点�?);
+                    throw new BridgeCommandException(fieldName + " 不能包含重合的相邻点。");
                 }
                 loop.Append(Line.CreateBound(start, end));
             }
@@ -35,7 +39,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建截面轮廓 CurveLoop 列表（支�?rect、rect_ring、circle、circle_ring、horseshoe）�?
+        /// 创建截面轮廓 CurveLoop 列表（支持 rect、rect_ring、circle、circle_ring、horseshoe）。
         /// Create a list of section profile CurveLoops (supports rect, rect_ring, circle, circle_ring, horseshoe).
         /// </summary>
         public static IList<CurveLoop> CreateSectionLoops(
@@ -48,7 +52,7 @@ namespace RevitCommandBridge
         {
             if (widthMm <= 0.0 || heightMm <= 0.0)
             {
-                throw new BridgeCommandException("截面 width_mm / height_mm 必须大于 0�?);
+                throw new BridgeCommandException("截面 width_mm / height_mm 必须大于 0。");
             }
             XYZ normal = tangent.Normalize();
             XYZ axisV = normal.CrossProduct(XYZ.BasisZ);
@@ -86,19 +90,19 @@ namespace RevitCommandBridge
                 case "horseshoe":
                     if (heightMm <= widthMm / 2.0)
                     {
-                        throw new BridgeCommandException("马蹄�?height_mm 必须大于 width_mm / 2�?);
+                        throw new BridgeCommandException("马蹄形 height_mm 必须大于 width_mm / 2。");
                     }
                     loops.Add(HorseshoeLoop(origin, axisU, axisV, widthMm, heightMm));
                     break;
                 default:
                     throw new BridgeCommandException(
-                        "create_swept_shape.section.shape 仅支�?rect、rect_ring、circle、circle_ring、horseshoe�?);
+                        "create_swept_shape.section.shape 仅支持 rect、rect_ring、circle、circle_ring、horseshoe。");
             }
             return loops;
         }
 
         /// <summary>
-        /// 将局部坐�?(xMm, yMm) 映射到世界坐标�?
+        /// 将局部坐标 (xMm, yMm) 映射到世界坐标。
         /// Map local coordinates (xMm, yMm) to world coordinates.
         /// </summary>
         private static XYZ Map(XYZ origin, XYZ axisU, XYZ axisV, double xMm, double yMm)
@@ -112,11 +116,11 @@ namespace RevitCommandBridge
         {
             if (wallThicknessMm <= 0.0)
             {
-                throw new BridgeCommandException("环形截面需�?wall_thickness_mm 大于 0�?);
+                throw new BridgeCommandException("环形截面需要 wall_thickness_mm 大于 0。");
             }
             if (wallThicknessMm * 2.0 >= Math.Min(outerWidth, outerHeight))
             {
-                throw new BridgeCommandException("wall_thickness_mm 过大：内环不存在�?);
+                throw new BridgeCommandException("wall_thickness_mm 过大：内环不存在。");
             }
         }
 

@@ -1,12 +1,25 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
+using Autodesk.Revit.DB.Electrical;
+using Autodesk.Revit.DB.Mechanical;
+using Autodesk.Revit.DB.Plumbing;
+using Autodesk.Revit.UI;
+
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// 所�?Revit 查询操作的实现�?    /// Implementation of all Revit query operations.
+    /// 所有 Revit 查询操作的实现。
+    /// Implementation of all Revit query operations.
     /// </summary>
     internal static class RevitPlanQueries
     {
         /// <summary>
-        /// 查询当前文档基本信息（标题、路径、是否族文档等）�?        /// Query basic document information (title, path, is family document, etc.).
+        /// 查询当前文档基本信息（标题、路径、是否族文档等）。
+        /// Query basic document information (title, path, is family document, etc.).
         /// </summary>
         public static Dictionary<string, object> QueryDocument(PlanExecutionContext context)
         {
@@ -24,7 +37,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目目录（标高、类别、视图、图纸、明细表、族、类型等）�?        /// Query the project catalog (levels, categories, views, sheets, schedules, families, types, etc.).
+        /// 查询项目目录（标高、类别、视图、图纸、明细表、族、类型等）。
+        /// Query the project catalog (levels, categories, views, sheets, schedules, families, types, etc.).
         /// </summary>
         public static Dictionary<string, object> QueryCatalog(PlanStep step, PlanExecutionContext context)
         {
@@ -62,12 +76,13 @@ namespace RevitCommandBridge
                 case "mep_types":
                     return QueryTypes(context.Document, step.Arguments, limit, true);
                 default:
-                    throw new BridgeCommandException("query_catalog.kind 仅支�?levels、categories、views、sheets、schedules、view_types、title_blocks、text_types、filled_region_types、revisions、families、types、mep_types、links�?);
+                    throw new BridgeCommandException("query_catalog.kind 仅支持 levels、categories、views、sheets、schedules、view_types、title_blocks、text_types、filled_region_types、revisions、families、types、mep_types、links。");
             }
         }
 
         /// <summary>
-        /// 查询元素列表。支持按 ID、类别、名称、族名称、类型名称过滤�?        /// Query a list of elements. Supports filtering by ID, category, name, family name, type name.
+        /// 查询元素列表。支持按 ID、类别、名称、族名称、类型名称过滤。
+        /// Query a list of elements. Supports filtering by ID, category, name, family name, type name.
         /// </summary>
         public static Dictionary<string, object> QueryElements(PlanStep step, PlanExecutionContext context)
         {
@@ -83,13 +98,14 @@ namespace RevitCommandBridge
             IEnumerable<Element> candidates;
             if (requestedIds != null)
             {
-                // 按指�?ID 列表查询
+                // 按指定 ID 列表查询
                 IList<ElementId> ids = context.ResolveElementIds(step.Arguments, "element_ids", "ids");
                 candidates = ids.Select(document.GetElement).Where(element => element != null);
             }
             else
             {
-                // 使用收集器遍历文�?                FilteredElementCollector collector = new FilteredElementCollector(document);
+                // 使用收集器遍历文档
+                FilteredElementCollector collector = new FilteredElementCollector(document);
                 object category = PlanValues.Get(step.Arguments, "category", "category_id");
                 if (category != null)
                 {
@@ -119,7 +135,8 @@ namespace RevitCommandBridge
                     .IndexOf(familyName, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
-            // 限制数量并判断是否截�?            List<Element> materialized = candidates.OrderBy(element => element.Id.GetValue()).Take(limit + 1).ToList();
+            // 限制数量并判断是否截断
+            List<Element> materialized = candidates.OrderBy(element => element.Id.GetValue()).Take(limit + 1).ToList();
             bool truncated = materialized.Count > limit;
             if (truncated)
             {
@@ -140,7 +157,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询元素的几何引用（�?�?全部）。返回持久化引用（stable representation）�?        /// Query geometric references of elements (faces/edges/all). Returns stable reference representations.
+        /// 查询元素的几何引用（面/边/全部）。返回持久化引用（stable representation）。
+        /// Query geometric references of elements (faces/edges/all). Returns stable reference representations.
         /// </summary>
         public static Dictionary<string, object> QueryReferences(PlanStep step, PlanExecutionContext context)
         {
@@ -150,7 +168,7 @@ namespace RevitCommandBridge
                 .Trim().ToLowerInvariant();
             if (kind != "all" && kind != "faces" && kind != "edges")
             {
-                throw new BridgeCommandException("query_references.kind 仅支�?all、faces、edges�?);
+                throw new BridgeCommandException("query_references.kind 仅支持 all、faces、edges。");
             }
             var options = new Options
             {
@@ -166,7 +184,7 @@ namespace RevitCommandBridge
                 Element element = context.Document.GetElement(id);
                 if (element == null)
                 {
-                    throw new BridgeCommandException("找不�?element_id=" + id.GetValue() + " 对应元素�?);
+                    throw new BridgeCommandException("找不到 element_id=" + id.GetValue() + " 对应元素。");
                 }
                 var references = new List<Dictionary<string, object>>();
                 CollectStableReferences(
@@ -191,19 +209,20 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询元素的参数列表（支持按名称过滤和只读筛选）�?        /// Query the parameter list of an element (supports name filtering and read-only filter).
+        /// 查询元素的参数列表（支持按名称过滤和只读筛选）。
+        /// Query the parameter list of an element (supports name filtering and read-only filter).
         /// </summary>
         public static Dictionary<string, object> QueryParameters(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
-            if (targetId == ElementId.InvalidElementId)
+            if (targetId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element element = context.Document.GetElement(targetId);
             if (element == null)
             {
-                throw new BridgeCommandException("query_parameters 找不�?element_id=" + targetId.GetValue() + "�?);
+                throw new BridgeCommandException("query_parameters 找不到 element_id=" + targetId.GetValue() + "。");
             }
             string nameContains = PlanValues.String(step.Arguments, null, "name_contains", "name_like");
             bool includeReadOnly = PlanValues.Boolean(step.Arguments, true, "include_read_only");
@@ -250,24 +269,25 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询元素的几何信息（包围盒、实体摘要或面详情）�?        /// Query geometric information of an element (bounding box, solid summary, or face details).
+        /// 查询元素的几何信息（包围盒、实体摘要或面详情）。
+        /// Query geometric information of an element (bounding box, solid summary, or face details).
         /// </summary>
         public static Dictionary<string, object> QueryGeometry(PlanStep step, PlanExecutionContext context)
         {
             ElementId targetId = context.ResolveSingleElementId(step.Arguments, "element_id", "element", "id", "targets");
-            if (targetId == ElementId.InvalidElementId)
+            if (targetId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element element = context.Document.GetElement(targetId);
             if (element == null)
             {
-                throw new BridgeCommandException("query_geometry 找不�?element_id=" + targetId.GetValue() + "�?);
+                throw new BridgeCommandException("query_geometry 找不到 element_id=" + targetId.GetValue() + "。");
             }
             string detail = PlanValues.String(step.Arguments, "bbox", "detail", "level").Trim().ToLowerInvariant();
             if (detail != "bbox" && detail != "solid_summary" && detail != "faces")
             {
-                throw new BridgeCommandException("query_geometry.detail 仅支�?bbox、solid_summary、faces�?);
+                throw new BridgeCommandException("query_geometry.detail 仅支持 bbox、solid_summary、faces。");
             }
             int limit = ReadLimit(step.Arguments);
 
@@ -276,7 +296,8 @@ namespace RevitCommandBridge
                 { "element_id", targetId.GetValue() },
                 { "detail", detail }
             };
-            // 获取包围盒信�?            BoundingBoxXYZ box = element.get_BoundingBox(null);
+            // 获取包围盒信息
+            BoundingBoxXYZ box = element.get_BoundingBox(null);
             if (box != null)
             {
                 data["bounding_box"] = new Dictionary<string, object>
@@ -313,7 +334,8 @@ namespace RevitCommandBridge
                 return data;
             }
 
-            // 面级别详�?            var faces = new List<Dictionary<string, object>>();
+            // 面级别详情
+            var faces = new List<Dictionary<string, object>>();
             bool truncated = false;
             foreach (Solid solid in solids)
             {
@@ -348,7 +370,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询房间。支持按点查询或列出所有房间�?        /// Query rooms. Supports point-based lookup or listing all rooms.
+        /// 查询房间。支持按点查询或列出所有房间。
+        /// Query rooms. Supports point-based lookup or listing all rooms.
         /// </summary>
         public static Dictionary<string, object> QueryRoom(PlanStep step, PlanExecutionContext context)
         {
@@ -369,7 +392,8 @@ namespace RevitCommandBridge
                 return pointData;
             }
 
-            // 列出所有房�?            var rooms = new FilteredElementCollector(document)
+            // 列出所有房间
+            var rooms = new FilteredElementCollector(document)
                 .OfClass(typeof(Room))
                 .Cast<Room>()
                 .Where(room => room.IsValidObject)
@@ -390,28 +414,29 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询 MEP 网络拓扑。从种子元素 BFS 遍历连接器图�?        /// Query MEP network topology. BFS traversal of the connector graph from a seed element.
+        /// 查询 MEP 网络拓扑。从种子元素 BFS 遍历连接器图。
+        /// Query MEP network topology. BFS traversal of the connector graph from a seed element.
         /// </summary>
         public static Dictionary<string, object> QueryMepNetwork(PlanStep step, PlanExecutionContext context)
         {
             ElementId seedId = context.ResolveSingleElementId(step.Arguments, "element_id", "seed", "target", "targets");
-            if (seedId == ElementId.InvalidElementId)
+            if (seedId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             Element seed = context.Document.GetElement(seedId);
             if (seed == null)
             {
-                throw new BridgeCommandException("query_mep_network 找不�?element_id=" + seedId.GetValue() + "�?);
+                throw new BridgeCommandException("query_mep_network 找不到 element_id=" + seedId.GetValue() + "。");
             }
             int maxDepth = PlanValues.Integer(step.Arguments, 100, "max_depth");
             if (maxDepth < 1 || maxDepth > 2000)
             {
-                throw new BridgeCommandException("max_depth 必须�?1 �?2000 之间�?);
+                throw new BridgeCommandException("max_depth 必须在 1 到 2000 之间。");
             }
             if (GetConnectorManager(seed) == null)
             {
-                throw new BridgeCommandException("种子元素没有 MEP 连接件（必须是管�?/ 风管 / 线管 / 桥架 / 配件）�?);
+                throw new BridgeCommandException("种子元素没有 MEP 连接件（必须是管道 / 风管 / 线管 / 桥架 / 配件）。");
             }
 
             var visited = new HashSet<ElementId>();
@@ -419,7 +444,8 @@ namespace RevitCommandBridge
             var edgeKeys = new HashSet<string>(StringComparer.Ordinal);
             var queue = new Queue<ElementId>();
             queue.Enqueue(seedId);
-            // BFS 遍历连接器网�?            while (queue.Count > 0 && visited.Count < maxDepth)
+            // BFS 遍历连接器网络
+            while (queue.Count > 0 && visited.Count < maxDepth)
             {
                 ElementId currentId = queue.Dequeue();
                 if (!visited.Add(currentId))
@@ -445,7 +471,8 @@ namespace RevitCommandBridge
                         {
                             continue;
                         }
-                        // 使用有序 pair 去重�?                        long low = Math.Min(currentId.GetValue(), owner.Id.GetValue());
+                        // 使用有序 pair 去重边
+                        long low = Math.Min(currentId.GetValue(), owner.Id.GetValue());
                         long high = Math.Max(currentId.GetValue(), owner.Id.GetValue());
                         string key = low + "-" + high;
                         if (edgeKeys.Add(key))
@@ -497,7 +524,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取元素�?MEP ConnectorManager（MEPCurve �?FamilyInstance）�?        /// Get the MEP ConnectorManager for an element (MEPCurve or FamilyInstance).
+        /// 获取元素的 MEP ConnectorManager（MEPCurve 或 FamilyInstance）。
+        /// Get the MEP ConnectorManager for an element (MEPCurve or FamilyInstance).
         /// </summary>
         private static ConnectorManager GetConnectorManager(Element element)
         {
@@ -515,7 +543,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取元素所属的系统名称（管道系统或风管系统）�?        /// Read the system name of an element (piping or duct system).
+        /// 读取元素所属的系统名称（管道系统或风管系统）。
+        /// Read the system name of an element (piping or duct system).
         /// </summary>
         private static string ReadSystemName(Element element)
         {
@@ -544,7 +573,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取参数分组名称（当前简化实现返回空字符串）�?        /// Get the parameter group name (currently simplified, returns empty string).
+        /// 获取参数分组名称（当前简化实现返回空字符串）。
+        /// Get the parameter group name (currently simplified, returns empty string).
         /// </summary>
         private static string GetParameterGroupName(Parameter parameter)
         {
@@ -552,24 +582,25 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询平面视图的视图范围（�?剖切�?�?视图深度）�?        /// Query the view range of a plan view (top/cut plane/bottom/view depth).
+        /// 查询平面视图的视图范围（顶/剖切面/底/视图深度）。
+        /// Query the view range of a plan view (top/cut plane/bottom/view depth).
         /// </summary>
         public static Dictionary<string, object> QueryViewRange(PlanStep step, PlanExecutionContext context)
         {
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view");
-            if (viewId == ElementId.InvalidElementId)
+            if (viewId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置视图引用尚无真实 ID。" } };
             }
             ViewPlan viewPlan = context.Document.GetElement(viewId) as ViewPlan;
             if (viewPlan == null || viewPlan.IsTemplate)
             {
-                throw new BridgeCommandException("query_view_range �?view_id 必须指向平面视图�?);
+                throw new BridgeCommandException("query_view_range 的 view_id 必须指向平面视图。");
             }
             PlanViewRange range = viewPlan.GetViewRange();
             var ranges = new Dictionary<string, object>();
             ranges["top"] = RangeSlotData(context.Document, range, 0);       // 顶部 Top
-            ranges["cut_plane"] = RangeSlotData(context.Document, range, 1); // 剖切�?CutPlane
+            ranges["cut_plane"] = RangeSlotData(context.Document, range, 1); // 剖切面 CutPlane
             ranges["bottom"] = RangeSlotData(context.Document, range, 2);    // 底部 Bottom
             ranges["view_depth"] = RangeSlotData(context.Document, range, 3);// 视图深度 ViewDepth
             return new Dictionary<string, object>
@@ -581,13 +612,14 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取视图范围中单个槽位的数据（标高和偏移）�?        /// Get data for a single plan view range slot (level and offset).
+        /// 获取视图范围中单个槽位的数据（标高和偏移）。
+        /// Get data for a single plan view range slot (level and offset).
         /// </summary>
         private static Dictionary<string, object> RangeSlotData(Document document, PlanViewRange range, int rangeType)
         {
             int slot = rangeType;
             ElementId levelId = range.GetLevelId((PlanViewPlane)slot);
-            Level level = levelId == ElementId.InvalidElementId
+            Level level = levelId.GetValue() == ElementId.InvalidElementId.GetValue()
                 ? null
                 : document.GetElement(levelId) as Level;
             return new Dictionary<string, object>
@@ -599,7 +631,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 检查元素碰撞。支持在候选集合内两两比较，或与指定集合交叉比较，以及链接文件碰撞�?        /// Check interferences between elements. Supports pairwise within candidates, cross-comparison with a set, and link document interference.
+        /// 检查元素碰撞。支持在候选集合内两两比较，或与指定集合交叉比较，以及链接文件碰撞。
+        /// Check interferences between elements. Supports pairwise within candidates, cross-comparison with a set, and link document interference.
         /// </summary>
         public static Dictionary<string, object> CheckInterferences(PlanStep step, PlanExecutionContext context)
         {
@@ -607,7 +640,7 @@ namespace RevitCommandBridge
             IList<ElementId> candidates = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
             if (candidates.Count == 0)
             {
-                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真�?ID�? } };
+                return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
             bool includeLinks = PlanValues.Boolean(step.Arguments, false, "include_links", "links");
             int limit = ReadLimit(step.Arguments);
@@ -619,7 +652,7 @@ namespace RevitCommandBridge
             }
             if (against == null && candidates.Count > 500)
             {
-                throw new BridgeCommandException("候选元素超�?500 个；请提�?against_ids 缩小对照集�?);
+                throw new BridgeCommandException("候选元素超过 500 个；请提供 against_ids 缩小对照集。");
             }
 
             var interferences = new List<Dictionary<string, object>>();
@@ -627,7 +660,8 @@ namespace RevitCommandBridge
 
             if (against == null)
             {
-                // 候选集合内两两碰撞检�?                for (int i = 0; i < candidates.Count && !truncated; i++)
+                // 候选集合内两两碰撞检测
+                for (int i = 0; i < candidates.Count && !truncated; i++)
                 {
                     for (int j = i + 1; j < candidates.Count; j++)
                     {
@@ -644,7 +678,8 @@ namespace RevitCommandBridge
             }
             else
             {
-                // 候选集与对照集交叉碰撞检�?                foreach (ElementId candidateId in candidates)
+                // 候选集与对照集交叉碰撞检测
+                foreach (ElementId candidateId in candidates)
                 {
                     foreach (ElementId againstId in against)
                     {
@@ -669,7 +704,8 @@ namespace RevitCommandBridge
             }
 
             var linkDocuments = new List<Dictionary<string, object>>();
-            // 链接文件碰撞检测：将候选元素转换到链接文档坐标系后检�?            if (includeLinks)
+            // 链接文件碰撞检测：将候选元素转换到链接文档坐标系后检查
+            if (includeLinks)
             {
                 foreach (RevitLinkInstance link in new FilteredElementCollector(document)
                     .OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>())
@@ -755,7 +791,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 添加一条碰撞记录（含可选的相交体积）�?        /// Add an interference record (with optional overlap volume).
+        /// 添加一条碰撞记录（含可选的相交体积）。
+        /// Add an interference record (with optional overlap volume).
         /// </summary>
         private static bool AddInterference(
             Document document,
@@ -804,13 +841,15 @@ namespace RevitCommandBridge
             }
             catch
             {
-                // 布尔求交失败不影�?存在碰撞"的结论，仅省略体积�?            }
+                // 布尔求交失败不影响"存在碰撞"的结论，仅省略体积。
+            }
             interferences.Add(item);
             return true;
         }
 
         /// <summary>
-        /// 查找元素的主实体（体积最大的 Solid）�?        /// Find the primary solid of an element (the one with the largest volume).
+        /// 查找元素的主实体（体积最大的 Solid）。
+        /// Find the primary solid of an element (the one with the largest volume).
         /// </summary>
         private static Solid FindPrimarySolid(Element element)
         {
@@ -826,7 +865,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 递归收集几何中的实体（Solid），跳过被实例化几何中的递归�?        /// Recursively collect solids from geometry, descending into instances.
+        /// 递归收集几何中的实体（Solid），跳过被实例化几何中的递归。
+        /// Recursively collect solids from geometry, descending into instances.
         /// </summary>
         private static void CollectSolids(GeometryElement geometry, ICollection<Solid> target)
         {
@@ -851,7 +891,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取元素的类别名称�?        /// Get the category name of an element.
+        /// 获取元素的类别名称。
+        /// Get the category name of an element.
         /// </summary>
         private static string CategoryName(Element element)
         {
@@ -859,7 +900,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 构造房间数据字典（含边界）�?        /// Build a room data dictionary (including boundary segments).
+        /// 构造房间数据字典（含边界）。
+        /// Build a room data dictionary (including boundary segments).
         /// </summary>
         private static Dictionary<string, object> RoomData(Room room)
         {
@@ -886,13 +928,15 @@ namespace RevitCommandBridge
             }
             catch
             {
-                // 无边界（未放置的房间）时省略 boundary�?            }
+                // 无边界（未放置的房间）时省略 boundary。
+            }
             data["boundary"] = boundary;
             return data;
         }
 
         /// <summary>
-        /// 查询链接文件（RevitLinkInstance）�?        /// Query linked files (RevitLinkInstance).
+        /// 查询链接文件（RevitLinkInstance）。
+        /// Query linked files (RevitLinkInstance).
         /// </summary>
         private static Dictionary<string, object> QueryLinks(Document document, int limit)
         {
@@ -914,7 +958,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的标高列表�?        /// Query the list of levels in the project.
+        /// 查询项目中的标高列表。
+        /// Query the list of levels in the project.
         /// </summary>
         private static Dictionary<string, object> QueryLevels(Document document, int limit)
         {
@@ -938,7 +983,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的类别列表�?        /// Query the list of categories in the project.
+        /// 查询项目中的类别列表。
+        /// Query the list of categories in the project.
         /// </summary>
         private static Dictionary<string, object> QueryCategories(Document document, int limit)
         {
@@ -956,7 +1002,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的视图列表（非样板）�?        /// Query the list of views in the project (non-template).
+        /// 查询项目中的视图列表（非样板）。
+        /// Query the list of views in the project (non-template).
         /// </summary>
         private static Dictionary<string, object> QueryViews(Document document, int limit)
         {
@@ -979,7 +1026,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的图纸列表�?        /// Query the list of sheets in the project.
+        /// 查询项目中的图纸列表。
+        /// Query the list of sheets in the project.
         /// </summary>
         private static Dictionary<string, object> QuerySheets(Document document, int limit)
         {
@@ -999,7 +1047,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的明细表列表�?        /// Query the list of schedules in the project.
+        /// 查询项目中的明细表列表。
+        /// Query the list of schedules in the project.
         /// </summary>
         private static Dictionary<string, object> QuerySchedules(Document document, int limit)
         {
@@ -1021,7 +1070,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的视图族类型�?        /// Query the list of view family types in the project.
+        /// 查询项目中的视图族类型。
+        /// Query the list of view family types in the project.
         /// </summary>
         private static Dictionary<string, object> QueryViewTypes(Document document, int limit)
         {
@@ -1041,7 +1091,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的文字类型�?        /// Query the list of text note types in the project.
+        /// 查询项目中的文字类型。
+        /// Query the list of text note types in the project.
         /// </summary>
         private static Dictionary<string, object> QueryTextTypes(Document document, int limit)
         {
@@ -1060,7 +1111,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的填充区域类型�?        /// Query the list of filled region types in the project.
+        /// 查询项目中的填充区域类型。
+        /// Query the list of filled region types in the project.
         /// </summary>
         private static Dictionary<string, object> QueryFilledRegionTypes(Document document, int limit)
         {
@@ -1079,7 +1131,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的修订列表�?        /// Query the list of revisions in the project.
+        /// 查询项目中的修订列表。
+        /// Query the list of revisions in the project.
         /// </summary>
         private static Dictionary<string, object> QueryRevisions(Document document, int limit)
         {
@@ -1102,7 +1155,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// �?BuiltInCategory 查询族符号�?        /// Query family symbols by BuiltInCategory.
+        /// 按 BuiltInCategory 查询族符号。
+        /// Query family symbols by BuiltInCategory.
         /// </summary>
         private static Dictionary<string, object> QueryFamilySymbolsByCategory(
             Document document,
@@ -1114,7 +1168,7 @@ namespace RevitCommandBridge
             var items = new List<Dictionary<string, object>>();
             foreach (FamilySymbol type in new FilteredElementCollector(document)
                 .OfClass(typeof(FamilySymbol)).Cast<FamilySymbol>()
-                .Where(type => type.Category != null && type.Category.Id == categoryId)
+                .Where(type => type.Category != null && type.Category.Id.GetValue() == categoryId.GetValue())
                 .OrderBy(type => RevitLookups.FamilyName(type)).ThenBy(type => type.Name).Take(limit))
             {
                 items.Add(new Dictionary<string, object>
@@ -1128,7 +1182,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 递归收集几何中的稳定引用（面/边）�?        /// Recursively collect stable references (faces/edges) from geometry.
+        /// 递归收集几何中的稳定引用（面/边）。
+        /// Recursively collect stable references (faces/edges) from geometry.
         /// </summary>
         private static void CollectStableReferences(
             Document document,
@@ -1171,7 +1226,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 添加一个稳定引用记录�?        /// Add a stable reference record.
+        /// 添加一个稳定引用记录。
+        /// Add a stable reference record.
         /// </summary>
         private static void AddStableReference(
             Document document,
@@ -1194,11 +1250,13 @@ namespace RevitCommandBridge
             }
             catch
             {
-                // 有些导入或链接几何不提供可持久化引用；跳过即可�?            }
+                // 有些导入或链接几何不提供可持久化引用；跳过即可。
+            }
         }
 
         /// <summary>
-        /// 查询项目中的族列表（按名称筛选可选）�?        /// Query the list of families in the project (optional name filter).
+        /// 查询项目中的族列表（按名称筛选可选）。
+        /// Query the list of families in the project (optional name filter).
         /// </summary>
         private static Dictionary<string, object> QueryFamilies(
             Document document,
@@ -1229,7 +1287,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 查询项目中的类型列表（按名称、族名称、类别过滤），可选仅 MEP 类型�?        /// Query the list of types in the project (filtered by name, family, category), optionally MEP-only.
+        /// 查询项目中的类型列表（按名称、族名称、类别过滤），可选仅 MEP 类型。
+        /// Query the list of types in the project (filtered by name, family, category), optionally MEP-only.
         /// </summary>
         private static Dictionary<string, object> QueryTypes(
             Document document,
@@ -1246,7 +1305,7 @@ namespace RevitCommandBridge
             if (category != null)
             {
                 ElementId categoryId = RevitLookups.ResolveCategoryId(document, arguments, BuiltInCategory.OST_GenericModel);
-                types = types.Where(type => type.Category != null && type.Category.Id == categoryId);
+                types = types.Where(type => type.Category != null && type.Category.Id.GetValue() == categoryId.GetValue());
             }
             if (mepOnly)
             {
@@ -1277,7 +1336,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 判断 ElementType 是否�?MEP 类型�?        /// Check if an ElementType is an MEP type.
+        /// 判断 ElementType 是否为 MEP 类型。
+        /// Check if an ElementType is an MEP type.
         /// </summary>
         private static bool IsMepType(ElementType type)
         {
@@ -1286,7 +1346,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取元素的类型名称�?        /// Get the type name of an element.
+        /// 获取元素的类型名称。
+        /// Get the type name of an element.
         /// </summary>
         private static string TypeName(Document document, Element element)
         {
@@ -1299,7 +1360,8 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 获取元素的族名称�?        /// Get the family name of an element.
+        /// 获取元素的族名称。
+        /// Get the family name of an element.
         /// </summary>
         private static string FamilyName(Document document, Element element)
         {
@@ -1312,20 +1374,22 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取 limit 参数（范�?1-500，默�?100）�?        /// Read the limit parameter (range 1-500, default 100).
+        /// 读取 limit 参数（范围 1-500，默认 100）。
+        /// Read the limit parameter (range 1-500, default 100).
         /// </summary>
         private static int ReadLimit(IDictionary<string, object> arguments)
         {
             int limit = PlanValues.Integer(arguments, 100, "limit");
             if (limit < 1 || limit > 500)
             {
-                throw new BridgeCommandException("limit 必须�?1 �?500 之间�?);
+                throw new BridgeCommandException("limit 必须在 1 到 500 之间。");
             }
             return limit;
         }
 
         /// <summary>
-        /// 查询当前 Revit 用户选中的元素�?        /// Query the currently selected elements in the Revit UI.
+        /// 查询当前 Revit 用户选中的元素。
+        /// Query the currently selected elements in the Revit UI.
         /// </summary>
         public static Dictionary<string, object> QuerySelection(PlanStep step, PlanExecutionContext context)
         {
@@ -1359,14 +1423,15 @@ namespace RevitCommandBridge
 
             return new Dictionary<string, object>
             {
-                { "selected_ids", ids.Select(id => id.GetValue()).ToArray() },
+                { "selected_ids", ids.Select(id => (long)id.GetValue()).ToArray() },
                 { "count", ids.Count },
                 { "elements", elements }
             };
         }
 
         /// <summary>
-        /// 读取字符串列表参数（支持单个字符串或字符串数组）�?        /// Read a string list parameter (supports single string or string array).
+        /// 读取字符串列表参数（支持单个字符串或字符串数组）。
+        /// Read a string list parameter (supports single string or string array).
         /// </summary>
         private static List<string> ReadStringList(object value)
         {
@@ -1384,7 +1449,7 @@ namespace RevitCommandBridge
             IEnumerable enumerable = value as IEnumerable;
             if (enumerable == null)
             {
-                throw new BridgeCommandException("parameters 必须是字符串或字符串数组�?);
+                throw new BridgeCommandException("parameters 必须是字符串或字符串数组。");
             }
             foreach (object item in enumerable)
             {
