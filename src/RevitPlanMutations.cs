@@ -442,14 +442,6 @@ namespace RevitCommandBridge
                             switch (verb)
                             {
                                 case "add":
-#if REVIT2022_OR_GREATER
-                                    RevitParameterAdmin.AddFamilyParameter(
-                                        manager,
-                                        name,
-                                        PlanValues.String(item, "length", "type"),
-                                        PlanValues.String(item, "data", "group", "parameter_group"),
-                                        PlanValues.Boolean(item, false, "is_instance", "instance"));
-#else
                                     RevitParameterAdmin.AddFamilyParameter(
                                         manager,
                                         familyDocument,
@@ -457,7 +449,6 @@ namespace RevitCommandBridge
                                         PlanValues.String(item, "length", "type"),
                                         PlanValues.String(item, "data", "group", "parameter_group"),
                                         PlanValues.Boolean(item, false, "is_instance", "instance"));
-#endif
                                     break;
                                 case "rename":
                                     manager.RenameParameter(

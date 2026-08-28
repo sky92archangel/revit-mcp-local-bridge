@@ -198,14 +198,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
-#if REVIT2022_OR_GREATER
-            var floorProfile = new CurveLoop();
-            foreach (Curve c in profile)
-                floorProfile.Append(c);
-            Floor floor = Floor.Create(context.Document, new[] { floorProfile }, floorType.Id, level.Id, structural, null, 0.0);
-#else
-            Floor floor = context.Document.Create.NewFloor(profile, floorType, level, structural);
-#endif
+Floor floor = RevitApiExtensions.CreateFloor(context.Document, profile, floorType, level, structural);
             data["element_id"] = floor.Id.GetValue();
             data["element_ids"] = new[] { floor.Id.GetValue() };
             return data;

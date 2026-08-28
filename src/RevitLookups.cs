@@ -288,11 +288,7 @@ namespace RevitCommandBridge
             {
                 case StorageType.Double:
                     data["internal_value"] = parameter.AsDouble();
-#if REVIT2022_OR_GREATER
-data["display_unit_type"] = parameter.Definition.GetDataType()?.TypeId;
-#else
-data["display_unit_type"] = parameter.Definition.ParameterType.ToString();
-#endif
+data["display_unit_type"] = parameter.Definition.GetDisplayUnitType();
                     break;
                 case StorageType.Integer:
                     data["value"] = parameter.AsInteger();

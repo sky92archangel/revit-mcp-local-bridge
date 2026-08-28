@@ -11,7 +11,8 @@ namespace RevitCommandBridge
     /// <summary>
     /// 参数定义层（项目参数 / 共享参数 / 族参数）的类型与分组解析，
     /// 以及 manage_project_parameters 的实现。
-    /// 使用 ForgeTypeId（SpecTypeId / GroupTypeId）API。
+    /// R2022+ 使用 ForgeTypeId（SpecTypeId / GroupTypeId）API，
+    /// R2020–R2021 使用 ParameterType / BuiltInParameterGroup 枚举。
     /// </summary>
     internal static class RevitParameterAdmin
     {
@@ -88,11 +89,24 @@ namespace RevitCommandBridge
             }
         }
 
-#if REVIT2022_OR_GREATER
         /// <summary>
-        /// 将归一化的规格标记解析为 ForgeTypeId。 / Resolves a normalized spec token to a ForgeTypeId.
+        /// 向族管理器添加族参数（所有版本统一入口）。 / Adds a family parameter to the FamilyManager (unified entry for all versions).
         /// </summary>
-        public static ForgeTypeId ResolveSpec(string token)
+        public static FamilyParameter AddFamilyParameter(
+            FamilyManager manager,
+            Document familyDocument,
+            string name,
+            string typeToken,
+            string groupToken,
+            bool isInstance)
+        {
+#if REVIT2022_OR_GREATER
+            ForgeTypeId spec = ResolveSpecForFamily(typeToken);
+            ForgeTypeId group = ResolveGroupForFamily(groupToken);
+            return manager.AddParameter(name, group, spec, isInstance);
+        }
+
+        private static ForgeTypeId ResolveSpecForFamily(string token)
         {
             switch (NormalizeSpecToken(token))
             {
@@ -107,10 +121,7 @@ namespace RevitCommandBridge
             }
         }
 
-        /// <summary>
-        /// 将归一化的分组标记解析为 ForgeTypeId。 / Resolves a normalized group token to a ForgeTypeId.
-        /// </summary>
-        private static ForgeTypeId ResolveGroup(string token)
+        private static ForgeTypeId ResolveGroupForFamily(string token)
         {
             switch (NormalizeGroupToken(token))
             {
@@ -130,26 +141,16 @@ namespace RevitCommandBridge
                 default: return GroupTypeId.Data;
             }
         }
-
-        /// <summary>
-        /// 向族管理器添加族参数（R22+ ForgeTypeId 版本）。 / Adds a family parameter to the FamilyManager (R22+ ForgeTypeId version).
-        /// </summary>
-        public static FamilyParameter AddFamilyParameter(
-            FamilyManager manager,
-            string name,
-            string typeToken,
-            string groupToken,
-            bool isInstance)
-        {
-            ForgeTypeId spec = ResolveSpec(typeToken);
-            ForgeTypeId group = ResolveGroup(groupToken);
-            return manager.AddParameter(name, group, spec, isInstance);
-        }
 #else
-        /// <summary>
-        /// 将归一化的规格标记解析为 ParameterType（R20 兼容）。 / Resolves a normalized spec token to a ParameterType (R20 compatible).
-        /// </summary>
-        public static ParameterType ResolveSpec(string token)
+            ParameterType spec = ResolveSpecForFamily(typeToken);
+            BuiltInParameterGroup group = ResolveGroupForFamily(groupToken);
+            var options = new ExternalDefinitionCreationOptions(name, spec);
+            var defGroup = familyDocument.Application.OpenSharedParameterFile()?.Groups.Create("RevitCommandBridge");
+            ExternalDefinition definition = (ExternalDefinition)defGroup?.Definitions.Create(options);
+            return manager.AddParameter(definition, group, isInstance);
+        }
+
+        private static ParameterType ResolveSpecForFamily(string token)
         {
             switch (NormalizeSpecToken(token))
             {
@@ -164,10 +165,7 @@ namespace RevitCommandBridge
             }
         }
 
-        /// <summary>
-        /// 将归一化的分组标记解析为 BuiltInParameterGroup（R20 兼容）。 / Resolves a normalized group token to a BuiltInParameterGroup (R20 compatible).
-        /// </summary>
-        private static BuiltInParameterGroup ResolveGroup(string token)
+        private static BuiltInParameterGroup ResolveGroupForFamily(string token)
         {
             switch (NormalizeGroupToken(token))
             {
@@ -187,26 +185,49 @@ namespace RevitCommandBridge
                 default: return BuiltInParameterGroup.PG_DATA;
             }
         }
+#endif
 
-        /// <summary>
-        /// 向族管理器添加族参数（R20 兼容版本）。 / Adds a family parameter to the FamilyManager (R20 compatible version).
-        /// </summary>
-        public static FamilyParameter AddFamilyParameter(
-            FamilyManager manager,
-            Document familyDocument,
-            string name,
-            string typeToken,
-            string groupToken,
-            bool isInstance)
+#if REVIT2023_OR_GREATER
+        private static ForgeTypeId ResolveSpecForProjectParam(string token) => ResolveSpecForFamily(token);
+#else
+        private static ParameterType ResolveSpecForProjectParam(string token)
         {
-            ParameterType spec = ResolveSpec(typeToken);
-            BuiltInParameterGroup group = ResolveGroup(groupToken);
-            // R20: FamilyManager.AddParameter requires ExternalDefinition, not string
-            // R20: FamilyManager does not have Document property, so we accept it as a parameter
-            var options = new ExternalDefinitionCreationOptions(name, spec);
-            var defGroup = familyDocument.Application.OpenSharedParameterFile()?.Groups.Create("RevitCommandBridge");
-            ExternalDefinition definition = (ExternalDefinition)defGroup?.Definitions.Create(options);
-            return manager.AddParameter(definition, group, isInstance);
+            switch (NormalizeSpecToken(token))
+            {
+                case "length": return ParameterType.Length;
+                case "number": return ParameterType.Integer;
+                case "text": return ParameterType.Text;
+                case "yesno": return ParameterType.YesNo;
+                case "angle": return ParameterType.Angle;
+                case "area": return ParameterType.Area;
+                case "volume": return ParameterType.Volume;
+                default: return ParameterType.Length;
+            }
+        }
+#endif
+
+#if REVIT2025_OR_GREATER
+        private static ForgeTypeId ResolveGroupForProjectParam(string token) => ResolveGroupForFamily(token);
+#else
+        private static BuiltInParameterGroup ResolveGroupForProjectParam(string token)
+        {
+            switch (NormalizeGroupToken(token))
+            {
+                case "geometry": return BuiltInParameterGroup.PG_GEOMETRY;
+                case "data": return BuiltInParameterGroup.PG_DATA;
+                case "general": return BuiltInParameterGroup.PG_GENERAL;
+                case "mechanical": return BuiltInParameterGroup.PG_MECHANICAL;
+                case "electrical": return BuiltInParameterGroup.PG_ELECTRICAL;
+                case "plumbing": return BuiltInParameterGroup.PG_PLUMBING;
+                case "text": return BuiltInParameterGroup.PG_TEXT;
+                case "identity": return BuiltInParameterGroup.PG_IDENTITY_DATA;
+                case "materials": return BuiltInParameterGroup.PG_MATERIALS;
+                case "structural": return BuiltInParameterGroup.PG_STRUCTURAL;
+                case "constraints": return BuiltInParameterGroup.PG_CONSTRAINTS;
+                case "visibility": return BuiltInParameterGroup.PG_VISIBILITY;
+                case "phasing": return BuiltInParameterGroup.PG_PHASING;
+                default: return BuiltInParameterGroup.PG_DATA;
+            }
         }
 #endif
 
@@ -337,7 +358,7 @@ namespace RevitCommandBridge
             if (definition == null)
             {
 ExternalDefinitionCreationOptions options =
-    new ExternalDefinitionCreationOptions(name, ResolveSpec(typeToken));
+    new ExternalDefinitionCreationOptions(name, ResolveSpecForProjectParam(typeToken));
 definition = group.Definitions.Create(options) as ExternalDefinition;
             }
             if (definition == null)
@@ -364,7 +385,7 @@ Category category = Category.GetCategory(document, categoryId);
             ElementBinding binding = isInstance
                 ? (ElementBinding)application.Create.NewInstanceBinding(categorySet)
                 : application.Create.NewTypeBinding(categorySet);
-bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
+bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroupForProjectParam(groupToken));
             data["bound"] = bound;
             return data;
         }
