@@ -334,7 +334,7 @@ node "$env:LOCALAPPDATA\RevitCommandBridge\2020\scripts\revit-mcp-server.mjs"
 
 ### REST
 
-REST 只监听本机 `127.0.0.1:8765`：
+REST 默认监听本机 `127.0.0.1:8765`（Revit 2020）。版本端口映射：`2020=8765`、`2021=8766`……`2026=8771`。`REVIT_BRIDGE_PORT` 环境变量可覆盖：
 
 | 方法与路径 | 结果 |
 | --- | --- |

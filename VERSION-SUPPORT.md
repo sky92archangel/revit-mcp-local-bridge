@@ -10,95 +10,115 @@ Each installed version also has an isolated command queue:
 %LOCALAPPDATA%\RevitCommandBridge\2020
 %LOCALAPPDATA%\RevitCommandBridge\2021
 ...
+%LOCALAPPDATA%\RevitCommandBridge\2026
 ```
 
 This prevents an agent connected to one Revit version from sending a command to another version's open project.
 
-MCP profiles are independent per version. REST keeps `2020 = 8765` for compatibility and assigns `2021 = 8766` through `2024 = 8769`; `REVIT_BRIDGE_PORT` can override the selected port.
+MCP profiles are independent per version. REST assigns ports sequentially: `2020 = 8765`, `2021 = 8766`, ..., `2026 = 8771`; `REVIT_BRIDGE_PORT` can override the selected port.
 
 ## Build pipeline
 
-All versions are compiled via a unified `build.ps1` that reads `build/version-manifest.json`.
+All versions share a single `.csproj` and are compiled via `dotnet build` using 14 configurations (Debug/Release × R20–R26). Nice3point NuGet packages provide the matching Revit API assemblies automatically.
 
 ```powershell
-# Build any single version
-.\build.ps1 -RevitVersion 2024
+# Build any single version (Debug)
+dotnet build -c "Debug R26"
 
-# Build all versions defined in the manifest
+# Build via wrapper script
+.\build.ps1 -RevitVersion 2026
+
+# Build all versions
 .\build-all.ps1
 ```
 
-## Single runtime generation (.NET Framework 4.8 + csc.exe)
+## Runtime matrix
 
-| Revit | Runtime | Compiler |
-|---|---|---|
-| **2020–2024** | .NET Framework 4.8 | `csc.exe` |
+| Revit | Runtime | Compiler | SDK required |
+|-------|---------|----------|-------------|
+| **2020–2024** | .NET Framework 4.8 | `dotnet build` (MSBuild) | .NET Framework 4.8 targeting pack |
+| **2025–2026** | .NET 8.0 Windows | `dotnet build` | .NET 8 SDK |
 
-- Uses the .NET Framework compiler (`csc.exe`) included with Windows — no Visual Studio or SDK required
-- All `.cs` files in `src/` are compiled directly into `RevitCommandBridge.dll`
-- Conditional compilation symbols (`REVIT_FORGE_UNITS`, `REVIT_PARAMETER_GROUPS`) are injected from `build/version-manifest.json`
-- The `.addin` manifest references `RevitCommandBridge.RevitCommandBridgeApp`
-- `bridge.config.json` contains `runtime: "net48"`
+- Revit API references come from `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` NuGet packages — no manual DLL management
+- All `.cs` files in `src/` are compiled into `RevitCommandBridge.dll` per configuration
+- Conditional compilation symbols are injected via `.csproj` `PropertyGroup` per configuration:
+  - `REVIT2022_OR_GREATER` (R22+)
+  - `REVIT2023_OR_GREATER` (R23+)
+  - `REVIT2024_OR_GREATER` (R24+)
+  - `REVIT2025_OR_GREATER` (R25+)
+- Each adapter entry (`AdapterEntry{20..26}.cs`) registers `RevitBuildInfo.SetApiYear()` at startup
+- `bridge.config.json` contains `runtime: "net48"` or `runtime: "net8.0-windows"` per version
 
 ## Current support matrix
 
-| Revit version | Build route | Validation state | Notes |
+| Revit version | Runtime | Validation state | Notes |
 | --- | --- | --- | --- |
-| 2020 | csc.exe (net48) | [V] core workflow live-regressed; 0.5.0 output expansion API-compiled | Family/model/view/sheet core workflows ran in Revit 2020; newly added annotations/schedules/export require their own template-specific live regression. |
-| 2021–2024 | csc.exe (net48) | [T] implemented, corresponding Revit APIs not present locally | Setup detects each installed version and compiles a year-matched DLL from its local `RevitAPI.dll` / `RevitAPIUI.dll`; each year still needs a real-machine load and modelling test. |
+| 2020 | net48 | [V] core workflow live-regressed | Family/model/view/sheet core workflows ran in Revit 2020. |
+| 2021–2024 | net48 | [T] implemented, not locally verified | Each year needs its own Revit API DLL to compile and live-test. |
+| 2025 | net8.0-windows | [T] implemented, not locally verified | New .NET 8 runtime baseline; `ForgeTypeId` always available. |
+| 2026 | net8.0-windows | [V] compile-only; live regression deferred | API-compiled against 2026 NuGet packages; no real-machine test yet. |
 
 ## Automatic setup behavior
 
-The single-file setup (`install-revit.ps1`) scans registry and standard installation locations for all Revit versions (2020 through 2024). It lists only detected versions. For each selected version it follows this rule:
+The single-file setup (`install-revit.ps1`) scans registry and standard installation locations for all Revit versions (2020 through 2026). It lists only detected versions. For each selected version it follows this rule:
 
 1. Use a pre-built, year-matched package from `dist/RevitCommandBridge-{year}`.
-2. If no matching package is found, attempt to compile one locally.
+2. If no matching package is found, attempt to compile one locally via `dotnet build`.
 3. Verify the selected directory's `RevitAPI.dll` major version matches the requested Revit year.
 4. Install into version-isolated add-in and queue directories.
 
-The user does not need Visual Studio. The .NET Framework compiler is included with Windows.
+The user needs .NET SDK (for R25–R26) or .NET Framework targeting pack (for R20–R24). Visual Studio is optional.
 
 ## Build a specific version
 
 ```powershell
-# 2024 (.NET Framework 4.8, csc.exe)
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 `
-  -RevitVersion 2024 `
-  -RevitInstallDirectory 'C:\Program Files\Autodesk\Revit 2024'
+# 2026 (.NET 8.0, dotnet build)
+.\build.ps1 -RevitVersion 2026
+
+# Or directly with dotnet:
+dotnet build -c "Release R26"
 ```
 
 The result is a separate package per version:
 
 ```text
-dist\RevitCommandBridge-2024
+dist\RevitCommandBridge-2026\
+├── RevitCommandBridge.dll
+├── RevitCommandBridge.pdb
+├── bridge.config.json
+├── scripts\
+├── examples\
+├── deploy\
+├── schemas\
+├── install-revit.ps1
+├── uninstall-revit.ps1
+└── PROTOCOL.md and other docs
 ```
 
 ## Install a specific version
 
 ```powershell
 # List detected Revit installations
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 -ListDetected
+.\install-revit.ps1 -ListDetected
 
 # Install a matching package
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 `
-  -RevitVersion 2020 `
-  -PackageDirectory .\dist\RevitCommandBridge-2020
+.\install-revit.ps1 -RevitVersion 2026
 
 # Preview without making changes
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install-revit.ps1 `
-  -RevitVersion 2020 `
-  -PackageDirectory .\dist\RevitCommandBridge-2020 `
-  -WhatIf
+.\install-revit.ps1 -RevitVersion 2026 -WhatIf
 ```
 
 The installer writes its DLL and client scripts to `%LOCALAPPDATA%\RevitCommandBridge\<year>` and its add-in manifest to `%APPDATA%\Autodesk\Revit\Addins\<year>`.
 
+## Build a specific version (legacy csc.exe path)
+
+The old `csc.exe` pipeline (described in `plans/BUILD-PIPELINE.md` v1) has been superseded by the `.csproj` + `dotnet build` pipeline. The `build/version-manifest.json` now uses `"compiler": "dotnet"` (schema v2). The csc pipeline remains documented for reference only.
+
 ## Evidence
 
-- **E1 [V]** `build.ps1` reads `build/version-manifest.json` and dispatches to `csc` pipeline.
-- **E2 [V]** `BridgeBuildInfo.cs` and `BridgeFileQueue.cs` derive the local queue path from the compiled Revit year.
-- **E3 [V]** `install-revit.ps1 -ListDetected` locates Revit 2020+ through the standard/registry discovery path during verification.
-- **E4 [V]** `build-revit-adapter.ps1` generates a Revit adapter from the locally installed Revit API.
-- **E5 [V]** csc pipeline produces identical reference and symbol arguments to the original `build.ps1`.
-- **E6 [T]** Revit 2021–2024 full compilation requires their respective Revit API assemblies; script logic verified.
-- **E7 [V/T]** Revit 2020 output expansion (`RevitOutputOperations.cs`) compiled with the local 20.0 API, schema/MCP regression passed; its live output execution was deliberately deferred for this release pass. See [verification/2026-08-19-regression.md](./verification/2026-08-19-regression.md).
+- **E1 [V]** `RevitCommandBridge.csproj` defines 14 configurations (Debug/Release × R20–R26) with correct framework targets and conditional symbols.
+- **E2 [V]** Nice3point NuGet packages resolve year-specific `RevitAPI.dll`/`RevitAPIUI.dll` automatically.
+- **E3 [V]** `AdapterEntry{20..26}.cs` register runtime API year via `BridgeBuildInfo.SetApiYear()`.
+- **E4 [V]** `build/version-manifest.json` (schema v2) contains all 7 versions with `compiler: "dotnet"`.
+- **E5 [V]** R2020 and R2026 both compile successfully via `dotnet build`.
+- **E6 [T]** R2021–R2025 full compilation requires their respective NuGet packages; script logic verified.

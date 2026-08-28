@@ -35,7 +35,7 @@
 | **P2** 深化表现 | `create_insulation`、`query_mep_network`、`set_element_overrides`+`set_category_overrides`、`manage_view_filters`、`query/set_view_range`、`manage_schedule_fields`、`manage_schema_data`、`create_swept_shape`、`create_view` camera、`manage_family_parameters` | 10/10 |
 | **P3** 按需 | `manage_project_parameters`、`manage_graphics_resources` | 2/2 |
 
-最终白名单共 **64 项**。
+最终白名单共约 **73 项**（截至 `PlanCommandExecutor.cs` 中 73 个 case）。
 
 ## 第二部分：版本构建管道
 
@@ -43,10 +43,12 @@
 
 | Revit | 运行时 | 编译工具 |
 |-------|--------|---------|
-| 2020–2024 | .NET Framework 4.8 | `csc.exe` |
+| 2020–2024 | .NET Framework 4.8 | `dotnet build` (MSBuild) |
+| 2025–2026 | .NET 8 Windows | `dotnet build` (MSBuild) |
 
-- 单一 csc.exe 管道，所有版本共享 `src/` 源码
-- 版本差异通过 `build/version-manifest.json` 中的 `define_symbols` 控制
+- 统一 `.csproj` 管道（14 个配置：Debug/Release × R20–R26），所有版本共享 `src/` 源码
+- Nice3point NuGet 自动获取对应年份的 `RevitAPI.dll` / `RevitAPIUI.dll`
+- 版本差异通过 `.csproj` 的 `PropertyGroup` 注入递增符号（`REVIT2022_OR_GREATER` 等）
 - `build-all.ps1` 批量编译全部版本
 
 ## 架构特征

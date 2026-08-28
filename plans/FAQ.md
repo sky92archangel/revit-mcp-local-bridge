@@ -10,17 +10,17 @@
 
 这是一个"本地命令桥"工程：用**文件队列 + Revit ExternalEvent** 解耦 AI 客户端与 Revit 进程。AI 客户端（Codex、WorkBuddy、Claude Desktop 等 MCP 客户端）通过 Node.js MCP Server 把受控 JSON 命令写入本地队列，Revit 插件轮询队列后在主线程以白名单原子操作 + 单一 Transaction 执行。整体架构清晰、安全边界明确，未发现严重问题。
 
-二期已新增 **64 个原子操作**（原 40 个）并建立版本清单驱动的构建管道（`build/version-manifest.json` 驱动 `csc.exe` 管道，支持 Revit 2020–2024）。
+二期扩展将原子操作从 40 个提升至约 73 个（当前 `PlanCommandExecutor` 中 73 个 case），并建立版本清单驱动的构建管道（`build/version-manifest.json` schema v2、`.csproj` + `dotnet build`、Nice3point NuGet，支持 Revit 2020–2026）。
 
 ## Q4：工程整体结构是怎样的？
 
 | 目录/文件 | 作用 |
 | --- | --- |
-| [`src/`](../src/RevitCommandBridgeApp.cs) | Revit 插件 C# 源码（22 个 `.cs`，按年份编译的 DLL，`IExternalApplication` 入口） |
+| [`src/`](../src/RevitCommandBridgeApp.cs) | Revit 插件 C# 源码（32 个 `.cs`，统一 `.csproj` 14 配置编译，`IExternalApplication` 入口） |
 | [`scripts/`](../scripts/revit-mcp-server.mjs) | 传输层：MCP Server、REST 网关、CLI、OpenAI 兼容本地助手 |
-| [`build/`](../build/version-manifest.json) | 版本矩阵清单 + 编译属性（`version-manifest.json` 驱动 csc 管道） |
-| [`setup/RevitAIHubSetup.cs`](../setup/RevitAIHubSetup.cs) | 单文件安装器（自动扫描 Revit 2020–2024、生成适配 DLL、配置 AI 客户端） |
-| [`deploy/RevitCommandBridge.addin.template`](../deploy/RevitCommandBridge.addin.template) | Revit 插件注册清单模板 |
+| [`build/`](../build/version-manifest.json) | 版本矩阵清单（schema v2，`dotnet build` 驱动） |
+| [`RevitCommandBridge.csproj`](../RevitCommandBridge.csproj) | 统一项目文件，Nice3point NuGet 自动获取 Revit API |
+| [`setup/RevitAIHubSetup.cs`](../setup/RevitAIHubSetup.cs) | 单文件安装器（自动扫描 Revit 2020–2026、生成适配 DLL、配置 AI 客户端） |
 | [`schemas/execute-plan.schema.json`](../schemas/execute-plan.schema.json) | `execute_plan` 机器可读校验契约 |
 | [`examples/`](../examples/preview-universal-plan.json) | 各类请求 JSON 示例 |
 | [`README.md`](../README.md) / [`ARCHITECTURE.md`](../ARCHITECTURE.md) / [`PROTOCOL.md`](../PROTOCOL.md) / [`CONNECTORS.md`](../CONNECTORS.md) / [`VERSION-SUPPORT.md`](../VERSION-SUPPORT.md) | 使用、架构、协议、客户端接入、版本支持文档 |
@@ -29,7 +29,7 @@
 
 ## Q5：如何使用？
 
-1. **安装**：普通用户直接运行 `release/RevitCommandBridgeSetup.exe`；开发者用 `build.ps1 -RevitVersion 2020` + `install-revit.ps1`。安装器自动扫描 Revit 2020–2024、按年份生成队列目录 `%LOCALAPPDATA%\RevitCommandBridge\<year>`。
+1. **安装**：普通用户直接运行 `release/RevitCommandBridgeSetup.exe`；开发者用 `build.ps1 -RevitVersion 2020` + `install-revit.ps1`。安装器自动扫描 Revit 2020–2026、按年份生成队列目录 `%LOCALAPPDATA%\RevitCommandBridge\<year>`。
 2. **连接 AI 客户端**：安装器自动识别并合并 MCP 配置（Codex、WorkBuddy、Claude Desktop、Cursor、Windsurf、Cline、Roo Code）；或在 Revit 功能区点"复制 MCP"按钮粘贴配置。配置指向内置 Node 运行时启动 [`scripts/revit-mcp-server.mjs`](../scripts/revit-mcp-server.mjs)。
 3. **日常流程**（见 [`ShowHelpCommand`](../src/RevitCommandBridgeApp.cs)）：启动 Revit 并打开项目 → 桥接自动启动 → 在 AI 对话框先发"只查询"命令认识项目（标高/族/类型）→ 提交建模计划 `preview=true` 预览 → 确认无误后 `preview=false` 执行 → 可用 Revit 原生 `Ctrl+Z` 一次撤销整个计划。
 4. **其它入口**：REST 网关 [`scripts/revit-http-gateway.mjs`](../scripts/revit-http-gateway.mjs)（仅 127.0.0.1:8765）、PowerShell CLI [`scripts/send-revit-command.ps1`](../scripts/send-revit-command.ps1)、纯文件读写 inbox/outbox、OpenAI 兼容本地助手 [`scripts/revit-openai-compatible-chat.mjs`](../scripts/revit-openai-compatible-chat.mjs)。
@@ -66,13 +66,13 @@ revit-mcp-server.mjs <─每200ms轮询 outbox─ waitForCommandResult() ─JSON
 3. **线程模型**：[`BridgeRuntime`](../src/BridgeRuntime.cs) 用后台 `Timer` 每 300ms 轮询 inbox，有请求时 `SignalQueue()` 触发 `ExternalEvent.Raise()`；Revit 随后在**主线程**回调 `BridgeEventHandler.Execute()` → `ProcessOne()`，符合 Revit API 只能在主线程调用的约束。
 4. **事务与回滚**：[`PlanCommandExecutor`](../src/PlanCommandExecutor.cs) 把普通写步骤包进一个名为"RCB 通用建模计划"的 `Transaction`，任一步失败整体 `RollBack()`；`export`/`save_document` 有外部文件副作用，强制单独成计划。
 5. **崩溃恢复**：启动时 `RecoverProcessingRequests()`（[`src/BridgeFileQueue.cs`](../src/BridgeFileQueue.cs)）把残留的 processing 请求移回 inbox 重跑或按已有结果归档。
-6. **安全边界**：不接受任意 C#/Python，只接受白名单原子操作（64 个，见 [`AtomicOperations`](../src/PlanCommandExecutor.cs)）；`preview=true` 干跑；`document_title` 匹配、只读文档拒写、1MB 请求上限；REST 仅绑 127.0.0.1。
+6. **安全边界**：不接受任意 C#/Python，只接受白名单原子操作（约 73 个，见 [`AtomicOperations`](../src/PlanCommandExecutor.cs)）；`preview=true` 干跑；`document_title` 匹配、只读文档拒写、1MB 请求上限；REST 仅绑 127.0.0.1。
 
 ## 审查结论
 
 架构上"MCP Server（Node，客户端子进程）↔ 文件队列 ↔ Revit 插件（ExternalEvent 主线程）"的分层干净且各司其职；文档与代码一致性高；安全与事务边界处理到位。
 
-二期扩展将原子操作从 40 个提升至 64 个，覆盖建筑、结构、MEP、族、出图与注释全管线，并建立版本清单驱动的构建体系（Revit 2020–2024，csc 管道）。各年份适配包仍需在装有对应 Revit 的机器上完成真机回归（VERSION-SUPPORT.md 已标注 [T] 状态）。
+二期扩展将原子操作从 40 个提升至约 73 个，覆盖建筑、结构、MEP、族、出图与注释全管线，并建立版本清单驱动的构建体系（Revit 2020–2026，`.csproj` + `dotnet build` + Nice3point NuGet）。各年份适配包仍需在装有对应 Revit 的机器上完成真机回归（VERSION-SUPPORT.md 已标注 [T] 状态）。
 
 ---
 
@@ -92,7 +92,7 @@ revit-mcp-server.mjs <─每200ms轮询 outbox─ waitForCommandResult() ─JSON
 
 **不能。这是白名单机制，扩展必须在插件端写 C#。**
 
-Revit API 有数千个对象，本桥接**只开放 64 个手工实现的原子操作**（见 [`AtomicOperations`](../src/PlanCommandExecutor.cs) 数组）。插件在执行前会校验：
+Revit API 有数千个对象，本桥接**只开放约 73 个手工实现的原子操作**（见 [`AtomicOperations`](../src/PlanCommandExecutor.cs) 数组）。插件在执行前会校验：
 
 - [`PlanCommandExecutor.cs`](../src/PlanCommandExecutor.cs)：`if (!AtomicOperations.Contains(operation, ...))` → 未登记的步骤操作**直接拒绝**；
 - [`RevitCommandExecutor.cs`](../src/RevitCommandExecutor.cs)：未登记的顶层 operation 同样报"不支持"。
@@ -112,10 +112,10 @@ flowchart LR
 
 - **MCP 端几乎不用改**：`revit_execute_plan` 工具的 `steps[].operation` 在 MCP schema 里就是开放字符串（[`revit-mcp-server.mjs`](../scripts/revit-mcp-server.mjs)），真正把关的是插件端白名单。只有新增"顶层操作"才需要同步更新 [`supportedOperations()`](../scripts/bridge-client.mjs)。
 - **为什么不开放全部 API**：[`ARCHITECTURE.md`](../ARCHITECTURE.md) "为什么不让 AI 直接跑 C# 或 Dynamo"一节明确回答了这个问题——AI 会产生错误的任意代码；白名单让桥接能校验目标文档、预览、事务、单位、元素 ID，并留下审计记录。开放任意 API 等于让 AI 直接在 Revit 进程里跑代码，风险不可控。
-- **为什么不担心"64 个不够用"**：设计哲学是**组合优于穷举**。这 64 个原子操作是按"高频、可组合"挑选的——"24 根不同标高的管道 + 阀门 + 连接 + 写系统编号 + 选中复核"是一个 `execute_plan` 计划，而不是 24 个新命令。幕墙、楼梯、嵌套族等专用对象在 [`ARCHITECTURE.md`](../ARCHITECTURE.md) 的"已知边界"中标注为 [T]（待按需增加原子操作）。
-- **每个 Revit 年份要单独编译**：新增原子操作后需为各年份重新编译对应 DLL（API 版本不兼容，不能共用一个 DLL）。构建管道已支持 `build-all.ps1` 批量编译 2020–2024，`build/version-manifest.json` 驱动 csc 管道。
+- **为什么不担心"73 个不够用"**：设计哲学是**组合优于穷举**。这约 73 个原子操作是按"高频、可组合"挑选的——"24 根不同标高的管道 + 阀门 + 连接 + 写系统编号 + 选中复核"是一个 `execute_plan` 计划，而不是 24 个新命令。幕墙、楼梯、嵌套族等专用对象在 [`ARCHITECTURE.md`](../ARCHITECTURE.md) 的"已知边界"中标注为 [T]（待按需增加原子操作）。
+- **每个 Revit 年份要单独编译**：新增原子操作后需为各年份重新编译对应 DLL（API 版本不兼容，不能共用一个 DLL）。构建管道已支持 `build-all.ps1` 批量编译 2020–2026，`build/version-manifest.json` schema v2 驱动 `dotnet build`。
 
-**一句话总结**：MCP/JSON 侧是"开放的传声筒"，Revit 插件侧是"收紧的执行器"——能力边界由插件端 C# 白名单（目前 64 个原子操作）决定，未来扩展 = 插件端加代码 + 重新编译，AI 客户端零改动。具体扩展步骤与优先级路线图见 [EXTENSION-PLAN.md](./EXTENSION-PLAN.md)。
+**一句话总结**：MCP/JSON 侧是"开放的传声筒"，Revit 插件侧是"收紧的执行器"——能力边界由插件端 C# 白名单（目前约 73 个原子操作）决定，未来扩展 = 插件端加代码 + 重新编译，AI 客户端零改动。具体扩展步骤与优先级路线图见 [EXTENSION-PLAN.md](./EXTENSION-PLAN.md)。
 
 ## Q4：如果 Revit API 出现跨版本的破坏性基础变更（如 2024→2025），`#if/#else` 管理不住时，用什么方法代替？
 

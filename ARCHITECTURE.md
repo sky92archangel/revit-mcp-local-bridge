@@ -44,12 +44,13 @@ flowchart LR
 
 | 状态 | 范围 | 说明 |
 | --- | --- | --- |
+| [V] | 多版本编译（R20–R26） | 统一 `.csproj` 14 个配置，Nice3point NuGet 自动获取对应 Revit API。R20–R24 为 net48，R25–R26 为 net8.0-windows。|
 | [V] | Revit 2020 二进制 | 使用本机 RevitAPI 20.0.0.377 编译；每个 Revit 年份使用独立 `%LOCALAPPDATA%\RevitCommandBridge\<year>` 队列。|
 | [V] | 族文件工作流 | `list_family_templates`、`create_family`、`load_family` 支持样板查询、参数/类型/实体、保存、载入和可选放置。|
 | [V] | 族放置 | `place_family_instance` 已覆盖 OneLevelBased、TwoLevelsBased、OneLevelBasedHosted、WorkPlaneBased、ViewBased、CurveBased、CurveBasedDetail、CurveDrivenStructural 与 Adaptive。|
 | [T] | 特定受限宿主族 | Revit 样板本身的宿主规则、连接器、嵌套族、幕墙与楼梯等专用对象需要按具体 API 原子操作继续增加。|
 | [T] | 复杂 MEP 自动布线与碰撞绕行 | 当前支持直线管段与连接；自动路径、管综规则、避障属于上层规划器能力。|
-| [T] | Revit 2021–2024 DLL 包 | 构建脚本可按目标年份调用 .NET Framework 适配构建；需要以目标年份 RevitAPI 再构建和真机验证。|
+| [T] | R2021–R2025 真机验证 | 构建路由已实现；需要以目标年份 RevitAPI 再构建和真机验证。|
 
 ## 为什么不让 AI 直接跑 C# 或 Dynamo
 

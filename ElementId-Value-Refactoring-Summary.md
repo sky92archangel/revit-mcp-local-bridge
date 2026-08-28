@@ -10,12 +10,9 @@
 
 ## 0. 工程现状（2026-08）
 
-| 项目 | 路径 | 特点 |
-|------|------|------|
-| **新工程** | `revit-mcp-local-bridge/` | 统一 csproj，支持 R20~R26 全部配置，Nice3point NuGet 引用 |
-| **旧工程（参考）** | `revit-mcp-local-bridge-old/` | 独立 PowerShell 编译，`#if REVIT_FORGE_UNITS` + 反射，无 csproj |
+本工程（`revit-mcp-local-bridge/`）使用统一 `.csproj` + Nice3point NuGet，支持 R20~R26 全部 14 个配置。旧工程已废弃（`revit-mcp-local-bridge-old/`，独立 PowerShell 编译 + `#if REVIT_FORGE_UNITS`）。
 
-### 新工程编译配置
+### 编译配置
 
 | 配置 | 框架 | Revit API 版本 | 条件编译符号 |
 |------|------|----------------|-------------|
@@ -24,10 +21,10 @@
 | `Debug R22` / `Release R22` | `net48` | 2022 | `REVIT2022_OR_GREATER` |
 | `Debug R23` / `Release R23` | `net48` | 2023 | `+REVIT2023_OR_GREATER` |
 | `Debug R24` / `Release R24` | `net48` | 2024 | `+REVIT2024_OR_GREATER` |
-| `Debug R25` / `Release R25` | `net8.0-windows` | 2025 | `+REVIT2024_OR_GREATER` |
-| `Debug R26` / `Release R26` | `net8.0-windows` | 2026 | `+REVIT2024_OR_GREATER` |
+| `Debug R25` / `Release R25` | `net8.0-windows` | 2025 | `+REVIT2025_OR_GREATER` |
+| `Debug R26` / `Release R26` | `net8.0-windows` | 2026 | `+REVIT2025_OR_GREATER` |
 
-Adapter 入口文件位于 `src/Adapter/AdapterEntry{20..26}.cs`，每个编译配置只编译对应的一个入口。
+Adapter 入口文件位于 `src/Adapter/AdapterEntry{20..26}.cs`（另有 `AdapterEntry27.cs` 代码已完成但未在 `.csproj` 中配置编译），每个编译配置只编译对应的一个入口。
 
 Revit API 引用通过 `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` NuGet 包自动获取对应版本 DLL，不再依赖本地 `depandency/` 目录。
 
@@ -110,9 +107,8 @@ public static FamilyParameter AddParameter(
 ```
 
 **现状**：
-- 新工程 R22+ 编译时直接使用 `SpecTypeId`/`GroupTypeId`（`RevitParameterAdmin.cs:98-131`）
-- 旧工程使用 `#if REVIT_FORGE_UNITS` + 反射（因当时无编译期引用）
-- 统一后应通过扩展方法隐藏版本差异，调用方只需传字符串 token
+- R22+ 编译时直接使用 `SpecTypeId`/`GroupTypeId`（`RevitParameterAdmin.cs:98-131`，`#if REVIT2022_OR_GREATER` 切换）
+- 通过扩展方法隐藏版本差异，调用方只需传字符串 token
 
 ---
 
@@ -137,8 +133,8 @@ public static object ResolveSpec(string token)
 ```
 
 **涉及文件**：
-- 旧工程：`RevitFamilyOperations.cs:692-725`（`ParseParameterType`, `ParseBuiltInParameterGroup`）
-- 新工程：`RevitParameterAdmin.cs:94-131`（`ResolveSpec`, `ResolveGroup`）
+- `RevitParameterAdmin.cs:94-131`（`ResolveSpec`, `ResolveGroup`）
+- `RevitFamilyOperations.cs:692-725`（`ParseParameterType`, `ParseBuiltInParameterGroup`，反射回退）
 
 ---
 
@@ -162,7 +158,7 @@ public static string GetUnitTypeIdString(this Parameter parameter)
 }
 ```
 
-**调用处**：`RevitLookups.cs:ParameterData()` — 两项目都有
+**调用处**：`RevitLookups.cs:ParameterData()` — `#if REVIT2022_OR_GREATER` 切换
 
 ---
 
@@ -170,32 +166,28 @@ public static string GetUnitTypeIdString(this Parameter parameter)
 
 | 版本 | API |
 |------|-----|
-| ≤2023 | `doc.Create.NewFloor(curveArray, floorType, level, structural)` |
-| ≥2024 | `Floor.Create(doc, curveLoops, floorTypeId, levelId, structural, null, 0.0)` |
+| ≤2021 | `doc.Create.NewFloor(curveArray, floorType, level, structural)` |
+| ≥2022 | `Floor.Create(doc, curveLoops, floorTypeId, levelId, structural, null, 0.0)` |
 
-### 方案：辅助方法 + `#if`
+### 方案：辅助方法 + `#if`（已实施）
+
+`RevitApiExtensions.cs:22-32` 已实现统一扩展方法：
 
 ```csharp
-#if REVIT2024_OR_GREATER
-public static Floor CreateFloor(this Document doc, CurveArray profile,
-    ElementId floorTypeId, ElementId levelId, bool structural, double offset)
+public static Floor CreateFloor(Document doc, CurveArray profile,
+    FloorType floorType, Level level, bool structural)
 {
-    var loops = new CurveLoop();
-    foreach (Curve c in profile) loops.Append(c);
-    return Floor.Create(doc, new[] { loops }, floorTypeId, levelId, structural, null, offset);
-}
+#if REVIT2022_OR_GREATER
+    var loop = new CurveLoop();
+    foreach (Curve c in profile) loop.Append(c);
+    return Floor.Create(doc, new[] { loop }, floorType.Id, level.Id, structural, null, 0.0);
 #else
-public static Floor CreateFloor(this Document doc, CurveArray profile,
-    ElementId floorTypeId, ElementId levelId, bool structural, double offset)
-{
-    FloorType floorType = doc.GetElement(floorTypeId) as FloorType;
-    Level level = doc.GetElement(levelId) as Level;
     return doc.Create.NewFloor(profile, floorType, level, structural);
-}
 #endif
+}
 ```
 
-**涉及文件**：`RevitPlanCreations.cs`（旧:176 `NewFloor` / 新:204 `Floor.Create`）
+**调用处**：`RevitPlanCreations.cs` 调用 `RevitApiExtensions.CreateFloor(context.Document, profile, floorType, level, structural)`，无 `#if` 暴露。
 
 ---
 
@@ -236,16 +228,12 @@ public static Floor CreateFloor(this Document doc, CurveArray profile,
 
 ```
 src/
-├── *.cs                              ← 共享业务逻辑（不变）
+├── *.cs                              ← 共享业务逻辑（32 个文件）
 ├── Adapter/
-│   ├── AdapterEntry20.cs
-│   ├── AdapterEntry21.cs
-│   ├── ...                           ← 版本适配入口（IExternalApplication）
-│   └── AdapterEntry26.cs
-└── Utils/                            ← NEW: 版本差异统一出口
-    ├── RevitApiExtensions.cs          ← ElementId.GetValue/.GetIntValue + 通用辅助方法
-    ├── RevitParameterResolver.cs      ← Spec/Group 字符串映射（含 #if）
-    └── RevitElementFactory.cs         ← 元素创建工厂（Floor.Create 等）
+│   ├── AdapterEntry20.cs .. 27.cs     ← 版本适配入口（IExternalApplication）
+│                                       每个配置只编译对应的一个入口
+└── Utils/
+    └── RevitApiExtensions.cs          ← ElementId.GetValue + CreateFloor + 通用辅助方法
 
 RevitCommandBridge.csproj             ← 统一项目文件，14 个配置 (Debug/Release R20~R26)
 ```
@@ -261,7 +249,7 @@ RevitCommandBridge.csproj             ← 统一项目文件，14 个配置 (Deb
 | 3 | 参数类型规格 | Revit 2022 | `ParameterType.Length` | `SpecTypeId.Length` | `ResolveSpec(token)` + `#if` |
 | 4 | 参数分组规格 | Revit 2022 | `BuiltInParameterGroup.PG_*` | `GroupTypeId.*` | `ResolveGroup(token)` + `#if` |
 | 5 | 显示单位类型 | Revit 2022 | `parameter.DisplayUnitType` | `parameter.GetUnitTypeId()` | `GetUnitTypeIdString()` + `#if` |
-| 6 | Floor 创建 | Revit 2024 | `doc.Create.NewFloor(...)` | `Floor.Create(...)` | 工厂方法 + `#if` |
+| 6 | Floor 创建 | Revit 2022 | `doc.Create.NewFloor(...)` | `Floor.Create(...)` | `RevitApiExtensions.CreateFloor()` 已实现 |
 | 7 | doc.Create.New* 系列 | 持续演进 | `doc.Create.NewRoom` 等 | 静态工厂 (未来) | 暂不动，设观察点 |
 | 8 | Opening 垂直/竖井 | Revit 2025+ | `doc.Create.NewOpening` | `Opening.CreateVertical` | 未来 `#if` 扩展 |
 | 9 | `Category.GetCategory` | 无变化 | `Category.GetCategory(doc, id)` | 相同 | 无需处理 |
@@ -269,12 +257,12 @@ RevitCommandBridge.csproj             ← 统一项目文件，14 个配置 (Deb
 
 ---
 
-## 10. 实施优先级
+## 10. 实施状态（2026-08）
 
-| 优先级 | 差异 | 修改量 | 影响面 |
-|--------|------|--------|--------|
-| **P0** | ElementId `.GetIntValue()` 统一方法（对外 int，内部消化 long） | 新建 1 文件，修改 ~230 处 | 全部文件，数据类型正确性 |
-| **P1** | `RevitParameterResolver.cs` 统一 Spec/Group 解析 | 新建 1 文件，修改 ~30 处 | RevitParameterAdmin, RevitFamilyOperations |
-| **P1** | `GetUnitTypeIdString()` 统一方法 | 新建 1 行，修改 1 处 | RevitLookups.cs |
-| **P2** | `CreateFloor()` 工厂方法 | 新建方法，修改 1 处 | RevitPlanCreations.cs |
-| **P3** | doc.Create.New* 观察/预留 | 0 处 | 未来兼容性预留 |
+| 优先级 | 差异 | 状态 | 实现位置 |
+|--------|------|------|---------|
+| **P0** | ElementId `.GetValue()` 统一方法（对外 long，内部 `#if`） | ✅ 已完成 | `RevitApiExtensions.cs:7-11` |
+| **P1** | `AddFamilyParameter` 统一 6 参签名 | ✅ 已完成 | `RevitParameterAdmin.cs`，内部 `#if` R2022+ |
+| **P1** | `GetDisplayUnitType()` 统一方法 | ✅ 已完成 | `RevitApiExtensions.cs:15-19` |
+| **P2** | `CreateFloor()` 工厂方法 | ✅ 已完成 | `RevitApiExtensions.cs:22-32` |
+| **P3** | doc.Create.New* 观察/预留 | ⏳ 未动 | 未来兼容性预留 |

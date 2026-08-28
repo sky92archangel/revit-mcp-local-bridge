@@ -4,7 +4,7 @@
 
 > 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个"万能 DLL"。本交付包支持 Revit 2020–2026；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
-单文件安装器会自动扫描本机 Revit 2020–2026，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit 和 .NET Framework 4.8 / .NET 8 SDK。
+单文件安装器会自动扫描本机 Revit 2020–2026，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit API NuGet 包（通过 Nice3point）和 .NET Framework 4.8 目标包 / .NET 8 SDK。
 
 ## 目录结构
 
@@ -35,17 +35,29 @@ revit-mcp-local-bridge/
 │   ├── BridgeFileQueue.cs
 │   ├── BridgeSchemas.cs
 │   ├── BridgeBuildInfo.cs
+│   ├── BridgeFailurePreprocessor.cs
+│   ├── BridgeFamilyLoadOptions.cs
+│   ├── BridgeSchemas.cs
 │   ├── GlobalUsings.cs
+│   ├── PlanCommandExecutor.cs
+│   ├── PlanValues.cs
+│   ├── RevitApiExtensions.cs
+│   ├── RevitCommandBridgeApp.cs
+│   ├── RevitCommandExecutor.cs
+│   ├── RevitFamilyOperations.cs
+│   ├── RevitGeometryFactory.cs
+│   ├── RevitLookups.cs
+│   ├── RevitOutputOperations.cs
+│   ├── RevitParameterAdmin.cs
+│   ├── RevitPlanCreations.cs
+│   ├── RevitPlanMutations.cs
+│   ├── RevitPlanOperations.cs
+│   ├── RevitPlanQueries.cs
+│   ├── RevitSectionFactory.cs
+│   ├── CommandPanelForm.cs
 │   │
 │   ├── Adapter/                       ← 版本适配入口（R20–R27）
-│   │   ├── AdapterEntry20.cs
-│   │   ├── AdapterEntry21.cs
-│   │   ├── AdapterEntry22.cs
-│   │   ├── AdapterEntry23.cs
-│   │   ├── AdapterEntry24.cs
-│   │   ├── AdapterEntry25.cs
-│   │   ├── AdapterEntry26.cs
-│   │   └── AdapterEntry27.cs
+│   │   ├── AdapterEntry20.cs .. 27.cs
 │   │
 │   └── Utils/                         ← 工具类
 │
@@ -126,8 +138,9 @@ revit-mcp-local-bridge/
 
 | 脚本 | 产出 | 说明 |
 |------|------|------|
-| `build.ps1 -RevitVersion 2026` | `dist\RevitCommandBridge-2026\RevitCommandBridge.dll` | 单版本 DLL + 配套脚本 |
-| `build-all.ps1` | `dist\RevitCommandBridge-202{5..7}\` | 全部版本 DLL |
+| `dotnet build -c "Debug R26"` | `bin\R26\RevitCommandBridge.dll` | 单版本 DLL，通过 .csproj + Nice3point NuGet |
+| `build.ps1 -RevitVersion 2026` | `dist\RevitCommandBridge-2026\` | 编译 DLL + 打包配套脚本 |
+| `build-all.ps1` | `dist\RevitCommandBridge-202{0..6}\` | 全部版本 DLL |
 | `build-installer.ps1` | `dist\RevitCommandBridgeSetup.exe` | 单文件安装器（内置所有年份 DLL + Node） |
 | `build-installer.ps1 -OutputPath "dist\RevitCommandBridgeSetup-2026.exe"` | 自定义输出文件名 | 单版本安装器，方便版本区分 |
 | `install-revit.ps1` | → `%LOCALAPPDATA%\RevitCommandBridge\{year}\` | 复制文件 + 写 `.addin` 清单 |
@@ -142,6 +155,8 @@ revit-mcp-local-bridge/
 
 # 2. 构建指定版本（编译 DLL + 打包安装器）
 .\build.ps1 -RevitVersion 2026
+# 或直接使用 dotnet：
+dotnet build -c "Debug R26"
 
 # 3. 安装到本机 Revit
 .\install-revit.ps1 -RevitVersion 2026
@@ -487,4 +502,4 @@ flowchart LR
 | `export` | 导出视图（PNG/JPG/DWG/DXF/IFC/明细表 CSV） |
 | `save_document` | 保存当前文档 |
 
-> 全部操作共约 65 个原子步骤。新增能力以受控原子步骤加入此表，不开放任意 C# 执行。完整参数定义见 [PROTOCOL.md](./PROTOCOL.md) 和 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json)。
+> 全部操作共约 73 个原子步骤。新增能力以受控原子步骤加入此表，不开放任意 C# 执行。完整参数定义见 [PROTOCOL.md](./PROTOCOL.md) 和 [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json)。

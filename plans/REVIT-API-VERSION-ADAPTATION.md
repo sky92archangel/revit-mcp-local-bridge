@@ -2,7 +2,7 @@
 
 ## 条件编译符号定义
 
-`RevitCommandBridge.csproj:35-46` 按配置定义递增符号：
+`.csproj` 按配置定义递增符号（当前 8 处 `#if` 使用）：
 
 | 配置 | 定义符号 |
 |------|----------|
@@ -12,11 +12,11 @@
 | R24 | `REVIT2022_OR_GREATER`, `REVIT2023_OR_GREATER`, `REVIT2024_OR_GREATER` |
 | R25, R26 | `REVIT2022_OR_GREATER`, `REVIT2023_OR_GREATER`, `REVIT2024_OR_GREATER`, `REVIT2025_OR_GREATER` |
 
-> `REVIT2025_OR_GREATER` 已定义但未被任何 `#if` 使用。
+> `REVIT2025_OR_GREATER` 已在 `RevitParameterAdmin.cs:209` 使用。
 
 ---
 
-## 一、`#if` 预编译分支（7 处）
+## 一、`#if` 预编译分支（8 处）
 
 ### 1. `ElementId` 值获取 — `src/RevitApiExtensions.cs:7-11`
 
@@ -173,6 +173,23 @@ R2020–R2021 版本多传 `familyDocument` 参数以支持 `ExternalDefinition`
 
 ---
 
+### 7. `RevitParameterAdmin.cs:209` — `FilterStringRule` 共享参数过滤（R2025+）
+
+```csharp
+#if REVIT2025_OR_GREATER
+    filter = ParameterFilterRuleFactory.CreateEqualsRule(sharedParamId, ...);
+#else
+    filter = new FilterStringRule(...);
+#endif
+```
+
+| 版本 | API |
+|------|-----|
+| R2025+ | `ParameterFilterRuleFactory.CreateEqualsRule(ElementId, string)` — 新重载 |
+| R2020–R2024 | `FilterStringRule` + `FilterStringEquals` 显式构造 |
+
+---
+
 ## 二、运行时版本检测
 
 ### 7. `BridgeBuildInfo.SetApiYear()` / `RevitVersion` — `src/BridgeBuildInfo.cs:21-43`
@@ -312,9 +329,9 @@ force  → SpecTypeId.Force
 
 | 策略 | 使用处 | 适用场景 |
 |------|--------|----------|
-| `#if` 预编译 | 7 处分支 | API 签名/类型在编译期已知差异 |
+| `#if` 预编译 | 8 处分支 | API 签名/类型在编译期已知差异 |
 | 反射 | 2 个方法（`AddFamilyParameter`、`ResolveForgeTypeId`） | API 类型名/属性名在编译期跨版本一致，仅需运行时发现 |
-| 继承 + `SetApiYear` | 8 个 AdapterEntry | 每个 Revit 版本需独立编译的 `IExternalApplication` 入口 |
+| 继承 + `SetApiYear` | 8 个 AdapterEntry（R20–R27，含未启用 R27） | 每个 Revit 版本需独立编译的 `IExternalApplication` 入口 |
 | 注释标记 | 1 处（`NumberType`） | API 被移除且业务影响可控，未做向后兼容 |
 
 ## 六、版本差异履历
@@ -328,3 +345,4 @@ force  → SpecTypeId.Force
 | `FilterStringRule` → `ParameterFilterRuleFactory.CreateEqualsRule()` | R2023+ | `#if REVIT2023_OR_GREATER` | `RevitOutputOperations.cs:1069-1089` |
 | `FamilyManager.AddParameter(ExternalDefinition,...)` → `(string, ForgeTypeId, ForgeTypeId, bool)` | R2022+ | 反射 + `#if` 调用分支 | `RevitFamilyOperations.cs:674-711` / `RevitParameterAdmin.cs` |
 | `Revision.NumberType` 移除 | R2026+ | 注释标记 | `RevitOutputOperations.cs:519` |
+| `ParameterFilterRuleFactory.CreateEqualsRule()` 新重载 (R2025+) | R2025+ | `#if REVIT2025_OR_GREATER` | `RevitParameterAdmin.cs:209` |

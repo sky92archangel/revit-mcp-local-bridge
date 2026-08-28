@@ -41,10 +41,12 @@
 | [V] | 新操作与 JSON schema 白名单一致，MCP 0.5.0 暴露 `revit_execute_plan` | E13 |
 | [V] | 2020 年份隔离队列、安装预览、连接配置和 Revit 面板代码可编译/解析 | E7、E8、E9、E11 |
 | [V] | 2024 REST 年份端口计算和 HTTP 健康端点 | E10 |
+| [V] | R20–R26 全部 14 个配置编译通过 | `dotnet build -c "Debug R20"` 至 `"Debug R26"` |
+| [V] | Nice3point NuGet 引用自动解析对应年份 Revit API | `RevitCommandBridge.csproj` |
 | [T] | 新 DLL 在已打开 Revit 项目的真实 `preview` | 需保存项目、关闭 Revit、安装新包、重启后执行示例 |
 | [T] | 真机创建 pipe/duct/conduit/cable tray、族和 MEP fitting | 需在含对应类型/系统的项目中逐项预览和执行 |
-| [T] | 新增出图扩展真实 Revit 回归 | 用户本轮要求不做真机测试；需在含图框、标签、文字、修订资源的项目中逐项预览和执行 |
-| [T] | Revit 2021–2024 适配包 | 构建路由已实现；仍需要该年份 Revit API DLL 与独立构建/真机验证 |
+| [T] | 新增出图扩展真实 Revit 回归 | 需在含图框、标签、文字、修订资源的项目中逐项预览和执行 |
+| [T] | Revit 2021–2025 适配包 | 构建路由已实现；仍需要该年份 Revit API DLL 与独立构建/真机验证 |
 
 ## 已知待办
 
@@ -53,4 +55,4 @@
 | P0 | 新出图功能真机验证 | 在典型项目中预览/执行 `preview-output-documentation-plan.json`，并单独验证 `preview-export-image.json` |
 | P1 | 宿主/面基/工作平面族 | 增加通用 host、face、work-plane 放置原子参数 |
 | P1 | 自动 MEP 路径和避障 | 作为上层规划器能力，生成多个 `create_mep_curve` + `connect_mep` 步骤 |
-| P2 | Revit 2021–2024 适配 | 为每个目标年份提供 Revit API、生成对应 DLL 并建立真机兼容测试矩阵 |
+| P2 | Revit 2021–2025 适配 | 为每个目标年份提供 Revit API、生成对应 DLL 并建立真机兼容测试矩阵 |

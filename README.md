@@ -4,7 +4,7 @@ A local command bridge for Revit. The Revit add-in only executes controlled Revi
 
 > Each Revit year must use a DLL compiled against its corresponding API; a single "universal DLL" cannot be shared across versions. This delivery package supports Revit 2020–2026; see [VERSION-SUPPORT.md](./VERSION-SUPPORT.md) for version boundaries.
 
-The single-file installer automatically scans for locally installed Revit 2020–2026 and uses the built-in precompiled adapter packages. End users do not need to select DLLs, install Visual Studio, or manually fill in Revit paths. Build machines must have the corresponding Revit version and .NET Framework 4.8 / .NET 8 SDK installed.
+The single-file installer automatically scans for locally installed Revit 2020–2026 and uses the built-in precompiled adapter packages. End users do not need to select DLLs, install Visual Studio, or manually fill in Revit paths. Build machines must have the corresponding Revit API NuGet packages (via Nice3point) and .NET Framework 4.8 targeting pack / .NET 8 SDK installed.
 
 ## Directory Structure
 
@@ -35,17 +35,29 @@ revit-mcp-local-bridge/
 │   ├── BridgeFileQueue.cs
 │   ├── BridgeSchemas.cs
 │   ├── BridgeBuildInfo.cs
+│   ├── BridgeFailurePreprocessor.cs
+│   ├── BridgeFamilyLoadOptions.cs
+│   ├── BridgeSchemas.cs
 │   ├── GlobalUsings.cs
+│   ├── PlanCommandExecutor.cs
+│   ├── PlanValues.cs
+│   ├── RevitApiExtensions.cs
+│   ├── RevitCommandBridgeApp.cs
+│   ├── RevitCommandExecutor.cs
+│   ├── RevitFamilyOperations.cs
+│   ├── RevitGeometryFactory.cs
+│   ├── RevitLookups.cs
+│   ├── RevitOutputOperations.cs
+│   ├── RevitParameterAdmin.cs
+│   ├── RevitPlanCreations.cs
+│   ├── RevitPlanMutations.cs
+│   ├── RevitPlanOperations.cs
+│   ├── RevitPlanQueries.cs
+│   ├── RevitSectionFactory.cs
+│   ├── CommandPanelForm.cs
 │   │
 │   ├── Adapter/                       ← Version-specific entry points (R20–R27)
-│   │   ├── AdapterEntry20.cs
-│   │   ├── AdapterEntry21.cs
-│   │   ├── AdapterEntry22.cs
-│   │   ├── AdapterEntry23.cs
-│   │   ├── AdapterEntry24.cs
-│   │   ├── AdapterEntry25.cs
-│   │   ├── AdapterEntry26.cs
-│   │   └── AdapterEntry27.cs
+│   │   ├── AdapterEntry20.cs .. 27.cs
 │   │
 │   └── Utils/                         ← Utility classes
 │
@@ -126,8 +138,9 @@ Build and install tool outputs:
 
 | Script | Output | Description |
 |--------|--------|-------------|
-| `build.ps1 -RevitVersion 2026` | `dist\RevitCommandBridge-2026\RevitCommandBridge.dll` | Single-version DLL + companion scripts |
-| `build-all.ps1` | `dist\RevitCommandBridge-202{5..7}\` | All-version DLLs |
+| `dotnet build -c "Debug R26"` | `bin\R26\RevitCommandBridge.dll` | Single-version DLL via .csproj + Nice3point NuGet |
+| `build.ps1 -RevitVersion 2026` | `dist\RevitCommandBridge-2026\` | Build + package DLL and companion scripts |
+| `build-all.ps1` | `dist\RevitCommandBridge-202{0..6}\` | All-version DLLs |
 | `build-installer.ps1` | `dist\RevitCommandBridgeSetup.exe` | Single-file installer (embeds all-year DLLs + Node) |
 | `build-installer.ps1 -OutputPath "dist\RevitCommandBridgeSetup-2026.exe"` | Custom output filename | Single-version installer for easier version distinction |
 | `install-revit.ps1` | → `%LOCALAPPDATA%\RevitCommandBridge\{year}\` | Copy files + write `.addin` manifest |
@@ -142,6 +155,8 @@ Build and install tool outputs:
 
 # 2. Build the specified version (compile DLL + package installer)
 .\build.ps1 -RevitVersion 2026
+# Or directly via dotnet:
+dotnet build -c "Debug R26"
 
 # 3. Install to local Revit
 .\install-revit.ps1 -RevitVersion 2026
@@ -487,4 +502,4 @@ All top-level `operation` and `execute_plan` `steps[].operation` values are disp
 | `export` | Export views (PNG/JPG/DWG/DXF/IFC/schedule CSV) |
 | `save_document` | Save the current document |
 
-> Total of approximately 65 atomic steps. New capabilities are added as controlled atomic steps to this table; arbitrary C# execution is not exposed. See [PROTOCOL.md](./PROTOCOL.md) and [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json) for complete parameter definitions.
+> Total of approximately 73 atomic steps. New capabilities are added as controlled atomic steps to this table; arbitrary C# execution is not exposed. See [PROTOCOL.md](./PROTOCOL.md) and [schemas/execute-plan.schema.json](./schemas/execute-plan.schema.json) for complete parameter definitions.

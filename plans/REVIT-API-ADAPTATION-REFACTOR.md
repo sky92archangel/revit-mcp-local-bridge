@@ -257,22 +257,26 @@ case "add":
 
 ---
 
-## 改造汇总
+## 改造汇总（基于当前代码状态 2026-08）
 
-| 序号 | 文件 | 行 | 门槛 | 改造 | 方案 |
-|------|------|-----|------|------|------|
-| ① | `RevitApiExtensions.cs` | 7-11 | R2024+ | **不改** | 已是最优 |
-| ② | `RevitLookups.cs` | 291-295 | R2022+ | **改** | 提取 `ParameterDefinition.GetDisplayUnitType()` 到 `RevitApiExtensions.cs` |
-| ③ | `RevitOutputOperations.cs` | 1069-1089 | R2023+ | **不改** | 已包裹在 `CreateEqualsRule()` |
-| ④ | `RevitPlanCreations.cs` | 201-208 | R2022+ | **改** | 提取 `RevitApiExtensions.CreateFloor(Doc, CurveArray, FloorType, Level, bool)` |
-| ⑤ | `RevitParameterAdmin.cs` | 91-211 | R2022+ | **改** | 统一 6 参公共签名，内部保留 `#if` |
-| ⑥ | `RevitPlanMutations.cs` | 444-460 | R2022+ | **被动消除** | 随 ⑤ 改造自动消失 |
+当前实际 `#if` 分布（8 处）：
+
+| 序号 | 文件 | 行 | 门槛 | 当前处理 | 建议 |
+|------|------|-----|------|---------|------|
+| ① | `RevitApiExtensions.cs` | 7 | R2024+ | `ElementId.GetValue()` 扩展方法 | **不改** — 已是最优，统一出口 |
+| ② | `RevitApiExtensions.cs` | 15 | R2022+ | 扩展方法内部 `#if` | **不改** — 已隐藏在扩展方法内 |
+| ③ | `RevitApiExtensions.cs` | 24 | R2022+ | 扩展方法内部 `#if` | **不改** — 已隐藏在扩展方法内 |
+| ④ | `RevitOutputOperations.cs` | 1069 | R2023+ | `CreateEqualsRule()` 私有方法 | **不改** — 已包裹 |
+| ⑤ | `RevitOutputOperations.cs` | 1080 | R2023+ | `CreateEqualsRule()` 私有方法 | **不改** — 已包裹 |
+| ⑥ | `RevitParameterAdmin.cs` | 103 | R2022+ | 内部 `#if` 双实现 | **改** — 统一 6 参公共签名 |
+| ⑦ | `RevitParameterAdmin.cs` | 190 | R2023+ | 共享参数过滤 | **改** — 提取统一方法到 `RevitApiExtensions.cs` |
+| ⑧ | `RevitParameterAdmin.cs` | 209 | R2025+ | `ParameterFilterRuleFactory.CreateEqualsRule()` 新重载 | **不改** — 已包裹在私有方法内 |
 
 改造后，全项目 `#if` 分布变化：
 
 ```
-改造前: RevitApiExtensions(1) RevitLookups(1) RevitOutputOperations(2) RevitPlanCreations(1) RevitParameterAdmin(3) RevitPlanMutations(1) = 9 处
-改造后: RevitApiExtensions(1) RevitOutputOperations(2) RevitParameterAdmin(3,内部) = 5 处（且全部隐藏在统一方法内部）
+改造前: RevitApiExtensions(3) RevitOutputOperations(2) RevitParameterAdmin(3) = 8 处
+改造后（建议）: RevitApiExtensions(3) RevitOutputOperations(2) RevitParameterAdmin(1 统一方法内部) = 6 处
 ```
 
-暴露在调用处的 `#if` 从 **4 处减为 0 处**。
+暴露在调用处的 `#if` 当前已为 **0 处**（全部隐藏在统一方法/扩展方法内部）。

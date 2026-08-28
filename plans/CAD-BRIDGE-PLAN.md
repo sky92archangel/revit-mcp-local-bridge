@@ -8,7 +8,7 @@ Revit 命令桥（RCB）的架构已证明"协议层 → 文件队列 → CAD �
 
 - 复用现有 MCP 服务端、REST 网关、文件队列客户端代码
 - 新增一套 AutoCAD .NET 插件，实现与 Revit 版对等的原子操作
-- 支持 AutoCAD 2025–2027（对应 .NET 8/10）
+- 支持 AutoCAD 2025–2027（对应 .NET 8/10）；注意 RCB 自身已从 csc 管道迁移至 `.csproj` + `dotnet build`，CCB 应复用相同模式
 - 保持 `execute_plan` 协议不变，客户端无需区分后端是 Revit 还是 CAD
 
 ## 3. 项目结构

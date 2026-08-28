@@ -4,7 +4,7 @@
 
 > 本版已将 [SEPD-ATOMIC-ANALYSIS.md](./SEPD-ATOMIC-ANALYSIS.md) 的结论（13 项新提议原子 + 5 项路线图重合项 + 88% 可组合论断）**合并进第 3 节路线图**，并在第 5–8 节为每一批操作给出可直接开工的实现规格。
 
-背景：桥接当前开放约 40 个原子操作（见 [`PlanCommandExecutor.AtomicOperations`](../src/PlanCommandExecutor.cs)）。协议与扩展原则见 [ARCHITECTURE.md](../ARCHITECTURE.md)；完整操作参数见 [PROTOCOL.md](../PROTOCOL.md)。
+背景：桥接当前开放约 73 个原子操作（见 [`PlanCommandExecutor.AtomicOperations`](../src/PlanCommandExecutor.cs)）。协议与扩展原则见 [ARCHITECTURE.md](../ARCHITECTURE.md)；完整操作参数见 [PROTOCOL.md](../PROTOCOL.md)。
 
 ## 1. 现状评估结论
 
@@ -90,7 +90,7 @@
 
 ## 4. 通用实现规约（所有新原子必须遵守）
 
-以下规约是现有 40 个操作的事实标准，新原子照抄，避免两套风格。
+以下规约是现有约 73 个操作的事实标准，新原子照抄，避免两套风格。
 
 ### 4.1 结果封套（result envelope）
 
@@ -175,7 +175,7 @@ case "管理视图过滤器": return "manage_view_filters";
 
 ### 4.5 版本适配：`#if` 符号条件编译
 
-仓库已有先例：`RevitLookups.ParameterData`（`src/RevitLookups.cs:261`）用 `#if REVIT_FORGE_UNITS` 切换 `GetUnitTypeId()`（2021+）与 `DisplayUnitType`（2020）。所有新操作的版本差异（见 §11.1 清单）一律沿用该模式，符号由 `build.ps1 -RevitVersion <year>` 注入，禁止按年份维护分支。
+仓库已有先例：`RevitApiExtensions.cs` / `RevitOutputOperations.cs` 用 `#if REVIT2022_OR_GREATER` / `#if REVIT2023_OR_GREATER` 等超年份符号（定义在 `.csproj` 的 `PropertyGroup` 中，由编译配置注入）。所有新操作的版本差异一律沿用该模式，使用 `REVIT202X_OR_GREATER` 递增符号，禁止按年份维护分支。
 
 ## 5. P0 详细设计与实现步骤
 
@@ -1380,7 +1380,7 @@ get-or-create 语义的线型 / 填充样式工具（低优先，也可并入未
 
 | 事项 | 说明 |
 | --- | --- |
-| 目标版本不同 | 共享库面向 **Revit 2024**（`UnitConverter.cs` 头部注明"仅支持 Revit 2024"）；桥接支持 **2020–2024**。两者交集仅 2024 |
+| 目标版本不同 | 共享库头部注明"仅支持 Revit 2024"，但自身也出现 `#if RLS_REVIT_2026`（做多版本适配）；桥接支持 **2020–2026**。两者直接交集为 2024，桥接需向下兼容 R2020 的旧 API。 |
 | 单位 API 断代 | 库中 `UnitTypeId` / `ForgeTypeId` / `SpecTypeId` 是 Revit **2021+** API；Revit 2020 需 `DisplayUnitType.DUT_*` 旧体系。桥接 2020 适配包应继续用自有的 `FeetPerMillimeter` 常量（`src/RevitCommandExecutor.cs`），不要直接搬 `UnitConverter`。仓库已有 `#if REVIT_FORGE_UNITS` 先例（`src/RevitLookups.cs:261`），所有断代点集中走该符号 |
 | 条件编译先例 | 库内 `FilterRuleExtension.cs` 使用 `#if RLS_REVIT_2026` 按年份切换实现——与桥接 `REVIT_FORGE_UNITS` 模式互证：一份源码 + 编译符号，替代按年份维护分支 |
 | 移植原则 | 只取**算法模式**（连接件配对、延伸求交、AllRefs 遍历、失败预处理流程），在桥接代码风格（`PlanValues` 取参、`BridgeCommandException` 报错、mm 默认单位）下重写 |
@@ -1447,7 +1447,7 @@ case "移动元素": return "transform_elements";
 
 ## 11. 注意事项
 
-1. **API 年份差异**：每个 Revit 年份单独编译，新调用的 API 必须存在于最老支持版本（2020）的 RevitAPI.dll；参考共享库代码时按 9.2 的版本断代表换算。多年份差异一律用 `#if REVIT_FORGE_UNITS`（或新增年份符号）条件编译，禁止维护年份分支。本文档标记的"真机核对"点（§5.1 NewVerticalOpening 语义、§5.3 MirrorElements 重载、§7.10 族文档事务嵌套、§8.1 2020 绑定行为）必须在写实现前完成。
+1. **API 年份差异**：每个 Revit 年份单独编译，新调用的 API 必须存在于最老支持版本（2020）的 RevitAPI.dll；参考共享库代码时按版本断代表换算。多年份差异一律用 `#if REVIT2022_OR_GREATER` / `#if REVIT2023_OR_GREATER` / `#if REVIT2024_OR_GREATER` / `#if REVIT2025_OR_GREATER` 递增符号（定义在 `.csproj` 中由编译配置注入）条件编译，禁止维护年份分支。本文档标记的"真机核对"点（§5.1 NewVerticalOpening 语义、§5.3 MirrorElements 重载、§7.10 族文档事务嵌套、§8.1 2020 绑定行为）必须在写实现前完成。
 2. **预览语义**：写操作在 `preview=true` 时不真正执行（`PlanCommandExecutor.Execute` 分流），实现方法在 preview 下返回"将要做什么"（§4.1 封套），参考现有创建类操作。
 3. **失败处理**：P0 完成失败预处理器后，新写操作遇到可自动解决的 Error（如"连接件不匹配"）由预处理器统一处置，错误文本进入结果 JSON `failure_messages`，不弹模态框。
 4. **回归记录**：新操作完成真机验证后，按 `verification/` 目录惯例补一份回归记录，保持 `[V]` / `[T]` 证据文化。
@@ -1468,7 +1468,7 @@ case "移动元素": return "transform_elements";
 - [ ] 长度参数支持裸数（mm）与带单位字符串（如 `"3.6m"`）；角度参数契约统一为度；
 - [ ] 只读操作在无写事务路径下验证（`transaction_mode: read_only`）；
 - [ ] 中文别名已加入 `NormalizeAtomicOperation`；
-- [ ] 在 Revit 2020 真机完成回归并记录到 `verification/`；涉及版本断代的操作在 2024 再编译一次确认 `#if` 分支；
+- [ ] 在 Revit 2020 真机完成回归并记录到 `verification/`；涉及版本断代的操作在 2024（net48）和 2026（net8.0-windows）再编译一次确认 `#if` 分支；
 - [ ] 若参考 / 移植 sepd-revit-extension 代码，已按 9.3 确认许可并补署名；
 - [ ] 动作式操作（`manage_*`）的非法 `action` / 非法参数组合给出含参数名的中文错误；
 - [ ] 失败预处理器在位后：构造的警告场景不弹模态框，`failure_messages` 出现在结果 JSON。

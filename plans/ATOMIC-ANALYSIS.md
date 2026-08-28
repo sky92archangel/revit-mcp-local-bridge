@@ -9,7 +9,7 @@
 | 类别 | 判定规则 |
 | --- | --- |
 | **A 必须原子** | 满足任一条：① 单条 Revit API 调用即完整语义，无法拆解（如 `View.Duplicate`）；② 必须在同一事务内完成，拆开会留下错误中间状态（如弯头连接需同时裁剪两管）；③ 访问参数体系之外的存储/对象（Extensible Storage、视图范围、明细表定义）；④ 组合需要 N 次往返且每次都依赖上一次结果，性能或原子性不可接受 |
-| **B 可组合** | 用现有 40 个操作 + [EXTENSION-PLAN.md](./EXTENSION-PLAN.md) 已规划操作即可编排；或纯几何/算术计算，Agent（LLM）在客户端就能算，根本不需要进 Revit |
+| **B 可组合** | 用现有约 73 个操作 + [EXTENSION-PLAN.md](./EXTENSION-PLAN.md) 已规划操作即可编排；或纯几何/算术计算，Agent（LLM）在客户端就能算，根本不需要进 Revit |
 | **C 不适用** | UI 对话框、Ribbon、交互式选择（`PickObject`）、事务包裹器、`IEqualityComparer`、单位换算——属于插件内部基础设施。AI 场景下"人工选择"由 `query_*` 感知代替，"事务"由桥接统一包裹 |
 
 组合配方中引用的操作：现有操作直接写名字；带 ★ 的是 EXTENSION-PLAN 已规划项（P0–P3）；带 ☆ 的是本文档新提议项（见第 3 节）。
@@ -130,9 +130,9 @@ pie title 全库约 300 个 public 用法的分类占比
 
 沿用 [EXTENSION-PLAN.md](./EXTENSION-PLAN.md) 4.2 / 4.3 节结论：
 
-1. 该库面向 **Revit 2024–2026**（`ForgeTypeId` / `SpecTypeId` 为 2021+ API），桥接最老支持 2020——移植时单位相关代码必须用桥接自有的 `FeetPerMillimeter` 体系重写；
+1. 该库面向 **Revit 2024–2026**（`ForgeTypeId` / `SpecTypeId` 为 2021+ API），桥接最老支持 2020、最前支持 2026——移植时单位相关代码必须用桥接自有的 `FeetPerMillimeter` 体系 + `#if REVIT2022_OR_GREATER` 等递增符号重写；
 2. 库内 `FilterRuleExtension.cs` 存在整段 `#if` 条件编译的重复代码块（2026 适配先例），提示其自身也在做多年份适配；
-3. 每个文件头部有作者署名，逐段复制前须确认许可证与桥接 [LICENSE](../LICENSE) 兼容并补 [NOTICE](../NOTICE.md) 署名；仅参考算法模式重写则无此约束。
+3. 每个文件头部有作者署名，逐段复制前须确认许可证与桥接 [LICENSE](../LICENSE) 兼容并补 [NOTICE.md](../NOTICE.md) 署名；仅参考算法模式重写则无此约束。
 
 ## 6. 分析方法说明
 
