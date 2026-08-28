@@ -1,9 +1,61 @@
+# === Build ===
 bin/
 obj/
-dist/
-release/*.zip
-*.pdb
-*.user
+[Bb]uild/[Rr]esults/
+*.nupkg
+
+# === IDE / Editor ===
+.vs/
+.idea/
+.vscode/
 *.suo
-*.vsix
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+[Dd]ebug/
+[Rr]elease/
+
+# === ReSharper ===
+_ReSharper*/
+*.ReSharper*
+
+# === NuGet ===
+packages/
+*.nuget.props
+*.nuget.targets
+
+# === Deployment / Distribution ===
+dist/
+release/
+deploy/*.addin
+!deploy/*.template
+*.addin
+!*.template
+
+# === Local configuration ===
 config.local.json
+*.local.json
+
+# === Logs & crash dumps ===
+*.log
+hs_err_pid*.log
+replay_pid*.log
+*.dmp
+
+# === OS artifacts ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# === Misc ===
+*.pdb
+*.vsix
+*.tmp
+*.bak
+*.old

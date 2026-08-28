@@ -1,3 +1,6 @@
+// RevitAIHubSetup.cs — Revit 命令桥 GUI 安装器
+// RevitAIHubSetup.cs — Revit Command Bridge GUI Installer
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,6 +18,8 @@ using Microsoft.Win32;
 
 namespace RevitAIHubSetup
 {
+    // 程序入口
+    // Program entry point
     internal static class Program
     {
         [STAThread]
@@ -26,8 +31,8 @@ namespace RevitAIHubSetup
             Application.Run(new SetupForm());
         }
 
-        // The released installer keeps one stable name. When that file is launched,
-        // old test builds next to it are no longer useful and are removed quietly.
+        // 清理旧版安装器残留文件
+        // Clean up leftover old installer copies
         private static void CleanupOldInstallerCopies()
         {
             try
@@ -62,11 +67,14 @@ namespace RevitAIHubSetup
             }
             catch
             {
+                // 清理失败不能阻止安装启动
                 // Cleanup must never prevent installation from starting.
             }
         }
     }
 
+    // 主安装表单
+    // Main setup form
     internal sealed class SetupForm : Form
     {
         private readonly ComboBox _packageSelector;
@@ -104,6 +112,8 @@ namespace RevitAIHubSetup
         private string _stageName;
         private int _stageProgress;
 
+        // 初始化安装界面
+        // Initialize the setup UI
         public SetupForm()
         {
             _packages = new List<PackageInfo>();
@@ -118,6 +128,8 @@ namespace RevitAIHubSetup
             Font = new Font("Microsoft YaHei UI", 9.0f);
             BackColor = Color.FromArgb(245, 247, 250);
 
+            // 顶部标题栏
+            // Top header bar
             var header = new Panel
             {
                 Dock = DockStyle.Top,
@@ -140,11 +152,13 @@ namespace RevitAIHubSetup
                 Dock = DockStyle.Fill,
                 Font = new Font("Microsoft YaHei UI", 9.0f),
                 ForeColor = Color.FromArgb(222, 235, 249),
-                Text = "支持 Revit 2020–2024 · 自动识别本机版本并生成适配插件"
+                Text = "支持 Revit 2025–2027 · 自动识别本机版本并生成适配插件"
             };
             header.Controls.Add(productSubtitle);
             header.Controls.Add(productTitle);
 
+            // Revit 版本选择下拉框
+            // Revit version selector dropdown
             _packageSelector = new ComboBox
             {
                 Dock = DockStyle.Fill,
@@ -152,6 +166,8 @@ namespace RevitAIHubSetup
             };
             _packageSelector.SelectedIndexChanged += delegate { RefreshEnvironment(); };
 
+            // AI 连接器选择下拉框
+            // AI connector selector dropdown
             _connectorSelector = new ComboBox
             {
                 Dock = DockStyle.Fill,
@@ -175,6 +191,8 @@ namespace RevitAIHubSetup
             };
             _connectorSelector.SelectedIndexChanged += delegate { RefreshConnectorHint(); };
 
+            // API 设置输入框（Base URL / 模型名称 / API Key）
+            // API settings input fields (Base URL / Model name / API Key)
             _apiBaseUrl = new TextBox { Dock = DockStyle.Fill, Text = "https://api.example.com/v1" };
             _apiModel = new TextBox { Dock = DockStyle.Fill, Text = "your-model-name" };
             _apiKey = new TextBox { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
@@ -199,11 +217,15 @@ namespace RevitAIHubSetup
             _connectorSelector.SelectedIndex = 0;
             _connectorSelector.Enabled = false;
 
+            // Revit 安装目录输入框
+            // Revit installation directory input
             _revitDirectory = new TextBox { Dock = DockStyle.Fill };
             _revitDirectory.TextChanged += delegate { RefreshEnvironment(); };
             var browse = new Button { Text = "选择 Revit 目录", AutoSize = true };
             browse.Click += BrowseForRevit;
 
+            // 字段容器面板
+            // Field container panel
             var fields = new TableLayoutPanel
             {
                 AutoSize = true,
@@ -222,6 +244,8 @@ namespace RevitAIHubSetup
             fields.Controls.Add(browse, 2, 1);
             fields.Visible = false;
 
+            // 选择卡片（版本 + 连接器）
+            // Choice card (version + connector)
             var choiceCard = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -248,6 +272,8 @@ namespace RevitAIHubSetup
             choiceCard.Controls.Add(_connectorHint, 0, 2);
             choiceCard.SetColumnSpan(_connectorHint, 2);
 
+            // 环境检测结果面板
+            // Environment detection result panel
             _environment = new Label
             {
                 AutoSize = false,
@@ -275,6 +301,8 @@ namespace RevitAIHubSetup
             environmentCard.Controls.Add(_environment);
             environmentCard.Controls.Add(environmentCaption);
 
+            // 预览安装按钮
+            // Preview install button
             _previewButton = new Button
             {
                 Text = "预览安装（不写入）",
@@ -283,6 +311,9 @@ namespace RevitAIHubSetup
             };
             _previewButton.Click += delegate { RunInstaller(true); };
             _previewButton.Visible = false;
+
+            // 安装按钮
+            // Install button
             _installButton = new Button
             {
                 Text = "安装到 Revit",
@@ -304,6 +335,9 @@ namespace RevitAIHubSetup
                 }
                 RunInstaller(false);
             };
+
+            // 复制 MCP 配置按钮
+            // Copy MCP configuration button
             _copyMcpButton = new Button
             {
                 Text = "复制 MCP 配置",
@@ -312,6 +346,9 @@ namespace RevitAIHubSetup
                 Visible = false
             };
             _copyMcpButton.Click += CopyMcpConfiguration;
+
+            // 卸载命令桥按钮
+            // Uninstall command bridge button
             _uninstallButton = new Button
             {
                 Text = "卸载命令桥",
@@ -319,6 +356,9 @@ namespace RevitAIHubSetup
                 Margin = new Padding(8)
             };
             _uninstallButton.Click += RunUninstaller;
+
+            // 关闭 Revit 按钮
+            // Close Revit button
             _closeRevitButton = new Button
             {
                 Text = "关闭 Revit",
@@ -327,6 +367,9 @@ namespace RevitAIHubSetup
                 Visible = false
             };
             _closeRevitButton.Click += CloseRevitGracefully;
+
+            // 选择 Revit 图标或应用按钮
+            // Browse Revit application button
             _browseRevitButton = new Button
             {
                 Text = "选择 Revit 图标或应用",
@@ -335,6 +378,9 @@ namespace RevitAIHubSetup
                 Visible = false
             };
             _browseRevitButton.Click += BrowseForRevitApplication;
+
+            // 重新检查按钮
+            // Refresh detection button
             _refreshButton = new Button
             {
                 Text = "重新检查",
@@ -342,6 +388,9 @@ namespace RevitAIHubSetup
                 Margin = new Padding(8)
             };
             _refreshButton.Click += delegate { RefreshEnvironment(); };
+
+            // 进度条
+            // Progress bar
             _progress = new ProgressBar
             {
                 Style = ProgressBarStyle.Continuous,
@@ -353,6 +402,9 @@ namespace RevitAIHubSetup
                 Visible = false,
                 Margin = new Padding(8, 10, 8, 8)
             };
+
+            // 更多选项按钮及弹出菜单
+            // More options button and context menu
             var more = new Button
             {
                 Text = "更多选项  ▾",
@@ -378,6 +430,9 @@ namespace RevitAIHubSetup
                 ShowAdvancedOptions(fields);
             });
             more.Click += delegate { moreMenu.Show(more, new Point(0, more.Height)); };
+
+            // 操作按钮容器
+            // Action buttons container
             var actions = new FlowLayoutPanel
             {
                 Height = 56,
@@ -392,6 +447,8 @@ namespace RevitAIHubSetup
             actions.Controls.Add(more);
             actions.Controls.Add(_progress);
 
+            // 状态摘要标签
+            // Status summary label
             _statusSummary = new Label
             {
                 Dock = DockStyle.Fill,
@@ -402,6 +459,8 @@ namespace RevitAIHubSetup
                 ForeColor = Color.DarkSlateGray
             };
 
+            // 详细日志输出框
+            // Detailed log output box
             _output = new TextBox
             {
                 Dock = DockStyle.Fill,
@@ -414,6 +473,8 @@ namespace RevitAIHubSetup
                 Visible = false
             };
 
+            // 查看/隐藏日志按钮
+            // Toggle log visibility button
             _detailsButton = new Button
             {
                 Text = "查看日志",
@@ -430,6 +491,8 @@ namespace RevitAIHubSetup
                 _detailsButton.Text = _output.Visible ? "隐藏详细日志" : "查看详细日志";
             };
 
+            // 状态面板
+            // Status panel
             var statusPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -457,6 +520,8 @@ namespace RevitAIHubSetup
             statusPanel.Controls.Add(statusActions);
             statusPanel.Controls.Add(nextStepCaption);
 
+            // 组装主界面
+            // Assemble main layout
             Controls.Add(statusPanel);
             Controls.Add(actions);
             Controls.Add(environmentCard);
@@ -466,6 +531,8 @@ namespace RevitAIHubSetup
             FormClosed += delegate { CleanupPayload(); };
         }
 
+        // 创建字段标签
+        // Create a field label
         private static Label FieldLabel(string text)
         {
             return new Label
@@ -477,6 +544,8 @@ namespace RevitAIHubSetup
             };
         }
 
+        // 显示高级设置对话框
+        // Show advanced settings dialog
         private void ShowAdvancedOptions(TableLayoutPanel fields)
         {
             using (var dialog = new Form
@@ -534,11 +603,15 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 添加连接器选项
+        // Add a connector option to the dropdown
         private void AddConnector(string value, string display)
         {
             _connectorSelector.Items.Add(new ConnectorInfo(value, display));
         }
 
+        // 加载安装包中的有效载荷
+        // Load payload from embedded resources
         private void LoadPayload()
         {
             try
@@ -560,6 +633,8 @@ namespace RevitAIHubSetup
                     }
                 }
 
+                // 解压并扫描各版本包
+                // Extract and scan version packages
                 ZipFile.ExtractToDirectory(zipPath, _payloadDirectory);
                 File.Delete(zipPath);
                 foreach (string directory in Directory.GetDirectories(_payloadDirectory, "RevitCommandBridge-*"))
@@ -576,22 +651,10 @@ namespace RevitAIHubSetup
                     throw new InvalidOperationException("安装包中没有有效的 Revit 适配包。 ");
                 }
 
-                PackageInfo templatePackage = null;
-                foreach (PackageInfo bundled in _bundledPackages.Values)
-                {
-                    if (Directory.Exists(Path.Combine(bundled.Directory, "src")) &&
-                        File.Exists(Path.Combine(bundled.Directory, "build-revit-adapter.ps1")))
-                    {
-                        templatePackage = bundled;
-                        break;
-                    }
-                }
+                // 匹配本机已安装的 Revit 版本
+                // Match against locally installed Revit versions
                 Dictionary<string, string> detectedInstallations = DetectAllRevitInstallations();
-                // Registry/standard paths are fast and deterministic. Only scan
-                // shortcuts for versions that were not found there; scanning a
-                // large redirected Desktop before the registry made first launch
-                // look frozen on some machines.
-                for (int year = 2020; year <= 2024; year++)
+                for (int year = 2025; year <= 2027; year++)
                 {
                     string version = year.ToString();
                     string detectedDirectory;
@@ -601,10 +664,6 @@ namespace RevitAIHubSetup
                     {
                         bundled.DetectedRevitDirectory = detectedDirectory;
                         _packages.Add(bundled);
-                    }
-                    else if (templatePackage != null)
-                    {
-                        _packages.Add(PackageInfo.CreateLocalBuild(version, templatePackage.Directory, detectedDirectory));
                     }
                 }
                 foreach (PackageInfo detectedPackage in _packages)
@@ -616,6 +675,8 @@ namespace RevitAIHubSetup
                     throw new InvalidOperationException("安装包缺少 Revit 2020–2024 自动适配模板。");
                 }
 
+                // 默认选中第一个已检测到的版本
+                // Default to selecting the first detected version
                 int selectedIndex = 0;
                 for (int index = 0; index < _packages.Count; index++)
                 {
@@ -640,6 +701,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 浏览并选择 Revit 目录
+        // Browse and select Revit directory
         private void BrowseForRevit(object sender, EventArgs eventArgs)
         {
             using (var dialog = new FolderBrowserDialog())
@@ -671,6 +734,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 通过文件选择对话框检测 Revit（支持 .lnk 快捷方式）
+        // Detect Revit via file picker (supports .lnk shortcuts)
         private void BrowseForRevitApplication(object sender, EventArgs eventArgs)
         {
             using (var dialog = new OpenFileDialog())
@@ -683,6 +748,8 @@ namespace RevitAIHubSetup
                 dialog.Multiselect = false;
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
+                // 解析快捷方式目标路径
+                // Resolve shortcut target path
                 string targetPath = string.Equals(Path.GetExtension(dialog.FileName), ".lnk", StringComparison.OrdinalIgnoreCase)
                     ? ResolveShortcutTarget(dialog.FileName)
                     : dialog.FileName;
@@ -691,7 +758,7 @@ namespace RevitAIHubSetup
                 if (!IsRevitDirectory(selectedDirectory) || !IsSupportedRevitVersion(detectedVersion))
                 {
                     MessageBox.Show(this,
-                        "所选文件没有指向受支持的 Revit 2020–2024。请重新选择 Revit 图标或应用。",
+                        "所选文件没有指向受支持的 Revit 2025–2027。请重新选择 Revit 图标或应用。",
                         "未识别到 Revit",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
@@ -710,6 +777,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 刷新环境检测状态
+        // Refresh environment detection state
         private void RefreshEnvironment()
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -737,6 +806,9 @@ namespace RevitAIHubSetup
 
             bool validDirectory = IsRevitDirectoryForVersion(configuredDirectory, package.RevitVersion);
             bool revitRunning = Process.GetProcessesByName("Revit").Length > 0;
+
+            // 已安装状态
+            // Already installed state
             if (_installed && string.Equals(_installedVersion, package.RevitVersion, StringComparison.OrdinalIgnoreCase))
             {
                 _environment.Text = "Revit " + package.RevitVersion + " 已安装命令桥。";
@@ -752,6 +824,8 @@ namespace RevitAIHubSetup
                 return;
             }
 
+            // 未检测到 Revit 目录
+            // Revit directory not found
             if (!validDirectory)
             {
                 _environment.Text = "未确认 Revit " + package.RevitVersion + " 的安装位置。";
@@ -764,6 +838,8 @@ namespace RevitAIHubSetup
                 return;
             }
 
+            // Revit 正在运行
+            // Revit is running
             if (revitRunning)
             {
                 _environment.Text = "已找到 Revit " + package.RevitVersion + "，但它正在打开。";
@@ -776,6 +852,8 @@ namespace RevitAIHubSetup
                 return;
             }
 
+            // 准备就绪，可以安装
+            // Ready to install
             string adapterHint = package.RequiresLocalBuild
                 ? "将使用本机 Revit API 自动生成适配插件。"
                 : "将使用已匹配的年份适配插件。";
@@ -788,6 +866,8 @@ namespace RevitAIHubSetup
             _browseRevitButton.Visible = false;
         }
 
+        // 优雅关闭 Revit 进程
+        // Gracefully close Revit processes
         private void CloseRevitGracefully(object sender, EventArgs eventArgs)
         {
             Process[] revitProcesses = Process.GetProcessesByName("Revit");
@@ -812,6 +892,7 @@ namespace RevitAIHubSetup
                     }
                     catch (InvalidOperationException)
                     {
+                        // 进程已退出
                         // The process has already exited.
                     }
                     finally
@@ -825,6 +906,8 @@ namespace RevitAIHubSetup
                 _closeRevitButton.Enabled = true;
             }
 
+            // 轮询等待 Revit 关闭（最多约 30 秒）
+            // Poll for Revit to close (up to ~30 seconds)
             var timer = new Timer { Interval = 700 };
             int checks = 0;
             timer.Tick += delegate
@@ -840,6 +923,8 @@ namespace RevitAIHubSetup
             timer.Start();
         }
 
+        // 刷新连接器提示文本
+        // Refresh connector hint text
         private void RefreshConnectorHint()
         {
             _apiSettings.Visible = false;
@@ -847,6 +932,8 @@ namespace RevitAIHubSetup
             _connectorHint.Text = "自动扫描本机已安装的 MCP 客户端并完成配置；未识别的软件可在 Revit 中点击“复制 MCP”。";
         }
 
+        // 执行安装（预览或实际安装）
+        // Run installation (preview or actual)
         private void RunInstaller(bool preview)
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -880,6 +967,8 @@ namespace RevitAIHubSetup
             bool installed = false;
             try
             {
+                // 准备包（如需要则本地编译适配插件）
+                // Prepare package (local build adapter if needed)
                 string packageDirectory = PreparePackage(package, revitDirectory);
                 if (string.IsNullOrWhiteSpace(packageDirectory))
                 {
@@ -899,6 +988,8 @@ namespace RevitAIHubSetup
                 installed = RunPowerShell(arguments, preview ? "第 3/4 步：校验安装目标" : "第 3/4 步：安装命令桥", 55, 75, 300, 180);
                 if (installed && !preview)
                 {
+                    // 自动配置已检测到的 AI 客户端
+                    // Auto-configure detected AI clients
                     ConfigureDetectedClients(package);
                 }
             }
@@ -906,6 +997,9 @@ namespace RevitAIHubSetup
             {
                 SetBusy(false, string.Empty);
             }
+
+            // 保存 OpenAI 兼容的 API 配置（DPAPI 加密）
+            // Save OpenAI-compatible API config (DPAPI encrypted)
             if (installed && !preview && connector.Value == "openai-compatible")
             {
                 try
@@ -933,6 +1027,8 @@ namespace RevitAIHubSetup
             RefreshEnvironment();
         }
 
+        // 执行卸载
+        // Run uninstall
         private void RunUninstaller(object sender, EventArgs eventArgs)
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -970,6 +1066,8 @@ namespace RevitAIHubSetup
             UpdateStage("正在卸载命令桥", 10);
             try
             {
+                // 调用 PowerShell 卸载脚本
+                // Invoke PowerShell uninstall script
                 string arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(script) +
                                    " -RevitVersion " + Quote(package.RevitVersion) +
                                    " -Confirm:$false";
@@ -988,6 +1086,8 @@ namespace RevitAIHubSetup
             RefreshEnvironment();
         }
 
+        // 设置界面繁忙状态
+        // Set UI busy state
         private void SetBusy(bool busy, string statusText)
         {
             _previewButton.Enabled = !busy;
@@ -1013,6 +1113,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 更新进度阶段
+        // Update progress stage display
         private void UpdateStage(string stageText, int progress, bool writeLog = true)
         {
             _stageName = stageText ?? string.Empty;
@@ -1025,6 +1127,8 @@ namespace RevitAIHubSetup
             Application.DoEvents();
         }
 
+        // 刷新已运行时间
+        // Refresh elapsed time display
         private void RefreshStageElapsed()
         {
             if (string.IsNullOrWhiteSpace(_stageName)) return;
@@ -1034,6 +1138,8 @@ namespace RevitAIHubSetup
             _statusSummary.Text = _environment.Text;
         }
 
+        // 验证 AI 供应商配置
+        // Validate AI provider configuration
         private bool ValidateAiProvider(ConnectorInfo connector, bool preview)
         {
             if (connector.Value != "openai-compatible")
@@ -1079,6 +1185,8 @@ namespace RevitAIHubSetup
             return true;
         }
 
+        // 保存 AI 供应商配置（DPAPI 加密 API Key）
+        // Save AI provider configuration (DPAPI encrypted API key)
         private string SaveAiProviderConfiguration(PackageInfo package)
         {
             string baseUrl = _apiBaseUrl.Text.Trim().TrimEnd('/');
@@ -1089,6 +1197,8 @@ namespace RevitAIHubSetup
             byte[] protectedKey = null;
             try
             {
+                // 使用 Windows DPAPI 加密 API Key
+                // Encrypt API Key using Windows DPAPI
                 protectedKey = ProtectedData.Protect(keyBytes, entropy, DataProtectionScope.CurrentUser);
             }
             finally
@@ -1106,6 +1216,8 @@ namespace RevitAIHubSetup
             string profilePath = Path.Combine(profileDirectory, "default.json");
             try
             {
+                // 写入配置文件
+                // Write configuration profile
                 var profile = new Dictionary<string, object>
                 {
                     { "schema_version", 1 },
@@ -1130,6 +1242,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 运行 PowerShell 脚本并监控输出/超时
+        // Run PowerShell script with output monitoring and timeout
         private bool RunPowerShell(string arguments, string stageText = null, int progressStart = 0, int progressEnd = 100, int timeoutSeconds = 600, int silenceTimeoutSeconds = 120, string statusFile = null)
         {
             string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
@@ -1162,6 +1276,9 @@ namespace RevitAIHubSetup
                 DateTime startedUtc = DateTime.UtcNow;
                 DateTime lastActivityUtc = startedUtc;
                 if (!string.IsNullOrWhiteSpace(stageText)) UpdateStage(stageText, progressStart);
+
+                // 异步读取标准输出
+                // Async read standard output
                 process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs eventArgs)
                 {
                     if (eventArgs.Data != null)
@@ -1172,6 +1289,9 @@ namespace RevitAIHubSetup
                         }
                     }
                 };
+
+                // 异步读取标准错误
+                // Async read standard error
                 process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs eventArgs)
                 {
                     if (eventArgs.Data != null)
@@ -1184,6 +1304,9 @@ namespace RevitAIHubSetup
                 };
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
+
+                // 等待进程结束，同时监控输出和超时
+                // Wait for process exit, monitoring output and timeout
                 while (!process.WaitForExit(100))
                 {
                     if (ReadAdapterStatus(statusFile, stageText, progressStart, progressEnd))
@@ -1215,6 +1338,8 @@ namespace RevitAIHubSetup
                         displayedErrorLength = pendingError.Length;
                         lastActivityUtc = DateTime.UtcNow;
                     }
+                    // 静默超时检测
+                    // Silence timeout detection
                     if (silenceTimeoutSeconds > 0 && (DateTime.UtcNow - lastActivityUtc).TotalSeconds >= silenceTimeoutSeconds)
                     {
                         Append("当前步骤连续 " + silenceTimeoutSeconds + " 秒没有任何进度，已停止。请查看详细日志。");
@@ -1222,6 +1347,8 @@ namespace RevitAIHubSetup
                         process.WaitForExit();
                         return false;
                     }
+                    // 总超时检测
+                    // Total timeout detection
                     if ((DateTime.UtcNow - startedUtc).TotalSeconds >= timeoutSeconds)
                     {
                         Append("当前步骤在 " + timeoutSeconds + " 秒内未完成，已停止。请查看详细日志中的最后错误。");
@@ -1256,13 +1383,14 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 根据脚本输出的进度标记更新 UI
+        // Update UI based on script progress markers
         private void ApplyScriptProgress(string output, string stageText, int progressStart, int progressEnd)
         {
             if (string.IsNullOrWhiteSpace(output) || string.IsNullOrWhiteSpace(stageText)) return;
 
-            // The installer script emits explicit copy/manifest markers. They
-            // are more useful than a single static 55% bar while a bundled
-            // Node runtime is being copied from the self-contained EXE.
+            // 安装脚本发出显式的复制/清单标记，比单个静态进度条更有用
+            // The installer script emits explicit copy/manifest markers, more useful than a single static bar
             string[] installMarkers = { "copy-files", "copy-complete", "write-manifest", "write-inventory", "complete" };
             string[] installNames = { "复制插件文件", "文件复制完成", "写入 Revit 加载项清单", "更新文件清单", "安装文件校验完成" };
             for (int markerIndex = installMarkers.Length - 1; markerIndex >= 0; markerIndex--)
@@ -1284,6 +1412,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 读取适配器状态文件以更新进度
+        // Read adapter status file for progress updates
         private bool ReadAdapterStatus(string statusFile, string stageText, int progressStart, int progressEnd)
         {
             if (string.IsNullOrWhiteSpace(statusFile) || !File.Exists(statusFile) || string.IsNullOrWhiteSpace(stageText)) return false;
@@ -1317,6 +1447,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 自动配置已检测到的 AI 客户端
+        // Auto-configure detected AI clients
         private void ConfigureDetectedClients(PackageInfo package)
         {
             string installedRoot = Path.Combine(
@@ -1352,6 +1484,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 设置安装结果摘要
+        // Set installation result summary
         private void SetInstallationResultSummary(PackageInfo package, ConnectorInfo connector)
         {
             string installedRoot = Path.Combine(
@@ -1413,6 +1547,8 @@ namespace RevitAIHubSetup
                 "未识别到具体 AI 客户端。点击“复制 MCP 配置”，粘贴到 Codex、WorkBuddy 或其它 MCP 客户端。";
         }
 
+        // 准备安装包（如需要则编译本地适配插件）
+        // Prepare package (compile local adapter if needed)
         private string PreparePackage(PackageInfo package, string revitDirectory)
         {
             if (!package.RequiresLocalBuild)
@@ -1436,14 +1572,20 @@ namespace RevitAIHubSetup
 
             try
             {
+                // 复制适配器模板
+                // Copy adapter template
                 UpdateStage("第 2/4 步：检查 Revit " + package.RevitVersion + " 组件", 15);
                 CopyAdapterTemplate(package.Directory, outputDirectory);
 
+                // 读取 Revit API 版本，确定编译参数
+                // Read Revit API version, determine compile flags
                 UpdateStage("第 2/4 步：读取 Revit " + package.RevitVersion + " 版本", 25);
                 Version apiVersion = AssemblyName.GetAssemblyName(revitApi).Version;
                 string[] sourceFiles = Directory.GetFiles(sourceDirectory, "*.cs", SearchOption.TopDirectoryOnly);
                 if (sourceFiles.Length == 0) throw new InvalidOperationException("安装包中没有插件源文件。");
 
+                // 构造编译器命令行参数
+                // Build compiler command-line arguments
                 string assemblyPath = Path.Combine(outputDirectory, "RevitCommandBridge.dll");
                 var arguments = new StringBuilder();
                 arguments.Append("/nologo /target:library /platform:anycpu /optimize+ /debug:pdbonly ");
@@ -1469,6 +1611,8 @@ namespace RevitAIHubSetup
                     return null;
                 }
 
+                // 生成元数据文件
+                // Generate metadata file
                 UpdateStage("第 2/4 步：验证 Revit " + package.RevitVersion + " 插件", 50);
                 var metadata = new Dictionary<string, object>
                 {
@@ -1490,6 +1634,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 运行 C# 编译器
+        // Run C# compiler
         private bool RunCompiler(string compiler, string arguments, out string error)
         {
             var startInfo = new ProcessStartInfo
@@ -1537,6 +1683,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 显示适配器编译失败信息
+        // Show adapter build failure details
         private void ShowAdapterFailure(string version, string stage, string detail)
         {
             string message = "失败阶段：" + stage + "\r\n\r\n原始错误：\r\n" + detail;
@@ -1546,6 +1694,8 @@ namespace RevitAIHubSetup
             MessageBox.Show(this, message, "Revit " + version + " 适配失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
+        // 复制适配器模板目录结构（排除已编译文件）
+        // Copy adapter template directory (excluding built binaries)
         private static void CopyAdapterTemplate(string source, string destination)
         {
             Directory.CreateDirectory(destination);
@@ -1563,6 +1713,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 打开使用说明
+        // Open usage guide
         private void OpenGuide(object sender, EventArgs eventArgs)
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -1578,6 +1730,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 获取安装根目录
+        // Get installation root directory
         private string GetInstalledRoot(PackageInfo package)
         {
             return Path.Combine(
@@ -1586,6 +1740,8 @@ namespace RevitAIHubSetup
                 package.RevitVersion);
         }
 
+        // 获取通用 MCP 配置路径
+        // Get generic MCP config path
         private string GetGenericMcpPath(PackageInfo package)
         {
             return Path.Combine(
@@ -1594,6 +1750,8 @@ namespace RevitAIHubSetup
                 "generic-mcp-revit-" + package.RevitVersion + ".mcp.json");
         }
 
+        // 复制 MCP 配置到剪贴板
+        // Copy MCP configuration to clipboard
         private void CopyMcpConfiguration(object sender, EventArgs eventArgs)
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -1629,6 +1787,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 打开 MCP 配置目录
+        // Open MCP configuration directory in Explorer
         private void OpenMcpConfigurationFolder(object sender, EventArgs eventArgs)
         {
             PackageInfo package = _packageSelector.SelectedItem as PackageInfo;
@@ -1658,6 +1818,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 清理临时有效载荷目录
+        // Clean up temporary payload directory
         private void CleanupPayload()
         {
             try
@@ -1669,10 +1831,13 @@ namespace RevitAIHubSetup
             }
             catch
             {
+                // 临时目录清理失败不影响已安装的命令桥
                 // A failed temporary cleanup must not affect the installed bridge.
             }
         }
 
+        // 添加日志文本
+        // Append log text
         private void Append(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -1683,6 +1848,8 @@ namespace RevitAIHubSetup
             _output.AppendText(Environment.NewLine + value.Trim());
         }
 
+        // 拷贝流数据
+        // Copy stream data
         private static void CopyStream(Stream input, Stream output)
         {
             byte[] buffer = new byte[81920];
@@ -1693,6 +1860,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 判断是否为有效的 Revit 目录
+        // Check if directory is a valid Revit installation
         private static bool IsRevitDirectory(string directory)
         {
             try
@@ -1708,12 +1877,16 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 判断 Revit 版本是否受支持
+        // Check if Revit version is supported
         private static bool IsSupportedRevitVersion(string version)
         {
             int value;
-            return Int32.TryParse(version, out value) && value >= 2020 && value <= 2024;
+            return Int32.TryParse(version, out value) && value >= 2025 && value <= 2027;
         }
 
+        // 判断目录是否为指定版本的 Revit
+        // Check if directory matches a specific Revit version
         private static bool IsRevitDirectoryForVersion(string directory, string version)
         {
             if (!IsRevitDirectory(directory))
@@ -1732,6 +1905,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 通过注册表查找 Revit 安装目录
+        // Find Revit installation directory via registry
         private static string FindRevitDirectory(string version)
         {
             foreach (string registryRoot in new[]
@@ -1780,6 +1955,8 @@ namespace RevitAIHubSetup
                 }
             }
 
+            // 回退到默认安装路径
+            // Fallback to default install path
             var candidates = new[]
             {
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Autodesk", "Revit " + version)
@@ -1795,6 +1972,8 @@ namespace RevitAIHubSetup
             return null;
         }
 
+        // 检测所有已安装的 Revit 版本
+        // Detect all installed Revit versions
         private static Dictionary<string, string> DetectAllRevitInstallations()
         {
             var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1804,12 +1983,14 @@ namespace RevitAIHubSetup
                 string directory = FindRevitDirectory(version);
                 if (IsRevitDirectory(directory)) result[version] = directory;
             }
-            // Shortcut lookup is a fallback only. Registry and standard paths
-            // cover normal installs without walking a redirected Desktop.
+            // 快捷方式查找是后备方案，注册表和标准路径覆盖正常安装
+            // Shortcut lookup is a fallback only. Registry and standard paths cover normal installs
             if (result.Count < 5) AddShortcutRevitDirectories(result);
             return result;
         }
 
+        // 从桌面快捷方式添加 Revit 目录
+        // Add Revit directories from desktop shortcuts
         private static void AddShortcutRevitDirectories(Dictionary<string, string> result)
         {
             var shortcutRoots = new List<string>
@@ -1837,6 +2018,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 解析 .lnk 快捷方式目标路径
+        // Resolve .lnk shortcut target path
         private static string ResolveShortcutTarget(string shortcutPath)
         {
             object shell = null;
@@ -1860,6 +2043,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 安全遍历目录查找文件
+        // Safely traverse directories to find a file
         private static IEnumerable<string> FindFilesSafely(string root, string fileName)
         {
             var pending = new Stack<string>();
@@ -1879,6 +2064,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 从注册表递归添加 Revit 目录
+        // Recursively add Revit directories from registry
         private static void AddRegistryRevitDirectories(RegistryKey key, Dictionary<string, string> result, int depth)
         {
             foreach (string propertyName in RevitRegistryPathValueNames())
@@ -1898,6 +2085,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 通过 RevitAPI.dll 或文件版本获取 Revit 版本号
+        // Get Revit version from RevitAPI.dll or file version
         private static string GetRevitVersion(string directory, string exePath)
         {
             try
@@ -1915,11 +2104,12 @@ namespace RevitAIHubSetup
             catch { return null; }
         }
 
+        // 检查能否使用自带的编译器
+        // Check if bundled compiler can be used
         private static bool CanUseBundledCompiler(string directory)
         {
-            // Keep this helper compatible with PowerShell 7/.NET Core hosts.
-            // ReflectionOnlyLoadFrom was removed there; the installer only needs
-            // to confirm that the API assembly is readable before compiling.
+            // 与 PowerShell 7 / .NET Core 主机兼容
+            // Keep this helper compatible with PowerShell 7/.NET Core hosts
             try
             {
                 return AssemblyName.GetAssemblyName(Path.Combine(directory, "RevitAPI.dll")) != null;
@@ -1930,6 +2120,8 @@ namespace RevitAIHubSetup
             }
         }
 
+        // 递归搜索注册表查找 Revit 目录
+        // Recursively search registry for Revit directory
         private static string FindRegistryRevitDirectory(RegistryKey key, string version, int depth)
         {
             foreach (string propertyName in RevitRegistryPathValueNames())
@@ -1962,6 +2154,8 @@ namespace RevitAIHubSetup
             return null;
         }
 
+        // 注册表中可能包含 Revit 安装路径的属性名列表
+        // List of registry property names that may contain Revit install paths
         private static string[] RevitRegistryPathValueNames()
         {
             return new[]
@@ -1976,6 +2170,8 @@ namespace RevitAIHubSetup
             };
         }
 
+        // 标准化 Revit 目录候选路径
+        // Normalize candidate Revit directory path
         private static string NormalizeRevitDirectoryCandidate(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return null;
@@ -1992,8 +2188,12 @@ namespace RevitAIHubSetup
             return candidate;
         }
 
+        // 对路径加引号（处理反斜杠转义）
+        // Quote a path string (handling backslash escaping)
         private static string Quote(string value)
         {
+            // Windows 命令行解析将结束引号前的反斜杠视为转义
+            // 双写末尾反斜杠以防止检测目录被 PowerShell 参数吞掉
             // Windows command-line parsing treats backslashes immediately before
             // a closing quote as quote escapes. Double trailing backslashes so a
             // detected directory such as "C:\\Program Files\\Autodesk\\Revit 2024\\"
@@ -2029,6 +2229,8 @@ namespace RevitAIHubSetup
         }
     }
 
+    // 包信息类：描述一个 RevitCommandBridge 编译包
+    // Package info class: describes a RevitCommandBridge build package
     internal sealed class PackageInfo
     {
         public string RevitVersion { get; private set; }
@@ -2036,17 +2238,8 @@ namespace RevitAIHubSetup
         public string DetectedRevitDirectory { get; set; }
         public bool RequiresLocalBuild { get; private set; }
 
-        public static PackageInfo CreateLocalBuild(string version, string templateDirectory, string detectedRevitDirectory)
-        {
-            return new PackageInfo
-            {
-                RevitVersion = version,
-                Directory = templateDirectory,
-                DetectedRevitDirectory = detectedRevitDirectory,
-                RequiresLocalBuild = true
-            };
-        }
-
+        // 从目录读取包元数据
+        // Read package metadata from directory
         public static PackageInfo Read(string directory)
         {
             string metadataPath = Path.Combine(directory, "bridge.config.json");
@@ -2091,6 +2284,8 @@ namespace RevitAIHubSetup
         }
     }
 
+    // 连接器信息类：描述一个 AI 连接器选项
+    // Connector info class: describes an AI connector option
     internal sealed class ConnectorInfo
     {
         public ConnectorInfo(string value, string display)

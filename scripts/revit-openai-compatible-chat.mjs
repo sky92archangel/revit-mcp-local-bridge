@@ -1,3 +1,5 @@
+// OpenAI 兼容模式聊天助手 —— 通过 OpenAI Chat Completions API 调用模型，自动将 Revit 工具调用接入文件队列
+// OpenAI-compatible chat assistant — calls models via the OpenAI Chat Completions API and bridges Revit tool calls to the file queue
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import {
@@ -10,10 +12,14 @@ import {
   waitForCommandResult,
 } from "./bridge-client.mjs";
 
+// 读取配置、命令行参数、工具定义，构造系统提示词
+// Read configuration, command-line args, tool definitions, and build the system prompt
 const configuration = readConfiguration();
 const commandLine = readCommandLine(process.argv.slice(2));
 const rootDirectory = resolveBridgeRoot(process.env.REVIT_COMMAND_BRIDGE_ROOT);
 const toolDefinitions = buildToolDefinitions();
+// 系统提示词：约束模型行为，要求先预览后执行
+// System prompt: constrain model behavior, require preview before execution
 const systemMessage = {
   role: "system",
   content: [
@@ -24,6 +30,8 @@ const systemMessage = {
   ].join("\n"),
 };
 
+// 命令行模式：单次提问并输出回答；交互模式：进入 REPL 循环
+// CLI mode: single question and answer; interactive mode: enter REPL loop
 if (commandLine.message != null) {
   const messages = [systemMessage, { role: "user", content: commandLine.message }];
   const answer = await continueConversation(messages);
@@ -32,6 +40,8 @@ if (commandLine.message != null) {
   await runInteractiveChat();
 }
 
+// 从环境变量读取 AI 模型配置（API Key、Base URL、Model）
+// Read AI model configuration from environment variables (API Key, Base URL, Model)
 function readConfiguration() {
   const apiKey = String(process.env.REVIT_AI_API_KEY || "").trim();
   const baseUrl = String(process.env.REVIT_AI_BASE_URL || "").trim().replace(/\/+$/, "");
@@ -45,6 +55,8 @@ function readConfiguration() {
   return { apiKey, baseUrl, model };
 }
 
+// 解析命令行参数：--message 单条指令，--help 显示帮助
+// Parse command-line arguments: --message for a single instruction, --help for help text
 function readCommandLine(argumentsValue) {
   const result = { message: null };
   for (let index = 0; index < argumentsValue.length; index += 1) {
@@ -67,6 +79,8 @@ function readCommandLine(argumentsValue) {
   return result;
 }
 
+// 交互式 REPL 循环：用户输入 -> 模型响应 -> 工具调用循环
+// Interactive REPL loop: user input -> model response -> tool call loop
 async function runInteractiveChat() {
   const terminal = readline.createInterface({ input, output });
   const messages = [systemMessage];
@@ -104,6 +118,8 @@ async function runInteractiveChat() {
   }
 }
 
+// 多轮工具调用循环：模型最多连续请求 10 轮工具调用
+// Multi-round tool call loop: model may request up to 10 consecutive tool call rounds
 async function continueConversation(messages) {
   for (let round = 0; round < 10; round += 1) {
     const assistantMessage = await requestChatCompletion(messages);
@@ -125,6 +141,8 @@ async function continueConversation(messages) {
   throw new Error("模型连续请求工具超过 10 轮，已停止本次会话。");
 }
 
+// 向 OpenAI 兼容 API 发送 Chat Completions 请求，返回第一个 choice 的 message
+// Send a Chat Completions request to the OpenAI-compatible API, return the first choice's message
 async function requestChatCompletion(messages) {
   const response = await fetch(chatCompletionsUrl(configuration.baseUrl), {
     method: "POST",
@@ -160,6 +178,8 @@ async function requestChatCompletion(messages) {
   return message;
 }
 
+// 执行模型返回的单个工具调用：解析参数并分发到 revit_command 或 revit_execute_plan
+// Execute a single tool call from the model: parse arguments and dispatch to revit_command or revit_execute_plan
 async function executeToolCall(toolCall) {
   if (!isRecord(toolCall) || !isRecord(toolCall.function)) {
     return { ok: false, error: "invalid_tool_call", message: "模型返回了无效的工具调用。" };

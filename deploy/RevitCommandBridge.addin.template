@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+================================================================================
+ Revit Command Bridge — .addin 清单模板 / Manifest Template
+================================================================================
+ 本文件是部署用的模板文件，其中的 __ASSEMBLY_PATH__ 和 __FULL_CLASS_NAME__
+ 占位符会在构建/安装脚本中被替换为目标 Revit 版本的对应值。
+ 参见 deploy/install.ps1 以了解替换细节。
+
+ This is the addin manifest template used during deployment. The placeholders
+ __ASSEMBLY_PATH__ and __FULL_CLASS_NAME__ are replaced by the build/install
+ script with values for the target Revit version.
+ See deploy/install.ps1 for replacement details.
+================================================================================
+-->
 <RevitAddIns>
   <AddIn Type="Application">
     <Name>Revit Command Bridge</Name>

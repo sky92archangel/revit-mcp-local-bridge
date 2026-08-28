@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+================================================================================
+ Revit Command Bridge — Revit 2026 .addin 清单 / Addin Manifest
+================================================================================
+ 本文件是 Revit 2026 的已填充清单，直接引用已编译的程序集路径。
+ 部署脚本将其复制到 %PROGRAMDATA%\Autodesk\Revit\Addins\2026\ 下。
+
+ This is the populated addin manifest for Revit 2026, referencing the compiled
+ assembly path directly. The deployment script copies it under
+ %PROGRAMDATA%\Autodesk\Revit\Addins\2026\.
+================================================================================
+-->
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Revit Command Bridge</Name>
+    <Assembly>C:\ProgramData\Autodesk\Revit\Addins\2026\RevitCommandBridge.dll</Assembly>
+    <AddInId>C3D736C1-54D3-47E4-9403-FBF2FFB2A07F</AddInId>
+    <FullClassName>RevitCommandBridge.RevitCommandBridgeApp26</FullClassName>
+    <VendorId>RCB0</VendorId>
+    <VendorDescription>Local, auditable Revit command bridge</VendorDescription>
+  </AddIn>
+</RevitAddIns>

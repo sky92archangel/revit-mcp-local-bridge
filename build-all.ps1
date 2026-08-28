@@ -1,12 +1,17 @@
+# build-all.ps1 — 多版本批量编译脚本
+# build-all.ps1 — Multi-version batch build script
+
 [CmdletBinding()]
 param(
-    [string[]]$RevitVersions,
-    [switch]$SkipInstaller
+    [string[]]$RevitVersions,  # 要编译的版本列表，为空则编译全部 / List of versions to build; empty means all
+    [switch]$SkipInstaller  # 跳过安装器打包 / Skip installer packaging
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
+# 加载版本清单
+# Load version manifest
 $manifestPath = Join-Path $PSScriptRoot 'build\version-manifest.json'
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "未找到版本清单: $manifestPath"
@@ -17,6 +22,8 @@ if ($null -eq $manifest.versions -or $manifest.versions.Count -eq 0) {
     throw "版本清单为空"
 }
 
+# 筛选目标版本，未指定则编译全部
+# Filter target versions; build all if none specified
 $targets = if ($RevitVersions) {
     $manifest.versions | Where-Object { $_.year -in ($RevitVersions | ForEach-Object { [int]$_ }) }
 } else {
@@ -36,6 +43,8 @@ foreach ($version in $targets) {
 
     $started = Get-Date
     try {
+        # 调用单版本编译脚本
+        # Invoke single-version build script
         & (Join-Path $PSScriptRoot 'build.ps1') -RevitVersion $version.year -SkipInstaller:$SkipInstaller.IsPresent
         $elapsed = (Get-Date) - $started
         Write-Host "[OK] Revit $($version.year) 完成 ($($elapsed.TotalSeconds.ToString('F1'))s)" -ForegroundColor Green
@@ -46,6 +55,8 @@ foreach ($version in $targets) {
     }
 }
 
+# 编译结果汇总
+# Build result summary
 Write-Host "`n═══════════════════════════════════════════"
 Write-Host "  编译汇总"
 Write-Host "═══════════════════════════════════════════"

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,15 +7,26 @@ using Autodesk.Revit.UI;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 定义桥接协议版本常量。 / Defines the bridge protocol version constants.
+    /// </summary>
     internal static class BridgeProtocol
     {
+        /// <summary>当前协议版本标识。 / Current protocol version identifier.</summary>
         public const string Version = "revit-command-bridge/2.0";
     }
 
+    /// <summary>
+    /// 执行建模计划：解析步骤、事务管理、分步执行。 / Executes a modeling plan: step parsing, transaction management, and step-by-step execution.
+    /// </summary>
     internal static class PlanCommandExecutor
     {
+        /// <summary>单个计划允许的最大步骤数。 / Maximum number of steps allowed in a single plan.</summary>
         private const int MaximumSteps = 500;
 
+        /// <summary>
+        /// 所有支持的原子操作列表。 / List of all supported atomic operations.
+        /// </summary>
         private static readonly string[] AtomicOperations =
         {
             "query_document",
@@ -28,6 +39,7 @@ namespace RevitCommandBridge
             "check_interferences",
             "query_mep_network",
             "query_view_range",
+            "query_selection",
             "create_level",
             "create_grid",
             "create_wall",
@@ -84,6 +96,9 @@ namespace RevitCommandBridge
             "save_document"
         };
 
+        /// <summary>
+        /// 会修改 Revit 模型的写操作集合。 / Write operations that modify the Revit model.
+        /// </summary>
         private static readonly HashSet<string> WriteOperations = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "create_level",
@@ -141,28 +156,41 @@ namespace RevitCommandBridge
             "delete_elements"
         };
 
+        /// <summary>
+        /// 涉及外部文件输出的操作集合（export / save_document）。 / Operations involving external file output (export / save_document).
+        /// </summary>
         private static readonly HashSet<string> ExternalOperations = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "export",
             "save_document"
         };
 
+        /// <summary>
+        /// 文档保存操作集合。 / Document-saving operations.
+        /// </summary>
         private static readonly HashSet<string> DocumentWriteOperations = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "save_document"
         };
 
+        /// <summary>获取受支持的原子操作列表副本。 / Gets a copy of the supported atomic operations list.</summary>
         public static string[] SupportedAtomicOperations
         {
             get { return AtomicOperations.ToArray(); }
         }
 
+        /// <summary>
+        /// 判断请求是否包含写操作步骤。 / Determines whether the request contains any write-operation steps.
+        /// </summary>
         public static bool IsWritePlan(BridgeRequest request)
         {
             return ParseSteps(request).Any(step =>
                 WriteOperations.Contains(step.Operation) || DocumentWriteOperations.Contains(step.Operation));
         }
 
+        /// <summary>
+        /// 执行建模计划：校验、事务包装、步骤执行、返回结果。 / Executes a modeling plan: validation, transaction wrapping, step execution, and result collection.
+        /// </summary>
         public static BridgeResponse Execute(UIApplication uiApplication, Document document, BridgeRequest request)
         {
             List<PlanStep> steps = ParseSteps(request);
@@ -181,12 +209,16 @@ namespace RevitCommandBridge
             var context = new PlanExecutionContext(uiApplication, document, request.Preview);
             var stepResults = new List<Dictionary<string, object>>();
             BridgeFailurePreprocessor failurePreprocessor = null;
+            // 预览模式或纯只读模式不需事务，直接执行
+            // Preview or read-only mode: execute without a transaction
             if (request.Preview || !hasWrites)
             {
                 ExecuteSteps(steps, context, stepResults);
             }
             else
             {
+                // 写操作在单个 Revit 事务中执行，支持全部提交或全部回滚
+                // All write operations execute inside a single Revit transaction (all-or-nothing)
                 using (Transaction transaction = new Transaction(document, "RCB 通用建模计划"))
                 {
                     TransactionStatus started = transaction.Start();
@@ -195,6 +227,8 @@ namespace RevitCommandBridge
                         throw new BridgeCommandException("Revit 未能启动计划事务：" + started);
                     }
 
+                    // 安装失败预处理器以收集警告而非弹窗
+                    // Install a failure preprocessor to collect warnings instead of showing dialogs
                     failurePreprocessor = new BridgeFailurePreprocessor();
                     FailureHandlingOptions failureOptions = transaction.GetFailureHandlingOptions();
                     failureOptions.SetFailuresPreprocessor(failurePreprocessor);
@@ -212,6 +246,8 @@ namespace RevitCommandBridge
                     }
                     catch
                     {
+                        // 事务未提交时回滚以保持模型一致性
+                        // Roll back if the transaction has not been committed
                         if (transaction.GetStatus() == TransactionStatus.Started)
                         {
                             transaction.RollBack();
@@ -252,6 +288,9 @@ namespace RevitCommandBridge
             return BridgeResponse.Success(state, message, data);
         }
 
+        /// <summary>
+        /// 逐步骤执行计划，收集结果或抛出异常。 / Executes plan steps sequentially, collecting results or throwing on failure.
+        /// </summary>
         private static void ExecuteSteps(
             IList<PlanStep> steps,
             PlanExecutionContext context,
@@ -284,6 +323,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 从请求中解析步骤列表，验证 ID 合法性、操作存在性、重复性。 / Parses the step list from a request, validating IDs, operations, and uniqueness.
+        /// </summary>
         private static List<PlanStep> ParseSteps(BridgeRequest request)
         {
             object rawSteps = PlanValues.Get(request.Arguments, "steps", "operations");
@@ -332,6 +374,9 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 将中文操作名标准化为英文操作名。 / Normalizes Chinese operation names to their English equivalents.
+        /// </summary>
         private static string NormalizeAtomicOperation(string operation)
         {
             string value = (operation ?? string.Empty).Trim().ToLowerInvariant();
@@ -348,6 +393,8 @@ namespace RevitCommandBridge
                 case "碰撞检查": return "check_interferences";
                 case "查询管网": return "query_mep_network";
                 case "查询视图范围": return "query_view_range";
+                case "查询选中":
+                case "查询选择": return "query_selection";
                 case "创建标高": return "create_level";
                 case "创建轴网": return "create_grid";
                 case "创建墙":
@@ -412,6 +459,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 验证步骤 ID 是否合法（字母、数字、点、下划线、连字符，最长 128 字符）。 / Validates that a step ID contains only safe characters and is within length limit.
+        /// </summary>
         private static bool IsValidStepId(string value)
         {
             if (string.IsNullOrWhiteSpace(value) || value.Length > 128)
@@ -429,13 +479,22 @@ namespace RevitCommandBridge
         }
     }
 
+    /// <summary>
+    /// 保存建模计划执行过程中的上下文状态：前置步骤结果、选中项、UI 动作等。 / Holds contextual state during plan execution: predecessor step results, selections, and deferred UI actions.
+    /// </summary>
     internal sealed class PlanExecutionContext
     {
+        /// <summary>按步骤 ID 存储的结果字典。 / Step results indexed by step ID.</summary>
         private readonly Dictionary<string, Dictionary<string, object>> _results =
             new Dictionary<string, Dictionary<string, object>>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>延迟选中的元素 ID 列表。 / Deferred element selection list.</summary>
         private readonly List<ElementId> _selection = new List<ElementId>();
+        /// <summary>是否在选中后缩放显示元素。 / Whether to show (zoom to) selected elements.</summary>
         private bool _showSelection;
 
+        /// <summary>
+        /// 初始化执行上下文。 / Initializes the execution context.
+        /// </summary>
         public PlanExecutionContext(UIApplication uiApplication, Document document, bool preview)
         {
             UiApplication = uiApplication;
@@ -444,16 +503,26 @@ namespace RevitCommandBridge
             DeferredPreviewReferences = new List<string>();
         }
 
+        /// <summary>当前 Revit UI 应用对象。 / The current Revit UI application object.</summary>
         public UIApplication UiApplication { get; private set; }
+        /// <summary>当前 Revit 文档。 / The current Revit document.</summary>
         public Document Document { get; private set; }
+        /// <summary>是否为预览模式（不执行写操作）。 / Whether in preview mode (no write operations).</summary>
         public bool Preview { get; private set; }
+        /// <summary>预览模式下无法解析的引用列表。 / List of references that could not be resolved during preview.</summary>
         public List<string> DeferredPreviewReferences { get; private set; }
 
+        /// <summary>
+        /// 注册某个步骤的执行结果，供后续步骤引用。 / Registers a step result for reference by subsequent steps.
+        /// </summary>
         public void RegisterResult(string stepId, Dictionary<string, object> result)
         {
             _results[stepId] = result ?? new Dictionary<string, object>();
         }
 
+        /// <summary>
+        /// 将参数值解析为 ElementId 列表，支持 $/@ 引用前置步骤。 / Resolves parameter values to a list of ElementIds, supporting $/@ references to prior steps.
+        /// </summary>
         public IList<ElementId> ResolveElementIds(IDictionary<string, object> arguments, params string[] fieldNames)
         {
             object value = PlanValues.Get(arguments, fieldNames);
@@ -480,9 +549,12 @@ namespace RevitCommandBridge
             {
                 AddResolvedToken(ids, token);
             }
-            return ids.GroupBy(id => id.IntegerValue).Select(group => group.First()).ToList();
+            return ids.GroupBy(id => (int)id.GetValue()).Select(group => group.First()).ToList();
         }
 
+        /// <summary>
+        /// 将参数值解析为单个 ElementId，预览模式下可返回无效 ID。 / Resolves parameter values to a single ElementId; may return invalid ID in preview mode.
+        /// </summary>
         public ElementId ResolveSingleElementId(IDictionary<string, object> arguments, params string[] fieldNames)
         {
             IList<ElementId> values = ResolveElementIds(arguments, fieldNames);
@@ -497,6 +569,9 @@ namespace RevitCommandBridge
             return values[0];
         }
 
+        /// <summary>
+        /// 请求在执行完成后选中指定的元素。 / Requests element selection after execution completes.
+        /// </summary>
         public void RequestSelection(IEnumerable<ElementId> ids, bool show)
         {
             _selection.Clear();
@@ -504,6 +579,9 @@ namespace RevitCommandBridge
             _showSelection = show;
         }
 
+        /// <summary>
+        /// 应用延迟的 UI 动作（选中元素、缩放显示）。 / Applies deferred UI actions (element selection and zoom).
+        /// </summary>
         public void ApplyDeferredUiActions()
         {
             if (Preview || _selection.Count == 0 || UiApplication.ActiveUIDocument == null)
@@ -517,6 +595,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 递归解析单个引用标记为 ElementId，支持 $/@ 嵌套引用。 / Recursively resolves a single reference token to ElementIds, supporting nested $/@ references.
+        /// </summary>
         private void AddResolvedToken(ICollection<ElementId> target, object token)
         {
             if (token == null)
@@ -524,6 +605,8 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("元素目标不能为 null。");
             }
             string text = token as string;
+            // $ 或 @ 前缀表示引用前置步骤的输出
+            // $ or @ prefix references a prior step's output
             if (text != null && (text.StartsWith("$", StringComparison.Ordinal) || text.StartsWith("@", StringComparison.Ordinal)))
             {
                 string stepId = text.Substring(1);
@@ -533,9 +616,13 @@ namespace RevitCommandBridge
                     throw new BridgeCommandException("找不到前置步骤引用：" + text);
                 }
 
+                // 从前置步骤结果中提取元素 ID
+                // Extract element IDs from the prior step result
                 object resolved = PlanValues.Get(result, "element_ids", "element_id", "id");
                 if (resolved == null)
                 {
+                    // 预览模式下暂存无法解析的引用，等执行完整后再处理
+                    // In preview mode, defer unresolved references for post-execution resolution
                     if (Preview)
                     {
                         if (!DeferredPreviewReferences.Contains(text))
@@ -547,6 +634,8 @@ namespace RevitCommandBridge
                     throw new BridgeCommandException("步骤引用“" + text + "”没有返回元素 ID。");
                 }
 
+                // 递归解析引用（支持嵌套引用列表）
+                // Recursively resolve references (supports nested reference lists)
                 if (resolved is string || !(resolved is System.Collections.IEnumerable))
                 {
                     AddResolvedToken(target, resolved);
@@ -561,6 +650,8 @@ namespace RevitCommandBridge
                 return;
             }
 
+            // 无前缀时视为直接元素 ID（正整数）
+            // Without a prefix, treat as a literal element ID (positive integer)
             int id;
             if (!int.TryParse(Convert.ToString(token, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out id) || id <= 0)
             {

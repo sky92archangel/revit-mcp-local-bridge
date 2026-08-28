@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -11,12 +11,22 @@ using Autodesk.Revit.DB.Structure;
 
 namespace RevitCommandBridge
 {
+    /// <summary>
+    /// 所有 Revit 元素创建操作的实现。
+    /// Implementation of all Revit element creation operations.
+    /// </summary>
     internal static class RevitPlanCreations
     {
+        /// <summary>
+        /// 创建标高。校验名称唯一性并支持预览模式。
+        /// Create a level. Validates name uniqueness and supports preview mode.
+        /// </summary>
         public static Dictionary<string, object> CreateLevel(PlanStep step, PlanExecutionContext context)
         {
+            // 从参数中获取标高值（毫米）
             double elevationMm = PlanValues.RequireMillimeters(step.Arguments, "elevation_mm", "elevation");
             string name = PlanValues.String(step.Arguments, null, "name");
+            // 检查名称是否已存在（不区分大小写）
             if (!string.IsNullOrWhiteSpace(name) && new FilteredElementCollector(context.Document)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
@@ -29,6 +39,7 @@ namespace RevitCommandBridge
                 { "name", name },
                 { "elevation_mm", elevationMm }
             };
+            // 预览模式：返回参数但不执行创建
             if (context.Preview)
             {
                 return data;
@@ -39,12 +50,16 @@ namespace RevitCommandBridge
             {
                 level.Name = name;
             }
-            data["element_id"] = level.Id.IntegerValue;
-            data["element_ids"] = new[] { level.Id.IntegerValue };
+            data["element_id"] = level.Id.GetValue();
+            data["element_ids"] = new[] { level.Id.GetValue() };
             data["name"] = level.Name;
             return data;
         }
 
+        /// <summary>
+        /// 创建直线轴网。校验起点/终点不重合且 Z 值相同。
+        /// Create a straight grid line. Validates start/end are not coincident and share the same Z value.
+        /// </summary>
         public static Dictionary<string, object> CreateGrid(PlanStep step, PlanExecutionContext context)
         {
             XYZ start = PlanValues.Point(step.Arguments, "start");
@@ -74,12 +89,16 @@ namespace RevitCommandBridge
             {
                 grid.Name = name;
             }
-            data["element_id"] = grid.Id.IntegerValue;
-            data["element_ids"] = new[] { grid.Id.IntegerValue };
+            data["element_id"] = grid.Id.GetValue();
+            data["element_ids"] = new[] { grid.Id.GetValue() };
             data["name"] = grid.Name;
             return data;
         }
 
+        /// <summary>
+        /// 创建墙体。支持指定厚度自动生成新墙类型。
+        /// Create a wall. Supports auto-generating a new wall type for a specified thickness.
+        /// </summary>
         public static Dictionary<string, object> CreateWall(PlanStep step, PlanExecutionContext context)
         {
             XYZ start = PlanValues.Point(step.Arguments, "start");
@@ -104,6 +123,7 @@ namespace RevitCommandBridge
             }
             double requestedThicknessMm = PlanValues.Millimeters(step.Arguments, -1.0, "thickness_mm", "thickness");
             string requestedNewTypeName = PlanValues.String(step.Arguments, null, "new_type", "new_wall_type");
+            // 如果指定了厚度，生成目标类型名称：前缀 RCB_ + 源类型 + 厚度
             string targetTypeName = requestedThicknessMm > 0.0
                 ? (string.IsNullOrWhiteSpace(requestedNewTypeName)
                     ? "RCB_" + sourceType.Name + "_" + requestedThicknessMm.ToString("0.###", CultureInfo.InvariantCulture) + "mm"
@@ -129,6 +149,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            // 如果需要特定厚度，创建或复用对应的墙类型
             WallType targetType = requestedThicknessMm > 0.0
                 ? ResolveOrCreateWallType(context.Document, sourceType, targetTypeName, requestedThicknessMm)
                 : sourceType;
@@ -143,12 +164,16 @@ namespace RevitCommandBridge
                 PlanValues.ToFeet(baseOffsetMm),
                 false,
                 false);
-            data["element_id"] = wall.Id.IntegerValue;
-            data["element_ids"] = new[] { wall.Id.IntegerValue };
+            data["element_id"] = wall.Id.GetValue();
+            data["element_ids"] = new[] { wall.Id.GetValue() };
             data["type_target"] = targetType.Name;
             return data;
         }
 
+        /// <summary>
+        /// 创建楼板。通过闭合轮廓生成楼板几何。
+        /// Create a floor. Generates floor geometry from a closed boundary profile.
+        /// </summary>
         public static Dictionary<string, object> CreateFloor(PlanStep step, PlanExecutionContext context)
         {
             Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
@@ -163,7 +188,7 @@ namespace RevitCommandBridge
             {
                 { "level", level.Name },
                 { "type", floorType.Name },
-                { "type_id", floorType.Id.IntegerValue },
+                { "type_id", floorType.Id.GetValue() },
                 { "structural", structural },
                 { "offset_mm", offsetMm },
                 { "boundary_segment_count", profile.Size }
@@ -173,12 +198,16 @@ namespace RevitCommandBridge
                 return data;
             }
 
-            Floor floor = context.Document.Create.NewFloor(profile, floorType, level, structural);
-            data["element_id"] = floor.Id.IntegerValue;
-            data["element_ids"] = new[] { floor.Id.IntegerValue };
+Floor floor = RevitApiExtensions.CreateFloor(context.Document, profile, floorType, level, structural);
+            data["element_id"] = floor.Id.GetValue();
+            data["element_ids"] = new[] { floor.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 创建房间（基于 Revit 的房间边界放置）。
+        /// Create a room (placed within Revit room-bounded areas).
+        /// </summary>
         public static Dictionary<string, object> CreateRoom(PlanStep step, PlanExecutionContext context)
         {
             Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
@@ -206,13 +235,17 @@ namespace RevitCommandBridge
             {
                 room.Number = number;
             }
-            data["element_id"] = room.Id.IntegerValue;
-            data["element_ids"] = new[] { room.Id.IntegerValue };
+            data["element_id"] = room.Id.GetValue();
+            data["element_ids"] = new[] { room.Id.GetValue() };
             data["name"] = room.Name;
             data["number"] = room.Number;
             return data;
         }
 
+        /// <summary>
+        /// 创建空间（MEP 空间，类似于房间但用于暖通分析）。
+        /// Create a space (MEP space, similar to room but for HVAC analysis).
+        /// </summary>
         public static Dictionary<string, object> CreateSpace(PlanStep step, PlanExecutionContext context)
         {
             Level level = RevitLookups.ResolveLevel(context.Document, step.Arguments);
@@ -240,13 +273,17 @@ namespace RevitCommandBridge
             {
                 space.Number = number;
             }
-            data["element_id"] = space.Id.IntegerValue;
-            data["element_ids"] = new[] { space.Id.IntegerValue };
+            data["element_id"] = space.Id.GetValue();
+            data["element_ids"] = new[] { space.Id.GetValue() };
             data["name"] = space.Name;
             data["number"] = space.Number;
             return data;
         }
 
+        /// <summary>
+        /// 创建模型线。自动计算草图平面方向。
+        /// Create a model curve. Auto-computes the sketch plane orientation.
+        /// </summary>
         public static Dictionary<string, object> CreateModelCurve(PlanStep step, PlanExecutionContext context)
         {
             XYZ start = PlanValues.Point(step.Arguments, "start");
@@ -267,6 +304,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            // 计算法向量以创建草图平面：优先使用 Z 轴，平行时改用 X 轴
             XYZ direction = (end - start).Normalize();
             XYZ seed = Math.Abs(direction.DotProduct(XYZ.BasisZ)) < 0.9 ? XYZ.BasisZ : XYZ.BasisX;
             XYZ normal = direction.CrossProduct(seed).Normalize();
@@ -276,15 +314,20 @@ namespace RevitCommandBridge
             ModelCurve curve = context.Document.Create.NewModelCurve(
                 Line.CreateBound(start, end),
                 sketchPlane);
-            data["element_id"] = curve.Id.IntegerValue;
-            data["element_ids"] = new[] { curve.Id.IntegerValue };
+            data["element_id"] = curve.Id.GetValue();
+            data["element_ids"] = new[] { curve.Id.GetValue() };
             if (!string.IsNullOrWhiteSpace(name))
             {
+                // 模型线在 Revit API 中不支持直接设置名称，仅记录尝试结果
                 data["name_applied"] = false;
             }
             return data;
         }
 
+        /// <summary>
+        /// 创建视图（3D、平面、天花板、结构平面）。支持相机方位设置。
+        /// Create a view (3D, floor plan, ceiling plan, structural plan). Supports camera orientation.
+        /// </summary>
         public static Dictionary<string, object> CreateView(PlanStep step, PlanExecutionContext context)
         {
             string kind = PlanValues.String(step.Arguments, "3d", "kind", "view_kind", "view_type")
@@ -293,6 +336,7 @@ namespace RevitCommandBridge
                 .Replace("-", "_")
                 .Replace(" ", "_");
             ViewFamily family;
+            // 将 kind 字符串映射到 ViewFamily 枚举
             switch (kind)
             {
                 case "3d":
@@ -322,6 +366,7 @@ namespace RevitCommandBridge
             XYZ eye = null;
             XYZ forward = null;
             XYZ up = null;
+            // 3D 视图可读取相机参数：eye（视点）、forward（视线方向）、up（上方向）
             if (family == ViewFamily.ThreeDimensional && PlanValues.Get(step.Arguments, "eye", "eye_position", "camera_position") != null)
             {
                 eye = ReadOptionalPoint(step.Arguments, "eye", "eye_position", "camera_position", "position");
@@ -329,7 +374,7 @@ namespace RevitCommandBridge
                 up = PlanValues.Get(step.Arguments, "up", "up_direction") == null
                     ? XYZ.BasisZ
                     : ReadDirectionVector(step.Arguments, "up", "up_direction");
-                if (Math.Abs(forward.Dot(up)) > 1e-3)
+                if (Math.Abs(forward.DotProduct(up)) > 1e-3)
                 {
                     throw new BridgeCommandException("create_view 的 forward 与 up 必须近似垂直。");
                 }
@@ -339,7 +384,7 @@ namespace RevitCommandBridge
                 { "kind", kind },
                 { "view_family", family.ToString() },
                 { "type", type.Name },
-                { "type_id", type.Id.IntegerValue },
+                { "type_id", type.Id.GetValue() },
                 { "level", level == null ? null : level.Name },
                 { "perspective", perspective },
                 { "name", name }
@@ -383,12 +428,16 @@ namespace RevitCommandBridge
                 }
                 view3D.SetOrientation(new ViewOrientation3D(eye, forward, up));
             }
-            data["element_id"] = view.Id.IntegerValue;
-            data["element_ids"] = new[] { view.Id.IntegerValue };
+            data["element_id"] = view.Id.GetValue();
+            data["element_ids"] = new[] { view.Id.GetValue() };
             data["name"] = view.Name;
             return data;
         }
 
+        /// <summary>
+        /// 创建图纸。可指定图框类型和编号/名称。
+        /// Create a sheet. Optionally specify a title block type and sheet number/name.
+        /// </summary>
         public static Dictionary<string, object> CreateSheet(PlanStep step, PlanExecutionContext context)
         {
             FamilySymbol titleBlock = ResolveOptionalTitleBlock(context.Document, step.Arguments);
@@ -396,7 +445,7 @@ namespace RevitCommandBridge
             string name = PlanValues.String(step.Arguments, null, "name", "sheet_name");
             var data = new Dictionary<string, object>
             {
-                { "title_block_type_id", titleBlock == null ? (object)null : titleBlock.Id.IntegerValue },
+                { "title_block_type_id", titleBlock == null ? (object)null : titleBlock.Id.GetValue() },
                 { "title_block", titleBlock == null ? null : titleBlock.Name },
                 { "sheet_number", sheetNumber },
                 { "name", name }
@@ -417,19 +466,23 @@ namespace RevitCommandBridge
             {
                 sheet.Name = name;
             }
-            data["element_id"] = sheet.Id.IntegerValue;
-            data["element_ids"] = new[] { sheet.Id.IntegerValue };
+            data["element_id"] = sheet.Id.GetValue();
+            data["element_ids"] = new[] { sheet.Id.GetValue() };
             data["sheet_number"] = sheet.SheetNumber;
             data["name"] = sheet.Name;
             return data;
         }
 
+        /// <summary>
+        /// 将视图放置到图纸上。校验视图是否可放置。
+        /// Place a view onto a sheet. Validates whether the view can be placed.
+        /// </summary>
         public static Dictionary<string, object> PlaceViewOnSheet(PlanStep step, PlanExecutionContext context)
         {
             ElementId sheetId = context.ResolveSingleElementId(step.Arguments, "sheet_id", "sheet", "target_sheet");
             ElementId viewId = context.ResolveSingleElementId(step.Arguments, "view_id", "view", "target_view");
-            if (sheetId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
-                viewId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (sheetId.GetValue() == ElementId.InvalidElementId.GetValue() ||
+                viewId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return new Dictionary<string, object>
                 {
@@ -441,17 +494,17 @@ namespace RevitCommandBridge
             View view = context.Document.GetElement(viewId) as View;
             if (sheet == null)
             {
-                throw new BridgeCommandException("sheet_id 不是有效图纸：" + sheetId.IntegerValue);
+                throw new BridgeCommandException("sheet_id 不是有效图纸：" + sheetId.GetValue());
             }
             if (view == null || view.IsTemplate)
             {
-                throw new BridgeCommandException("view_id 不是可放置的视图：" + viewId.IntegerValue);
+                throw new BridgeCommandException("view_id 不是可放置的视图：" + viewId.GetValue());
             }
             XYZ point = PlanValues.Point(step.Arguments, "point");
             var data = new Dictionary<string, object>
             {
-                { "sheet_id", sheetId.IntegerValue },
-                { "view_id", viewId.IntegerValue },
+                { "sheet_id", sheetId.GetValue() },
+                { "view_id", viewId.GetValue() },
                 { "point", PlanValues.PointData(point) },
                 { "can_place", Viewport.CanAddViewToSheet(context.Document, sheetId, viewId) }
             };
@@ -465,11 +518,15 @@ namespace RevitCommandBridge
             }
 
             Viewport viewport = Viewport.Create(context.Document, sheetId, viewId, point);
-            data["element_id"] = viewport.Id.IntegerValue;
-            data["element_ids"] = new[] { viewport.Id.IntegerValue };
+            data["element_id"] = viewport.Id.GetValue();
+            data["element_ids"] = new[] { viewport.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 创建洞口（墙洞、竖直楼板洞、竖井洞）。
+        /// Create an opening (wall opening, vertical floor opening, shaft opening).
+        /// </summary>
         public static Dictionary<string, object> CreateOpening(PlanStep step, PlanExecutionContext context)
         {
             string kind = PlanValues.String(step.Arguments, "wall", "kind", "opening_type").Trim().ToLowerInvariant();
@@ -483,7 +540,7 @@ namespace RevitCommandBridge
             }
 
             ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host", "wall_id", "wall");
-            if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (hostId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return new Dictionary<string, object>
                 {
@@ -495,7 +552,7 @@ namespace RevitCommandBridge
             var data = new Dictionary<string, object>
             {
                 { "kind", kind },
-                { "host_id", hostId.IntegerValue }
+                { "host_id", hostId.GetValue() }
             };
             if (kind == "wall")
             {
@@ -517,8 +574,8 @@ namespace RevitCommandBridge
                     return data;
                 }
                 Opening opening = context.Document.Create.NewOpening(wall, start, end);
-                data["element_id"] = opening.Id.IntegerValue;
-                data["element_ids"] = new[] { opening.Id.IntegerValue };
+                data["element_id"] = opening.Id.GetValue();
+                data["element_ids"] = new[] { opening.Id.GetValue() };
                 return data;
             }
 
@@ -527,6 +584,7 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("create_opening(kind=vertical) 的 host_id 必须指向楼板。");
             }
+            // 兼容 corner_1/corner_2 或 start/end 参数名
             XYZ corner1 = PlanValues.Point(step.Arguments,
                 PlanValues.Get(step.Arguments, "corner_1") != null ? "corner_1" : "start");
             XYZ corner2 = PlanValues.Point(step.Arguments,
@@ -541,12 +599,26 @@ namespace RevitCommandBridge
             {
                 return data;
             }
-            Opening verticalOpening = context.Document.Create.NewVerticalOpening(floor, corner1, corner2);
-            data["element_id"] = verticalOpening.Id.IntegerValue;
-            data["element_ids"] = new[] { verticalOpening.Id.IntegerValue };
+            // Revit 2026: Opening.CreateVertical  —  使用 NewOpening + CurveLoop 创建垂直洞口
+            CurveLoop verticalProfile = new CurveLoop();
+            verticalProfile.Append(Line.CreateBound(corner1, new XYZ(corner2.X, corner1.Y, 0)));
+            verticalProfile.Append(Line.CreateBound(new XYZ(corner2.X, corner1.Y, 0), corner2));
+            verticalProfile.Append(Line.CreateBound(corner2, new XYZ(corner1.X, corner2.Y, 0)));
+            verticalProfile.Append(Line.CreateBound(new XYZ(corner1.X, corner2.Y, 0), corner1));
+            Element floorElement = context.Document.GetElement(floor.Id);
+            CurveArray openingCurves = new CurveArray();
+            foreach (Curve c in verticalProfile)
+                openingCurves.Append(c);
+            Opening verticalOpening = context.Document.Create.NewOpening(floorElement, openingCurves, false);
+            data["element_id"] = verticalOpening.Id.GetValue();
+            data["element_ids"] = new[] { verticalOpening.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 创建竖井洞口（从底部标高到顶部标高）。
+        /// Create a shaft opening spanning from bottom level to top level.
+        /// </summary>
         private static Dictionary<string, object> CreateShaftOpening(PlanStep step, PlanExecutionContext context)
         {
             Level bottomLevel = ResolveLevelField(context.Document, step.Arguments, "bottom_level");
@@ -563,18 +635,25 @@ namespace RevitCommandBridge
                 { "top_level", topLevel.Name },
                 { "bottom_elevation_mm", PlanValues.ToMillimeters(bottomLevel.Elevation) },
                 { "top_elevation_mm", PlanValues.ToMillimeters(topLevel.Elevation) },
-                { "vertex_count", profile.NumberOfCurves }
+                { "vertex_count", profile.NumberOfCurves() }
             };
             if (context.Preview)
             {
                 return data;
             }
-            Opening shaft = context.Document.Create.NewShaftOpening(bottomLevel, topLevel, profile);
-            data["element_id"] = shaft.Id.IntegerValue;
-            data["element_ids"] = new[] { shaft.Id.IntegerValue };
+            CurveArray shaftCurves = new CurveArray();
+            foreach (Curve c in profile)
+                shaftCurves.Append(c);
+            Opening shaft = context.Document.Create.NewOpening(context.Document.GetElement(bottomLevel.Id), shaftCurves, false);
+            data["element_id"] = shaft.Id.GetValue();
+            data["element_ids"] = new[] { shaft.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 从参数字段解析标高（按 ID 或名称）。
+        /// Resolve a level from arguments by ID or name field.
+        /// </summary>
         private static Level ResolveLevelField(Document document, IDictionary<string, object> arguments, string fieldName)
         {
             object idValue = PlanValues.Get(arguments, fieldName + "_id");
@@ -595,6 +674,10 @@ namespace RevitCommandBridge
             return RevitLookups.ResolveLevel(document, lookup);
         }
 
+        /// <summary>
+        /// 从点列表构建闭合边界环（用于竖井等）。
+        /// Build a closed boundary loop from a list of points (for shaft openings, etc.).
+        /// </summary>
         private static CurveLoop BuildBoundaryLoop(IDictionary<string, object> arguments, string fieldName)
         {
             object raw = PlanValues.Get(arguments, "boundary", "profile", "points");
@@ -608,8 +691,8 @@ namespace RevitCommandBridge
             {
                 double x = PlanValues.RequireMillimeters(point, "x", "x_mm");
                 double y = PlanValues.RequireMillimeters(point, "y", "y_mm");
-                double z = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
-                resolved.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(z)));
+                double zOffset = PlanValues.Millimeters(point, 0.0, "z", "z_mm");
+                resolved.Add(new XYZ(PlanValues.ToFeet(x), PlanValues.ToFeet(y), PlanValues.ToFeet(zOffset)));
             }
             double z = resolved[0].Z;
             if (resolved.Any(point => Math.Abs(point.Z - z) > 1e-8))
@@ -630,6 +713,10 @@ namespace RevitCommandBridge
             return loop;
         }
 
+        /// <summary>
+        /// 构建闭合轮廓线集（用于楼板等），基于指定基础标高。
+        /// Build a closed CurveArray profile for floors etc., offset from a base elevation.
+        /// </summary>
         private static CurveArray BuildClosedProfile(
             IDictionary<string, object> arguments,
             double baseElevation,
@@ -671,6 +758,10 @@ namespace RevitCommandBridge
             return profile;
         }
 
+        /// <summary>
+        /// 解析视图族类型（ViewFamilyType），按 ID 或名称查找。
+        /// Resolve a ViewFamilyType by ID or name, matching the expected view family.
+        /// </summary>
         private static ViewFamilyType ResolveViewFamilyType(
             Document document,
             IDictionary<string, object> arguments,
@@ -706,6 +797,10 @@ namespace RevitCommandBridge
             return candidates[0];
         }
 
+        /// <summary>
+        /// 解析可选的图框族符号。如未指定任何参数则返回 null。
+        /// Resolve an optional title block family symbol. Returns null if no arguments specified.
+        /// </summary>
         private static FamilySymbol ResolveOptionalTitleBlock(
             Document document,
             IDictionary<string, object> arguments)
@@ -732,20 +827,24 @@ namespace RevitCommandBridge
             }
             FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(document, lookup);
             if (symbol.Category == null ||
-                symbol.Category.Id.IntegerValue != new ElementId(BuiltInCategory.OST_TitleBlocks).IntegerValue)
+                symbol.Category.Id.GetValue() != new ElementId(BuiltInCategory.OST_TitleBlocks).GetValue())
             {
                 throw new BridgeCommandException("指定的 title_block 不是图框族类型。");
             }
             return symbol;
         }
 
+        /// <summary>
+        /// 创建 DirectShape（直接形状），支持材质和几何描述。
+        /// Create a DirectShape element with optional material and geometry description.
+        /// </summary>
         public static Dictionary<string, object> CreateDirectShape(PlanStep step, PlanExecutionContext context)
         {
             ElementId categoryId = RevitLookups.ResolveCategoryId(
                 context.Document, step.Arguments, BuiltInCategory.OST_GenericModel);
             if (!DirectShape.IsValidCategoryId(categoryId, context.Document))
             {
-                throw new BridgeCommandException("DirectShape 不支持类别 ID：" + categoryId.IntegerValue);
+                throw new BridgeCommandException("DirectShape 不支持类别 ID：" + categoryId.GetValue());
             }
 
             string name = PlanValues.String(step.Arguments, step.Id, "name");
@@ -754,13 +853,13 @@ namespace RevitCommandBridge
             Material material = RevitLookups.FindMaterial(context.Document, materialName);
             if (!string.IsNullOrWhiteSpace(materialName) && material == null && !createMaterial)
             {
-                throw new BridgeCommandException("找不到材质“" + materialName + "”。设置 create_material_if_missing=true 可在执行时创建。");
+                throw new BridgeCommandException("找不到材质\u201c" + materialName + "\u201d。设置 create_material_if_missing=true 可在执行时创建。");
             }
             Dictionary<string, object> geometryData = RevitGeometryFactory.DescribeGeometry(step.Arguments);
             var data = new Dictionary<string, object>
             {
                 { "name", name },
-                { "category_id", categoryId.IntegerValue },
+                { "category_id", categoryId.GetValue() },
                 { "material", materialName },
                 { "material_exists", material != null },
                 { "geometry", geometryData }
@@ -788,11 +887,15 @@ namespace RevitCommandBridge
             shape.ApplicationDataId = PlanValues.String(step.Arguments, step.Id, "application_data_id");
             shape.Name = name;
             shape.SetShape(geometry);
-            data["element_id"] = shape.Id.IntegerValue;
-            data["element_ids"] = new[] { shape.Id.IntegerValue };
+            data["element_id"] = shape.Id.GetValue();
+            data["element_ids"] = new[] { shape.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 创建 MEP 曲线（管道、风管、线管、桥架）。支持坡度和尺寸设置。
+        /// Create MEP curves (pipe, duct, conduit, cable tray). Supports slope and sizing.
+        /// </summary>
         public static Dictionary<string, object> CreateMepCurve(PlanStep step, PlanExecutionContext context)
         {
             string kind = PlanValues.String(step.Arguments, null, "kind", "system");
@@ -806,6 +909,7 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("机电曲线 start 与 end 不能重合。");
             }
+            // 坡度计算：根据起点终点水平距离调整终点 Z 值
             object rawSlope = PlanValues.Get(step.Arguments, "slope", "slope_percent", "slope_permille");
             if (rawSlope != null)
             {
@@ -840,6 +944,7 @@ namespace RevitCommandBridge
             }
 
             Element created;
+            // 根据 kind 分发到不同的 MEP 曲线创建逻辑
             switch (normalizedKind)
             {
                 case "pipe":
@@ -908,18 +1013,22 @@ namespace RevitCommandBridge
                     throw new BridgeCommandException("create_mep_curve.kind 仅支持 pipe、duct、conduit、cable_tray。");
             }
 
-            data["element_id"] = created.Id.IntegerValue;
-            data["element_ids"] = new[] { created.Id.IntegerValue };
+            data["element_id"] = created.Id.GetValue();
+            data["element_ids"] = new[] { created.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 连接两个 MEP 元素（管道、风管等），支持多种连接件类型。
+        /// Connect two MEP elements (pipes, ducts, etc.) with various fitting types.
+        /// </summary>
         public static Dictionary<string, object> ConnectMep(PlanStep step, PlanExecutionContext context)
         {
             ElementId aId = context.ResolveSingleElementId(step.Arguments, "element_a", "from", "first");
             ElementId bId = context.ResolveSingleElementId(step.Arguments, "element_b", "to", "second");
             string fitting = PlanValues.String(step.Arguments, "auto", "fitting").ToLowerInvariant();
-            if (aId.IntegerValue == ElementId.InvalidElementId.IntegerValue ||
-                bId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (aId.GetValue() == ElementId.InvalidElementId.GetValue() ||
+                bId.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 return new Dictionary<string, object> { { "deferred", true }, { "reason", "preview 中前置元素引用尚无真实 ID。" } };
             }
@@ -929,8 +1038,8 @@ namespace RevitCommandBridge
             Connector secondConnector = FindConnector(second, step.Arguments, "connector_b_index", first);
             var data = new Dictionary<string, object>
             {
-                { "element_a", aId.IntegerValue },
-                { "element_b", bId.IntegerValue },
+                { "element_a", aId.GetValue() },
+                { "element_b", bId.GetValue() },
                 { "fitting", fitting },
                 { "connector_a_origin", PlanValues.PointData(firstConnector.Origin) },
                 { "connector_b_origin", PlanValues.PointData(secondConnector.Origin) }
@@ -940,6 +1049,7 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            // 可选：延伸管线至交点后再连接
             if (PlanValues.Boolean(step.Arguments, false, "extend_to_intersection", "extend"))
             {
                 XYZ intersection = ExtendMepCurvesToIntersection(context.Document, first, second);
@@ -952,6 +1062,7 @@ namespace RevitCommandBridge
             }
 
             Element fittingElement = null;
+            // 根据 fitting 类型创建对应连接件
             switch (fitting)
             {
                 case "auto":
@@ -969,7 +1080,7 @@ namespace RevitCommandBridge
                     Element third = RequireElement(context.Document, cId, "element_c");
                     Connector thirdConnector = FindConnector(third, step.Arguments, "connector_c_index", first);
                     fittingElement = context.Document.Create.NewTeeFitting(firstConnector, secondConnector, thirdConnector);
-                    data["element_c"] = cId.IntegerValue;
+                    data["element_c"] = cId.GetValue();
                     data["connector_c_origin"] = PlanValues.PointData(thirdConnector.Origin);
                     break;
                 case "reducer":
@@ -984,8 +1095,8 @@ namespace RevitCommandBridge
                     Connector crossFourthConnector = FindConnector(crossFourth, step.Arguments, "connector_d_index", second);
                     fittingElement = context.Document.Create.NewCrossFitting(
                         firstConnector, secondConnector, crossThirdConnector, crossFourthConnector);
-                    data["element_c"] = crossCId.IntegerValue;
-                    data["element_d"] = crossDId.IntegerValue;
+                    data["element_c"] = crossCId.GetValue();
+                    data["element_d"] = crossDId.GetValue();
                     data["connector_c_origin"] = PlanValues.PointData(crossThirdConnector.Origin);
                     data["connector_d_origin"] = PlanValues.PointData(crossFourthConnector.Origin);
                     break;
@@ -994,12 +1105,16 @@ namespace RevitCommandBridge
             }
             if (fittingElement != null)
             {
-                data["element_id"] = fittingElement.Id.IntegerValue;
-                data["element_ids"] = new[] { fittingElement.Id.IntegerValue };
+                data["element_id"] = fittingElement.Id.GetValue();
+                data["element_ids"] = new[] { fittingElement.Id.GetValue() };
             }
             return data;
         }
 
+        /// <summary>
+        /// 创建 MEP 系统（管道系统或机械系统），并可添加成员。
+        /// Create an MEP system (piping or mechanical) and optionally add members.
+        /// </summary>
         public static Dictionary<string, object> CreateMepSystem(PlanStep step, PlanExecutionContext context)
         {
             string domain = PlanValues.String(step.Arguments, null, "domain", "kind").Trim().ToLowerInvariant();
@@ -1038,7 +1153,7 @@ namespace RevitCommandBridge
             {
                 foreach (ElementId memberId in context.ResolveElementIds(step.Arguments, "members", "element_ids", "elements"))
                 {
-                    if (memberId.IntegerValue != ElementId.InvalidElementId.IntegerValue)
+                    if (memberId.GetValue() != ElementId.InvalidElementId.GetValue())
                     {
                         members.Add(memberId);
                     }
@@ -1051,36 +1166,66 @@ namespace RevitCommandBridge
             }
 
             ElementId systemId = domain == "piping"
-                ? PipingSystem.Create(context.Document, systemTypeId, name)
-                : MechanicalSystem.Create(context.Document, systemTypeId, name);
-            data["element_id"] = systemId.IntegerValue;
-            data["element_ids"] = new[] { systemId.IntegerValue };
+                ? PipingSystem.Create(context.Document, systemTypeId, name).Id
+                : MechanicalSystem.Create(context.Document, systemTypeId, name).Id;
+            data["element_id"] = systemId.GetValue();
+            data["element_ids"] = new[] { systemId.GetValue() };
             data["name"] = RevitLookups.ElementName(context.Document.GetElement(systemId));
 
+            // 将成员逐一添加到系统中（通过连接件集）
             int added = 0;
             foreach (ElementId memberId in members)
             {
                 try
                 {
-                    if (domain == "piping")
+                    Element member = context.Document.GetElement(memberId);
+                    ConnectorSet connectorSet = new ConnectorSet();
+                    ConnectorManager cm = null;
+                    MEPCurve mepCurve = member as MEPCurve;
+                    if (mepCurve != null)
                     {
-                        added += ((PipingSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                        cm = mepCurve.ConnectorManager;
                     }
                     else
                     {
-                        added += ((MechanicalSystem)context.Document.GetElement(systemId)).Add(memberId) ? 1 : 0;
+                        FamilyInstance fi = member as FamilyInstance;
+                        if (fi != null && fi.MEPModel != null)
+                        {
+                            cm = fi.MEPModel.ConnectorManager;
+                        }
+                    }
+                    if (cm != null)
+                    {
+                        foreach (Connector c in cm.Connectors)
+                        {
+                            connectorSet.Insert(c);
+                        }
+                    }
+                    if (domain == "piping")
+                    {
+                        ((PipingSystem)context.Document.GetElement(systemId)).Add(connectorSet);
+                        added++;
+                    }
+                    else
+                    {
+                        ((MechanicalSystem)context.Document.GetElement(systemId)).Add(connectorSet);
+                        added++;
                     }
                 }
                 catch (Exception ex)
                 {
                     throw new BridgeCommandException(
-                        "系统成员 element_id=" + memberId.IntegerValue + " 指派失败（域或类型不匹配）：" + ex.Message);
+                        "系统成员 element_id=" + memberId.GetValue() + " 指派失败（域或类型不匹配）：" + ex.Message);
                 }
             }
             data["member_added"] = added;
             return data;
         }
 
+        /// <summary>
+        /// 加载族文件（.rfa）到当前项目，可选激活特定族类型。
+        /// Load a family file (.rfa) into the current project, optionally activating a specific symbol.
+        /// </summary>
         public static Dictionary<string, object> LoadFamily(PlanStep step, PlanExecutionContext context)
         {
             string path = PlanValues.String(step.Arguments, null, "path", "family_path", "file");
@@ -1109,8 +1254,8 @@ namespace RevitCommandBridge
                 throw new BridgeCommandException("Revit 拒绝加载族文件：" + path);
             }
             data["family"] = family.Name;
-            data["element_id"] = family.Id.IntegerValue;
-            data["element_ids"] = new[] { family.Id.IntegerValue };
+            data["element_id"] = family.Id.GetValue();
+            data["element_ids"] = new[] { family.Id.GetValue() };
             var symbolNames = new List<string>();
             FamilySymbol matchedSymbol = null;
             foreach (ElementId symbolId in family.GetFamilySymbolIds())
@@ -1133,14 +1278,18 @@ namespace RevitCommandBridge
                 if (matchedSymbol == null)
                 {
                     throw new BridgeCommandException(
-                        "族“" + family.Name + "”没有类型“" + symbolName + "”。可用：" + string.Join("、", symbolNames));
+                        "族\u201c" + family.Name + "\u201d没有类型\u201c" + symbolName + "\u201d。可用：" + string.Join("\u3001", symbolNames));
                 }
                 ActivateSymbol(context.Document, matchedSymbol);
-                data["symbol_id"] = matchedSymbol.Id.IntegerValue;
+                data["symbol_id"] = matchedSymbol.Id.GetValue();
             }
             return data;
         }
 
+        /// <summary>
+        /// 创建管道/风管保温层。
+        /// Create pipe or duct insulation.
+        /// </summary>
         public static Dictionary<string, object> CreateInsulation(PlanStep step, PlanExecutionContext context)
         {
             IList<ElementId> targets = context.ResolveElementIds(step.Arguments, "element_ids", "elements", "targets");
@@ -1196,17 +1345,21 @@ namespace RevitCommandBridge
                     created.Add(DuctInsulation.Create(context.Document, duct.Id, ductTypeId, thickness).Id);
                     continue;
                 }
-                throw new BridgeCommandException("create_insulation 目标必须是管道或风管：element_id=" + targetId.IntegerValue);
+                throw new BridgeCommandException("create_insulation 目标必须是管道或风管：element_id=" + targetId.GetValue());
             }
-            data["element_ids"] = created.Select(id => id.IntegerValue).ToArray();
+            data["element_ids"] = created.Select(id => id.GetValue()).ToArray();
             data["created_count"] = created.Count;
             if (created.Count == 1)
             {
-                data["element_id"] = created[0].IntegerValue;
+                data["element_id"] = created[0].GetValue();
             }
             return data;
         }
 
+        /// <summary>
+        /// 解析保温层类型 ID（PipeInsulationType 或 DuctInsulationType）。
+        /// Resolve the insulation type ID (PipeInsulationType or DuctInsulationType).
+        /// </summary>
         private static ElementId ResolveInsulationTypeId<T>(Document document, string typeName) where T : ElementType
         {
             List<T> candidates = new FilteredElementCollector(document)
@@ -1227,6 +1380,10 @@ namespace RevitCommandBridge
             return candidates[0].Id;
         }
 
+        /// <summary>
+        /// 创建放样形状（扫掠体）。支持矩形/圆形截面，可含壁厚。
+        /// Create a swept solid shape. Supports rectangular/circular profiles with optional wall thickness.
+        /// </summary>
         public static Dictionary<string, object> CreateSweptShape(PlanStep step, PlanExecutionContext context)
         {
             List<Dictionary<string, object>> rawPoints = PlanValues.DictionaryList(
@@ -1261,7 +1418,7 @@ namespace RevitCommandBridge
                         { "wall_thickness_mm", wallThicknessMm }
                     }
                 },
-                { "category_id", categoryId.IntegerValue }
+                { "category_id", categoryId.GetValue() }
             };
             CurveLoop path = RevitSectionFactory.BuildPath(pathPoints, "create_swept_shape.path");
             XYZ pathStart = path.First().GetEndPoint(0);
@@ -1285,11 +1442,15 @@ namespace RevitCommandBridge
             directShape.ApplicationDataId = step.Id;
             directShape.Name = name;
             directShape.SetShape(geometry);
-            data["element_id"] = directShape.Id.IntegerValue;
-            data["element_ids"] = new[] { directShape.Id.IntegerValue };
+            data["element_id"] = directShape.Id.GetValue();
+            data["element_ids"] = new[] { directShape.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 放置族实例。支持多种放置类型（基于标高、基于面、工作平面、视图等）。
+        /// Place a family instance. Supports multiple placement types (level-based, face-hosted, work-plane, view-based, etc.).
+        /// </summary>
         public static Dictionary<string, object> PlaceFamilyInstance(PlanStep step, PlanExecutionContext context)
         {
             FamilySymbol symbol = RevitLookups.ResolveFamilySymbol(context.Document, step.Arguments);
@@ -1303,7 +1464,7 @@ namespace RevitCommandBridge
             {
                 { "family", symbol.Family.Name },
                 { "type", symbol.Name },
-                { "type_id", symbol.Id.IntegerValue },
+                { "type_id", symbol.Id.GetValue() },
                 { "placement_type", placementType.ToString() },
                 { "structural_type", structuralType.ToString() }
             };
@@ -1327,13 +1488,13 @@ namespace RevitCommandBridge
                 case FamilyPlacementType.OneLevelBasedHosted:
                     XYZ hostedPoint = PlanValues.Point(step.Arguments, "point");
                     ElementId hostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
-                    if (hostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                    if (hostId.GetValue() == ElementId.InvalidElementId.GetValue())
                     {
                         return DeferredPlacement(data, "$host");
                     }
                     Element host = RequireElement(context.Document, hostId, "host_id");
                     data["point"] = PlanValues.PointData(hostedPoint);
-                    data["host_id"] = hostId.IntegerValue;
+                    data["host_id"] = hostId.GetValue();
                     data["host_class"] = host.GetType().FullName;
                     if (context.Preview)
                     {
@@ -1351,7 +1512,7 @@ namespace RevitCommandBridge
                     if (useHostFace)
                     {
                         ElementId faceHostId = context.ResolveSingleElementId(step.Arguments, "host_id", "host");
-                        if (faceHostId.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+                        if (faceHostId.GetValue() == ElementId.InvalidElementId.GetValue())
                         {
                             return DeferredPlacement(data, "$host");
                         }
@@ -1359,7 +1520,7 @@ namespace RevitCommandBridge
                         int faceIndex = PlanValues.Integer(step.Arguments, 0, "host_face_index", "face_index");
                         Reference face = FindFaceReference(faceHost, faceIndex);
                         XYZ direction = ReadReferenceDirection(step.Arguments);
-                        data["host_id"] = faceHostId.IntegerValue;
+                        data["host_id"] = faceHostId.GetValue();
                         data["host_face_index"] = faceIndex;
                         data["reference_direction"] = PlanValues.PointData(direction);
                         if (context.Preview)
@@ -1379,7 +1540,7 @@ namespace RevitCommandBridge
                             return data;
                         }
                         SketchPlane workPlane = ResolveOrCreateWorkPlane(context, step.Arguments, workPlanePoint);
-                        data["work_plane_id"] = workPlane.Id.IntegerValue;
+                        data["work_plane_id"] = workPlane.Id.GetValue();
                         ActivateSymbol(context.Document, symbol);
                         instance = context.Document.Create.NewFamilyInstance(workPlanePoint, symbol, workPlane, structuralType);
                     }
@@ -1389,7 +1550,7 @@ namespace RevitCommandBridge
                     XYZ viewPoint = PlanValues.Point(step.Arguments, "point");
                     View view = ResolveTargetView(context, step.Arguments, "view_id", "view");
                     data["point"] = PlanValues.PointData(viewPoint);
-                    data["view_id"] = view.Id.IntegerValue;
+                    data["view_id"] = view.Id.GetValue();
                     data["view_name"] = view.Name;
                     if (context.Preview)
                     {
@@ -1415,7 +1576,7 @@ namespace RevitCommandBridge
                         PlanValues.Get(step.Arguments, "view_id", "view") != null)
                     {
                         View curveView = ResolveTargetView(context, step.Arguments, "view_id", "view");
-                        data["view_id"] = curveView.Id.IntegerValue;
+                        data["view_id"] = curveView.Id.GetValue();
                         data["view_name"] = curveView.Name;
                         if (context.Preview)
                         {
@@ -1457,22 +1618,26 @@ namespace RevitCommandBridge
                         ReferencePoint referencePoint = context.Document.GetElement(pointIds[index]) as ReferencePoint;
                         if (referencePoint == null)
                         {
-                            throw new BridgeCommandException("未能定位自适应族放置点：" + pointIds[index].IntegerValue);
+                            throw new BridgeCommandException("未能定位自适应族放置点：" + pointIds[index].GetValue());
                         }
                         referencePoint.Position = adaptivePoints[index];
                     }
-                    data["adaptive_point_ids"] = pointIds.Select(id => id.IntegerValue).ToArray();
+                    data["adaptive_point_ids"] = pointIds.Select(id => id.GetValue()).ToArray();
                     break;
 
                 default:
                     throw new BridgeCommandException(
-                        "族“" + symbol.Family.Name + "”使用暂未识别的放置类型：" + placementType + "。");
+                        "族\u201c" + symbol.Family.Name + "\u201d使用暂未识别的放置类型：" + placementType + "。");
             }
-            data["element_id"] = instance.Id.IntegerValue;
-            data["element_ids"] = new[] { instance.Id.IntegerValue };
+            data["element_id"] = instance.Id.GetValue();
+            data["element_ids"] = new[] { instance.Id.GetValue() };
             return data;
         }
 
+        /// <summary>
+        /// 创建结构构件（梁、支撑、柱）。
+        /// Create structural members (beam, brace, column).
+        /// </summary>
         public static Dictionary<string, object> CreateStructuralMember(PlanStep step, PlanExecutionContext context)
         {
             string kind = PlanValues.String(step.Arguments, null, "kind");
@@ -1489,7 +1654,7 @@ namespace RevitCommandBridge
                 { "kind", normalizedKind },
                 { "family", symbol.Family == null ? null : symbol.Family.Name },
                 { "type", symbol.Name },
-                { "type_id", symbol.Id.IntegerValue },
+                { "type_id", symbol.Id.GetValue() },
                 { "level", level.Name }
             };
 
@@ -1511,8 +1676,8 @@ namespace RevitCommandBridge
                 ActivateSymbol(context.Document, symbol);
                 FamilyInstance lineInstance = context.Document.Create.NewFamilyInstance(
                     Line.CreateBound(start, end), symbol, level, structuralType);
-                data["element_id"] = lineInstance.Id.IntegerValue;
-                data["element_ids"] = new[] { lineInstance.Id.IntegerValue };
+                data["element_id"] = lineInstance.Id.GetValue();
+                data["element_ids"] = new[] { lineInstance.Id.GetValue() };
                 return data;
             }
 
@@ -1527,13 +1692,17 @@ namespace RevitCommandBridge
                 ActivateSymbol(context.Document, symbol);
                 FamilyInstance column = context.Document.Create.NewFamilyInstance(point, symbol, level, StructuralType.Column);
                 SetOptionalLengthParameter(column, BuiltInParameter.INSTANCE_LENGTH_PARAM, step.Arguments, "height_mm", "height");
-                data["element_id"] = column.Id.IntegerValue;
-                data["element_ids"] = new[] { column.Id.IntegerValue };
+                data["element_id"] = column.Id.GetValue();
+                data["element_ids"] = new[] { column.Id.GetValue() };
                 return data;
             }
             throw new BridgeCommandException("create_structural_member.kind 仅支持 beam、brace、column。");
         }
 
+        /// <summary>
+        /// 解析楼板类型。过滤掉基础底板。
+        /// Resolve a FloorType, filtering out foundation slabs.
+        /// </summary>
         private static FloorType ResolveFloorType(
             Document document,
             IDictionary<string, object> arguments)
@@ -1574,6 +1743,10 @@ namespace RevitCommandBridge
             return candidates[0];
         }
 
+        /// <summary>
+        /// 解析系统类型（如 PipingSystemType / MechanicalSystemType）。
+        /// Resolve a system type (e.g. PipingSystemType / MechanicalSystemType).
+        /// </summary>
         private static T ResolveSystemType<T>(Document document, IDictionary<string, object> arguments, string fieldName)
             where T : ElementType
         {
@@ -1607,6 +1780,10 @@ namespace RevitCommandBridge
             return candidates[0];
         }
 
+        /// <summary>
+        /// 在预览数据中添加 MEP 尺寸描述（直径/宽/高）。
+        /// Add MEP size description (diameter/width/height) to preview data.
+        /// </summary>
         private static void AddMepSizeDescription(
             IDictionary<string, object> data,
             IDictionary<string, object> arguments,
@@ -1641,6 +1818,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 在已创建的 MEP 元素上设置尺寸（直径/宽/高）。
+        /// Set sizing (diameter/width/height) on a created MEP element.
+        /// </summary>
         private static void SetMepSize(Element element, IDictionary<string, object> arguments, bool allowDiameter, bool allowRectangular)
         {
             AddMepSizeDescription(new Dictionary<string, object>(), arguments, allowDiameter, allowRectangular);
@@ -1668,6 +1849,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 尝试设置元素的可选长度参数（毫米值转 Revit 内部单位）。
+        /// Attempt to set an optional length parameter (mm value converted to Revit internal units).
+        /// </summary>
         private static bool SetOptionalLengthParameter(
             Element element,
             BuiltInParameter builtInParameter,
@@ -1693,16 +1878,24 @@ namespace RevitCommandBridge
             return true;
         }
 
+        /// <summary>
+        /// 获取文档中指定 ID 的元素，不存在时抛出异常。
+        /// Get an element by ID from the document, throwing if not found.
+        /// </summary>
         private static Element RequireElement(Document document, ElementId id, string fieldName)
         {
             Element element = document.GetElement(id);
             if (element == null)
             {
-                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.IntegerValue + " 对应元素。");
+                throw new BridgeCommandException("找不到 " + fieldName + "=" + id.GetValue() + " 对应元素。");
             }
             return element;
         }
 
+        /// <summary>
+        /// 查找 MEP 元素的连接器（按索引或最近连接器）。
+        /// Find a connector on an MEP element (by index or nearest to another element's connectors).
+        /// </summary>
         private static Connector FindConnector(
             Element element,
             IDictionary<string, object> arguments,
@@ -1712,7 +1905,7 @@ namespace RevitCommandBridge
             List<Connector> connectors = GetConnectors(element);
             if (connectors.Count == 0)
             {
-                throw new BridgeCommandException("元素 " + element.Id.IntegerValue + " 没有可连接的 MEP Connector。");
+                throw new BridgeCommandException("元素 " + element.Id.GetValue() + " 没有可连接的 MEP Connector。");
             }
             object rawIndex = PlanValues.Get(arguments, indexName);
             if (rawIndex != null)
@@ -1729,6 +1922,7 @@ namespace RevitCommandBridge
                 return connectors[index];
             }
 
+            // 未指定索引时，选择距离另一元素最近的连接器
             List<Connector> otherConnectors = GetConnectors(otherElement);
             if (otherConnectors.Count == 0)
             {
@@ -1737,6 +1931,10 @@ namespace RevitCommandBridge
             return connectors.OrderBy(connector => otherConnectors.Min(other => connector.Origin.DistanceTo(other.Origin))).First();
         }
 
+        /// <summary>
+        /// 延伸两条 MEP 曲线至其交点（直线段适用）。
+        /// Extend two MEP curves to their intersection point (for straight segments only).
+        /// </summary>
         private static XYZ ExtendMepCurvesToIntersection(Document document, Element first, Element second)
         {
             MEPCurve firstCurve = first as MEPCurve;
@@ -1776,6 +1974,10 @@ namespace RevitCommandBridge
             return intersection;
         }
 
+        /// <summary>
+        /// 将直线修剪到指定点（保留距该点较近的端点到该点之间的线段）。
+        /// Trim a line to a given point (keeps the segment from the nearer endpoint to the point).
+        /// </summary>
         private static Line TrimLineToPoint(Line line, XYZ point)
         {
             XYZ start = line.GetEndPoint(0);
@@ -1789,6 +1991,10 @@ namespace RevitCommandBridge
                 : Line.CreateBound(point, end);
         }
 
+        /// <summary>
+        /// 获取 MEP 元素的端点连接器列表。
+        /// Get the list of end-type connectors for an MEP element.
+        /// </summary>
         private static List<Connector> GetConnectors(Element element)
         {
             ConnectorManager manager = null;
@@ -1820,6 +2026,10 @@ namespace RevitCommandBridge
             return result;
         }
 
+        /// <summary>
+        /// 解析结构类型字符串到 StructuralType 枚举。
+        /// Parse a structural type string to the StructuralType enum.
+        /// </summary>
         private static StructuralType ResolveStructuralType(IDictionary<string, object> arguments, StructuralType defaultValue)
         {
             string requested = PlanValues.String(arguments, null, "structural_type");
@@ -1835,6 +2045,10 @@ namespace RevitCommandBridge
             return parsed;
         }
 
+        /// <summary>
+        /// 返回延迟放置结果（预览时前置引用尚未就绪）。
+        /// Return a deferred placement result (preceding reference not yet available in preview).
+        /// </summary>
         private static Dictionary<string, object> DeferredPlacement(
             Dictionary<string, object> data,
             string reference)
@@ -1844,13 +2058,17 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 解析目标视图（必须是有效非样板视图）。
+        /// Resolve a target view (must be a valid non-template view).
+        /// </summary>
         private static View ResolveTargetView(
             PlanExecutionContext context,
             IDictionary<string, object> arguments,
             params string[] names)
         {
             ElementId id = context.ResolveSingleElementId(arguments, names);
-            if (id.IntegerValue == ElementId.InvalidElementId.IntegerValue)
+            if (id.GetValue() == ElementId.InvalidElementId.GetValue())
             {
                 throw new BridgeCommandException("预览中视图引用尚无真实 ID。请将该步骤单独预览，或直接指定已有 view_id。");
             }
@@ -1862,6 +2080,10 @@ namespace RevitCommandBridge
             return view;
         }
 
+        /// <summary>
+        /// 解析或创建工作平面。可复用已有工作平面或根据法向量创建新的。
+        /// Resolve or create a sketch plane. Reuses an existing one or creates from a normal vector.
+        /// </summary>
         private static SketchPlane ResolveOrCreateWorkPlane(
             PlanExecutionContext context,
             IDictionary<string, object> arguments,
@@ -1896,6 +2118,10 @@ namespace RevitCommandBridge
                 Plane.CreateByNormalAndOrigin(normal.Normalize(), origin));
         }
 
+        /// <summary>
+        /// 读取可选点参数。
+        /// Read an optional point parameter.
+        /// </summary>
         private static XYZ ReadOptionalPoint(IDictionary<string, object> arguments, params string[] fieldNames)
         {
             foreach (string fieldName in fieldNames)
@@ -1908,6 +2134,10 @@ namespace RevitCommandBridge
             throw new BridgeCommandException("缺少参数：" + string.Join("/", fieldNames));
         }
 
+        /// <summary>
+        /// 读取方向向量参数并归一化。
+        /// Read a direction vector parameter and normalize it.
+        /// </summary>
         private static XYZ ReadDirectionVector(IDictionary<string, object> arguments, params string[] fieldNames)
         {
             object raw = PlanValues.Get(arguments, fieldNames);
@@ -1927,6 +2157,10 @@ namespace RevitCommandBridge
             return direction.Normalize();
         }
 
+        /// <summary>
+        /// 读取参考方向（放置族时的方向参数）。
+        /// Read the reference direction parameter (for family instance placement).
+        /// </summary>
         private static XYZ ReadReferenceDirection(IDictionary<string, object> arguments)
         {
             object raw = PlanValues.Get(arguments, "reference_direction", "direction");
@@ -1946,6 +2180,10 @@ namespace RevitCommandBridge
             return direction.Normalize();
         }
 
+        /// <summary>
+        /// 查找宿主元素上指定索引的面引用。
+        /// Find a face reference on a host element by index.
+        /// </summary>
         private static Reference FindFaceReference(Element host, int requestedIndex)
         {
             if (requestedIndex < 0)
@@ -1968,6 +2206,10 @@ namespace RevitCommandBridge
             return references[requestedIndex];
         }
 
+        /// <summary>
+        /// 递归收集几何中的面引用。
+        /// Recursively collect face references from geometry.
+        /// </summary>
         private static void CollectFaceReferences(GeometryElement geometry, ICollection<Reference> target)
         {
             if (geometry == null)
@@ -1996,6 +2238,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 读取自适应点列表。
+        /// Read a list of adaptive placement points.
+        /// </summary>
         private static List<XYZ> ReadAdaptivePoints(IDictionary<string, object> arguments)
         {
             List<Dictionary<string, object>> raw = PlanValues.DictionaryList(
@@ -2016,6 +2262,10 @@ namespace RevitCommandBridge
             return points;
         }
 
+        /// <summary>
+        /// 激活族类型（如果尚未激活）。
+        /// Activate a family symbol if it is not already active.
+        /// </summary>
         private static void ActivateSymbol(Document document, FamilySymbol symbol)
         {
             if (!symbol.IsActive)
@@ -2025,6 +2275,10 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 解析或创建墙类型。如指定厚度的类型已存在则复用，否则复制源类型并调整厚度。
+        /// Resolve or create a wall type. Reuses an existing type at the target thickness or duplicates and adjusts.
+        /// </summary>
         private static WallType ResolveOrCreateWallType(Document document, WallType sourceType, string targetName, double thicknessMm)
         {
             WallType existing = new FilteredElementCollector(document)
@@ -2036,7 +2290,7 @@ namespace RevitCommandBridge
             {
                 if (Math.Abs(PlanValues.ToMillimeters(existing.Width) - thicknessMm) > 0.5)
                 {
-                    throw new BridgeCommandException("墙类型“" + targetName + "”已存在，且厚度不匹配；不会改动既有类型。");
+                    throw new BridgeCommandException("墙类型\u201c" + targetName + "\u201d已存在，且厚度不匹配；不会改动既有类型。");
                 }
                 return existing;
             }
@@ -2044,12 +2298,12 @@ namespace RevitCommandBridge
             WallType duplicate = sourceType.Duplicate(targetName) as WallType;
             if (duplicate == null)
             {
-                throw new BridgeCommandException("无法复制墙类型“" + sourceType.Name + "”。");
+                throw new BridgeCommandException("无法复制墙类型\u201c" + sourceType.Name + "\u201d。");
             }
             CompoundStructure structure = duplicate.GetCompoundStructure();
             if (structure == null || structure.LayerCount < 1)
             {
-                throw new BridgeCommandException("墙类型“" + sourceType.Name + "”没有可调整的复合结构。");
+                throw new BridgeCommandException("墙类型\u201c" + sourceType.Name + "\u201d没有可调整的复合结构。");
             }
             double targetTotal = PlanValues.ToFeet(thicknessMm);
             double currentTotal = structure.GetLayers().Sum(layer => layer.Width);
@@ -2057,7 +2311,7 @@ namespace RevitCommandBridge
             double adjustedWidth = structure.GetLayers()[index].Width + targetTotal - currentTotal;
             if (adjustedWidth <= 0.0)
             {
-                throw new BridgeCommandException("指定墙厚会使墙类型“" + sourceType.Name + "”的层厚无效。");
+                throw new BridgeCommandException("指定墙厚会使墙类型\u201c" + sourceType.Name + "\u201d的层厚无效。");
             }
             structure.SetLayerWidth(index, adjustedWidth);
             duplicate.SetCompoundStructure(structure);

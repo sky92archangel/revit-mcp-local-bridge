@@ -116,3 +116,250 @@ flowchart LR
 - **每个 Revit 年份要单独编译**：新增原子操作后需为各年份重新编译对应 DLL（API 版本不兼容，不能共用一个 DLL）。构建管道已支持 `build-all.ps1` 批量编译 2020–2024，`build/version-manifest.json` 驱动 csc 管道。
 
 **一句话总结**：MCP/JSON 侧是"开放的传声筒"，Revit 插件侧是"收紧的执行器"——能力边界由插件端 C# 白名单（目前 64 个原子操作）决定，未来扩展 = 插件端加代码 + 重新编译，AI 客户端零改动。具体扩展步骤与优先级路线图见 [EXTENSION-PLAN.md](./EXTENSION-PLAN.md)。
+
+## Q4：如果 Revit API 出现跨版本的破坏性基础变更（如 2024→2025），`#if/#else` 管理不住时，用什么方法代替？
+
+**最佳方案：接口抽象层 + 按版本独立实现程序集。**
+
+具体做法：
+
+```csharp
+// src/CoreAbstractions/IRuntimeService.cs — 共享核心接口
+public interface IRuntimeService
+{
+    void Start(IControlledApplication app);
+    string GetApiYear();
+    // ...
+}
+
+// src-net8/Adapters/Revit2025RuntimeService.cs — Revit 2025 实现
+public class Revit2025RuntimeService : IRuntimeService { ... }
+
+// src-net10/Adapters/Revit2027RuntimeService.cs — Revit 2027 实现（完全不同）
+public class Revit2027RuntimeService : IRuntimeService { ... }
+```
+
+| 方法 | 适用场景 | 缺点 |
+|---|---|---|
+| `#if/#else` 条件编译 | **API 签名相同**，只是类型/枚举名称变化（如 `PlanViewPlane`→`PlanViewRangeType`） | 代码臃肿，可读性差 |
+| **接口抽象 + DI** | **API 语义/体系完全不同**（如 .NET Framework → .NET Core，`BuiltInParameterGroup`→`GroupTypeId`） | 需提前设计抽象层，额外接口代码 |
+| Git 版本分支 | 各版本代码完全独立，几乎无共享 | 维护成本极高，修复需合并 n 个分支 |
+| 独立 .csproj + 文件链接 | 90% 共享 + 10% 差异小，`<Compile Include="..\src\*.cs" />` 链接共享源文件 | 差异较大时链接不灵活 |
+
+建议混合使用：
+
+- **共享层**（`src/`）：不变的核心逻辑（队列、调度、协议），纯接口不变
+- **抽象层**（`src/CoreAbstractions/`）：定义 `IRuntimeService`、`IUnitConverter` 等接口
+- **版本实现**（`src-net8/`, `src-net10/` 内的 Adapters 目录）：每个版本提供接口实现，编译时只链接本版本的实现文件
+- **注册**：`AdapterEntry{year}.cs` 通过工厂或 DI 容器注入对应的实现
+
+这样，当 Revit 2028 彻底移除 `ForgeTypeId` 体系时，只需新增 `src-net12/Adapters/Revit2028RuntimeService.cs`，无需改动共享层和 MCP 端。
+
+---
+
+## Q5：可否用 .NET MCP NuGet 包替换现有的 JS/MJS MCP 服务端？
+
+**可以。** Microsoft 发布了官方 MCP SDK NuGet 包 [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol/)，可用 C# 重写 MCP 服务端，完全替代 `revit-mcp-server.mjs`。
+
+### 替换方式一：独立 .NET MCP 服务进程（推荐）
+
+```
+MCP 客户端 ─stdio─> CadMcpServer.exe（.NET 控制台应用）
+                         │
+                   bridge-client.mjs 的 C# 移植版
+                         │
+                   文件队列（不变）
+                         │
+                   Revit 插件（不变）
+```
+
+```csharp
+// 使用 Microsoft.ModelContextProtocol NuGet 包
+using ModelContextProtocol;
+using ModelContextProtocol.Server;
+
+var builder = McpServerBuilder.Create("revit-command-bridge", "2.0.0")
+    .WithTools(new McpServerTool[]
+    {
+        McpServerTool.FromHandler<RevitHealthHandler>(),
+        McpServerTool.FromHandler<RevitExecutePlanHandler>(),
+    });
+
+await builder.BuildAsync().RunAsync(args);
+```
+
+工具实现：
+
+```csharp
+public class RevitExecutePlanHandler : IMcpToolHandler
+{
+    public string Name => "revit_execute_plan";
+
+    public async Task<McpToolResponse> HandleAsync(
+        McpToolRequest request, CancellationToken ct)
+    {
+        // 调用 C# 版 bridge-client（直接操作文件队列）
+        var queued = await CSharpBridgeClient.EnqueueCommandAsync(
+            request.Arguments, ct);
+        return new McpToolResponse
+        {
+            Content = new[] { new McpContent { Type = "text", Text = queued.ToString() } }
+        };
+    }
+}
+```
+
+### 替换方式二：将 MCP Server 嵌入 Revit 插件进程
+
+这种方式让 Revit 插件自身成为 MCP 服务端，去掉文件队列中间层：
+
+```
+MCP 客户端 ─stdio─> Revit 进程（内含 MCP Server + 工具实现）
+```
+
+优点是延迟更低（无文件队列轮询），缺点是：
+- MCP 客户端必须等 Revit 完全启动后才能连接
+- MCP 通信在 Revit 主线程执行（需注意阻塞）
+- 插件崩溃直接影响 MCP 连接
+
+### 部署建议
+
+两种方式都不需要 Node.js 运行时，安装器只需分发 `.NET 独立发布` 的可执行文件：
+
+```xml
+<PackageReference Include="ModelContextProtocol" Version="*" />
+```
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true
+```
+
+输出 `CadMcpServer.exe`（约 30MB 含 SDK），替代原 `runtime/node.exe` + `scripts/revit-mcp-server.mjs`。安装器中的路径配置从 `.mjs` 改为 `.exe`。
+
+---
+
+## Q6：如果 Revit 在远程 Windows 服务器上，如何实现 Streamable HTTP 的 MCP 接入？
+
+当前 MCP 使用 stdio 传输，要求客户端能启动服务端进程（同机）。远程场景需改为 HTTP 传输。MCP 规范定义了 **Streamable HTTP** 传输模式：客户端通过 `POST /mcp` 发送 JSON-RPC 请求，服务端通过 HTTP 响应返回结果或通过 SSE 流式推送。
+
+### 架构总览
+
+关键前提：**inbox/outbox 文件队列在远程服务器本地**，MCP Server 和 Revit 插件共享同一份本地文件系统。远程 AI 客户端不直接访问文件队列，只通过 HTTP 与 MCP Server 通信。
+
+```
+客户端（本机）                      远程 Windows 服务器
+┌──────────────────┐           ┌─────────────────────────────────────────────┐
+│ AI Agent          │  HTTP     │                                             │
+│ (Codex/Cursor 等) │ ──POST──▶│  Streamable HTTP MCP 服务端                  │
+│                   │  /mcp     │  （JS 或 .NET 实现）                          │
+│ 发送 JSON-RPC     │◀─JSON─── │  ─ 校验身份 / 路由工具调用                     │
+│ 接收结果          │          │  ─ 写入本地 inbox → 轮询 outbox → 返回结果    │
+└──────────────────┘           │                         │                    │
+                               │  ┌──────────────────────▼──────────────────┐ │
+                               │  │  本地文件队列（服务器 C 盘）               │ │
+                               │  │  %LOCALAPPDATA%\RevitCommandBridge\2026\ │ │
+                               │  │  ├── inbox/{id}.request.json   ← 写入    │ │
+                               │  │  ├── processing/{id}.json               │ │
+                               │  │  ├── outbox/{id}.result.json → 读取     │ │
+                               │  │  └── status.json                        │ │
+                               │  └──────────────────────┬──────────────────┘ │
+                               │                         │ 本地轮询 300ms      │
+                               │  ┌──────────────────────▼──────────────────┐ │
+                               │  │  Revit 进程（插件）                      │ │
+                               │  │  读取 inbox → 执行 → 写入 outbox         │ │
+                               │  └─────────────────────────────────────────┘ │
+                               └─────────────────────────────────────────────┘
+```
+
+**Agent 永远不直接写远程 inbox/outbox**，它只和 MCP Server 通过 HTTP 通信，由 MCP Server 代为读写本地文件队列。
+
+### JS 实现（Node.js + Express）
+
+基于现有 `revit-http-gateway.mjs` 改造，但遵循 MCP Streamable HTTP 协议：
+
+```javascript
+import express from "express";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { enqueueCommand, readBridgeStatus } from "./bridge-client.mjs";
+
+const app = express();
+app.use(express.json());
+
+const transport = new StreamableHTTPServerTransport({
+    sessionId: crypto.randomUUID(),
+    endpoint: "/mcp",
+});
+
+const server = new McpServer(
+    { name: "revit-command-bridge-remote", version: "2.0.0" },
+    { transport }
+);
+
+server.tool("revit_execute_plan", { /* schema */ }, async (args) => {
+    const status = await readBridgeStatus({ rootDirectory });
+    if (!isBridgeRunning(status)) {
+        return { content: [{ type: "text", text: "桥接未运行" }], isError: true };
+    }
+    const result = await enqueueCommand({ operation: "execute_plan", args }, { rootDirectory });
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+});
+
+app.post("/mcp", async (req, res) => {
+    await transport.handleRequest(req, res);
+});
+
+app.listen(8765, "0.0.0.0", () => {
+    console.log("MCP Streamable HTTP: http://0.0.0.0:8765/mcp");
+});
+```
+
+要求 `.env` 或启动参数设置：
+- `REVIT_COMMAND_BRIDGE_ROOT` — 远程服务器上的队列根目录（共享文件夹或本地）
+- `REVIT_BRIDGE_HOST` — `0.0.0.0`（允许局域网访问）
+- 建议搭配 HTTPS + 认证（API Key / JWT）
+
+### C# 实现（ASP.NET Core + MCP NuGet）
+
+```csharp
+using ModelContextProtocol;
+using ModelContextProtocol.Server;
+using ModelContextProtocol.Transport.StreamableHttp;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddMcpServer()
+    .WithTransport<StreamableHttpTransport>()
+    .WithTools(new[]
+    {
+        McpServerTool.FromHandler<RevitExecutePlanHandler>(),
+    });
+
+var app = builder.Build();
+app.MapMcp("/mcp");
+app.Run();
+```
+
+工具实现与 Q5 中的独立进程方案完全一致，只是传输方式从 stdio 改为 HTTP。
+
+### 网络配置建议
+
+| 组件 | 配置 |
+|---|---|
+| 绑定地址 | `0.0.0.0:8765`（局域网）；`127.0.0.1:8765` + SSH 隧道（公网） |
+| 安全传输 | **必须使用 HTTPS**，反向代理（nginx）终结 TLS |
+| 认证 | 推荐 API Key（`Authorization: Bearer <key>`），MCP Server 端校验 |
+| 会话管理 | Streamable HTTP 支持 sessionId，客户端复用同一会话可保持上下文 |
+| 防火墙 | 开放 8765 端口，限制来源 IP 白名单 |
+| 队列位置 | **MCP Server 和 Revit 共处一台机器**，inbox/outbox 在本机 `%LOCALAPPDATA%`。Agent **不直接访问**文件队列，只通过 HTTP 与 MCP Server 通信。永远不要用网络共享文件夹做队列根目录（文件锁冲突、延迟不可控） |
+
+### 远程 vs 本地场景对比
+
+| 特性 | 本地 stdio | 远程 Streamable HTTP |
+|---|---|---|
+| 延迟 | < 1ms（进程间） | 1–50ms（局域网） |
+| 安全模型 | 文件系统权限 | HTTPS + 认证 |
+| 部署复杂度 | 安装器分发 | 需配置 Web 服务器 |
+| 多客户端 | 一对一（stdio） | 一对多（HTTP） |
+| 适用场景 | 个人桌面开发 | 团队共享、CI/CD、远程桌面 |
+| JS 实现 | 现有 `revit-mcp-server.mjs` | Express + `@modelcontextprotocol/sdk` |
+| .NET 实现 | `ModelContextProtocol` NuGet | ASP.NET Core + `ModelContextProtocol` |

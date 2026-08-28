@@ -2,47 +2,28 @@
   "schema_version": 1,
   "versions": [
     {
-      "year": 2020,
-      "runtime": "net48",
-      "compiler": "csc",
+      "year": 2025,
+      "runtime": "net8.0-windows",
+      "compiler": "dotnet",
+      "project_file": "src-net8/RevitCommandBridge.Adapter25.csproj",
       "define_symbols": [],
-      "framework_references": [
-        "System.Web.Extensions.dll",
-        "System.Windows.Forms.dll",
-        "System.Drawing.dll"
-      ],
-      "wpf_references": [
-        "WindowsBase.dll",
-        "PresentationCore.dll"
-      ]
+      "entry_class": "RevitCommandBridgeApp25"
     },
     {
-      "year": 2021,
-      "runtime": "net48",
-      "compiler": "csc",
-      "define_symbols": ["REVIT_FORGE_UNITS"],
-      "inherits_from": 2020
+      "year": 2026,
+      "runtime": "net8.0-windows",
+      "compiler": "dotnet",
+      "project_file": "src-net8/RevitCommandBridge.Adapter26.csproj",
+      "define_symbols": [],
+      "entry_class": "RevitCommandBridgeApp26"
     },
     {
-      "year": 2022,
-      "runtime": "net48",
-      "compiler": "csc",
-      "define_symbols": ["REVIT_FORGE_UNITS"],
-      "inherits_from": 2020
-    },
-    {
-      "year": 2023,
-      "runtime": "net48",
-      "compiler": "csc",
-      "define_symbols": ["REVIT_FORGE_UNITS", "REVIT_PARAMETER_GROUPS"],
-      "inherits_from": 2020
-    },
-    {
-      "year": 2024,
-      "runtime": "net48",
-      "compiler": "csc",
-      "define_symbols": ["REVIT_FORGE_UNITS", "REVIT_PARAMETER_GROUPS"],
-      "inherits_from": 2020
+      "year": 2027,
+      "runtime": "net10.0-windows",
+      "compiler": "dotnet",
+      "project_file": "src-net10/RevitCommandBridge.Adapter27.csproj",
+      "define_symbols": [],
+      "entry_class": "RevitCommandBridgeApp27"
     }
   ]
 }

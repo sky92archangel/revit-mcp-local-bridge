@@ -1,4 +1,6 @@
-﻿[CmdletBinding()]
+﻿# OpenAI 兼容聊天启动器 —— 解密 DPAPI 配置中的 API Key，设置环境变量并启动 Node.js 聊天助手
+# OpenAI-compatible chat launcher — decrypts the API Key from DPAPI config, sets environment variables, and launches the Node.js chat assistant
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^20\d{2}$')]
@@ -12,15 +14,21 @@ param(
     [string[]]$HarnessArguments
 )
 
+# 启用严格模式与错误停止
+# Enable strict mode and stop-on-error
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 设置控制台为 UTF-8 输出
+# Set console output to UTF-8
 try {
     $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $utf8OutputEncoding
     $OutputEncoding = $utf8OutputEncoding
 }
 catch { }
+# 加载 System.Security 以使用 DPAPI 解密
+# Load System.Security for DPAPI decryption
 Add-Type -AssemblyName System.Security
 
 function Get-ProfileEntropy {
@@ -28,6 +36,8 @@ function Get-ProfileEntropy {
     return [System.Text.Encoding]::UTF8.GetBytes("RevitCommandBridge:ai-provider:1:$Version")
 }
 
+# 解析配置文件路径与桥接根目录
+# Resolve profile path and bridge root directory
 if ([string]::IsNullOrWhiteSpace($ProfilePath)) {
     $ProfilePath = Join-Path $env:LOCALAPPDATA "RevitCommandBridge\$RevitVersion\ai-providers\$ProfileName.json"
 }
@@ -42,6 +52,8 @@ if (-not (Test-Path -LiteralPath $ProfilePath)) {
     throw "AI provider profile was not found: $ProfilePath. Run configure-ai-provider.ps1 or Revit AI Hub Setup first."
 }
 
+# 加载并验证 AI 提供者配置文件
+# Load and validate the AI provider profile
 $profile = Get-Content -LiteralPath $ProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($requiredProperty in @('provider_kind', 'revit_version', 'base_url', 'model', 'api_key_protected', 'credential_scheme')) {
     if ($null -eq $profile.PSObject.Properties[$requiredProperty] -or [string]::IsNullOrWhiteSpace([string]$profile.$requiredProperty)) {

@@ -1,0 +1,144 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <AssemblyName>RevitCommandBridge</AssemblyName>
+        <RootNamespace>RevitCommandBridge</RootNamespace>
+        <UseWindowsForms>true</UseWindowsForms>
+        <UseWPF>true</UseWPF>
+        <LangVersion>latest</LangVersion>
+        <PlatformTarget>x64</PlatformTarget>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <Nullable>disable</Nullable>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <Configurations>Debug R20;Debug R21;Debug R22;Debug R23;Debug R24;Debug R25;Debug R26</Configurations>
+        <Configurations>$(Configurations);Release R20;Release R21;Release R22;Release R23;Release R24;Release R25;Release R26</Configurations>
+    </PropertyGroup>
+
+    <!-- ========== 版本条件属性 ========== -->
+
+    <!-- Revit 2020-2024: .NET Framework 4.8 -->
+    <PropertyGroup Condition="$(Configuration.Contains('R20')) Or $(Configuration.Contains('R21'))">
+        <TargetFramework>net48</TargetFramework>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R22')) Or $(Configuration.Contains('R23')) Or $(Configuration.Contains('R24'))">
+        <TargetFramework>net48</TargetFramework>
+    </PropertyGroup>
+
+    <!-- Revit 2025-2026: .NET 8 Windows -->
+    <PropertyGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
+        <TargetFramework>net8.0-windows</TargetFramework>
+    </PropertyGroup>
+
+    <!-- 条件编译符号 -->
+    <PropertyGroup Condition="$(Configuration.Contains('R22'))">
+        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R23'))">
+        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R24'))">
+        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER;REVIT2024_OR_GREATER</DefineConstants>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
+        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER;REVIT2024_OR_GREATER;REVIT2025_OR_GREATER</DefineConstants>
+    </PropertyGroup>
+
+    <!-- RevitVersion 与输出目录 -->
+    <PropertyGroup Condition="$(Configuration.Contains('R20'))">
+        <RevitVersion>2020</RevitVersion>
+        <OutputPath>bin\R20\</OutputPath>
+        <IntermediateOutputPath>obj\R20\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R21'))">
+        <RevitVersion>2021</RevitVersion>
+        <OutputPath>bin\R21\</OutputPath>
+        <IntermediateOutputPath>obj\R21\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R22'))">
+        <RevitVersion>2022</RevitVersion>
+        <OutputPath>bin\R22\</OutputPath>
+        <IntermediateOutputPath>obj\R22\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R23'))">
+        <RevitVersion>2023</RevitVersion>
+        <OutputPath>bin\R23\</OutputPath>
+        <IntermediateOutputPath>obj\R23\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R24'))">
+        <RevitVersion>2024</RevitVersion>
+        <OutputPath>bin\R24\</OutputPath>
+        <IntermediateOutputPath>obj\R24\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R25'))">
+        <RevitVersion>2025</RevitVersion>
+        <OutputPath>bin\R25\</OutputPath>
+        <IntermediateOutputPath>obj\R25\</IntermediateOutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="$(Configuration.Contains('R26'))">
+        <RevitVersion>2026</RevitVersion>
+        <OutputPath>bin\R26\</OutputPath>
+        <IntermediateOutputPath>obj\R26\</IntermediateOutputPath>
+    </PropertyGroup>
+
+    <!-- ========== 编译源码 ========== -->
+    <ItemGroup>
+        <Compile Include="src\*.cs" />
+    </ItemGroup>
+
+    <ItemGroup Condition="$(Configuration.Contains('R20'))">
+        <Compile Include="src\Adapter\AdapterEntry20.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R21'))">
+        <Compile Include="src\Adapter\AdapterEntry21.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R22'))">
+        <Compile Include="src\Adapter\AdapterEntry22.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R23'))">
+        <Compile Include="src\Adapter\AdapterEntry23.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R24'))">
+        <Compile Include="src\Adapter\AdapterEntry24.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R25'))">
+        <Compile Include="src\Adapter\AdapterEntry25.cs" />
+    </ItemGroup>
+    <ItemGroup Condition="$(Configuration.Contains('R26'))">
+        <Compile Include="src\Adapter\AdapterEntry26.cs" />
+    </ItemGroup>
+
+    <!-- ========== Nice3point Revit API NuGet 引用 ========== -->
+
+    <!-- Build.Tasks: 自动处理 Private=false、生成 .addin、部署到 Revit Addins -->
+    <ItemGroup>
+        <PackageReference Include="Nice3point.Revit.Build.Tasks" Version="2.*" />
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).*" />
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).*" />
+    </ItemGroup>
+
+    <!-- ========== 其他依赖 ========== -->
+    <ItemGroup>
+        <PackageReference Include="System.Text.Json" Version="8.0.6" />
+    </ItemGroup>
+
+    <!-- ========== 调试启动 ========== -->
+    <PropertyGroup>
+        <StartAction>Program</StartAction>
+        <StartProgram Condition="'$(RevitVersion)' != ''">C:\Program Files\Autodesk\Revit $(RevitVersion)\Revit.exe</StartProgram>
+        <StartArguments>/language ENG</StartArguments>
+    </PropertyGroup>
+
+    <!-- ========== Nice3point 自动部署目标（可选） ========== -->
+    <!-- 取消注释以下目标以自动部署到 Revit Addins 文件夹
+    <Target Name="DeployToRevit" AfterTargets="Build" Condition="'$(RevitVersion)' != ''">
+        <PropertyGroup>
+            <RevitAddinsDir>$(AppData)\Autodesk\Revit\Addins\$(RevitVersion)\</RevitAddinsDir>
+        </PropertyGroup>
+        <Copy SourceFiles="$(TargetDir)$(AssemblyName).dll;$(TargetDir)$(AssemblyName).pdb"
+              DestinationFolder="$(RevitAddinsDir)" />
+    </Target>
+    -->
+
+</Project>

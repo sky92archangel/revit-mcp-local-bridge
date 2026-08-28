@@ -1,17 +1,25 @@
-﻿[CmdletBinding()]
+﻿# 自动检测并配置 MCP 客户端 —— 扫描本机已知客户端（Codex、WorkBuddy、Claude、Cursor 等），导入 Revit 桥接 MCP 配置
+# Auto-detect and configure MCP clients — scans known local clients (Codex, WorkBuddy, Claude, Cursor, etc.) and imports the Revit bridge MCP config
+[CmdletBinding()]
 param(
   [Parameter(Mandatory=$true)][ValidatePattern('^20\d{2}$')][string]$RevitVersion,
   [Parameter(Mandatory=$true)][string]$RootDirectory
 )
+# 启用严格模式与错误停止
+# Enable strict mode and stop-on-error
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 设置控制台为 UTF-8 输出
+# Set console output to UTF-8
 try {
     $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $utf8OutputEncoding
     $OutputEncoding = $utf8OutputEncoding
 }
 catch { }
+# 备份已有配置文件（追加时间戳后缀）
+# Back up existing config files (append timestamp suffix)
 function Backup-Config([string]$Path) {
   if (Test-Path -LiteralPath $Path -PathType Leaf) {
     $backupPath = $Path + '.revitaibhub-backup-' + (Get-Date -Format 'yyyyMMddHHmmss')

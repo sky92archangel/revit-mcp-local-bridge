@@ -1,20 +1,25 @@
-﻿[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+﻿# install-revit.ps1 — 安装/检测 Revit 命令桥
+# install-revit.ps1 — Install/detect Revit Command Bridge
+
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
     [ValidatePattern('^20\d{2}$')]
-    [string]$RevitVersion,
-    [string]$PackageDirectory,
-    [string]$RevitInstallDirectory,
-    [string]$InstallDirectory,
-    [string]$AddinsDirectory,
+    [string]$RevitVersion,  # Revit 版本年份 / Revit version year
+    [string]$PackageDirectory,  # 编译包目录 / Built package directory
+    [string]$RevitInstallDirectory,  # Revit 安装目录 / Revit installation directory
+    [string]$InstallDirectory,  # 命令桥安装目录 / Command bridge install directory
+    [string]$AddinsDirectory,  # Revit Addins 目录 / Revit Addins directory
     [ValidateSet('none', 'codex', 'workbuddy', 'deepseek', 'function-api', 'openai-compatible', 'generic-mcp', 'rest')]
-    [string]$Connector = 'none',
-    [string[]]$SearchRoot = @('C:\Program Files\Autodesk'),
-    [switch]$ListDetected
+    [string]$Connector = 'none',  # AI 连接器类型 / AI connector type
+    [string[]]$SearchRoot = @('C:\Program Files\Autodesk'),  # Revit 扫描根目录 / Revit scan root directories
+    [switch]$ListDetected  # 仅列出检测到的 Revit 安装 / Only list detected Revit installations
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# 设置 UTF-8 输出编码
+# Set UTF-8 output encoding
 try {
     $utf8OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $utf8OutputEncoding
@@ -22,6 +27,8 @@ try {
 }
 catch { }
 
+# 检查文件或目录是否存在
+# Check if file or directory exists
 function Test-FileSystemPath {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -35,6 +42,8 @@ function Test-FileSystemPath {
     }
 }
 
+# 检查目录是否存在
+# Check if directory exists
 function Test-FileSystemDirectory {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) {
@@ -48,6 +57,8 @@ function Test-FileSystemDirectory {
     }
 }
 
+# 从文本中提取 Revit 版本年份
+# Extract Revit version year from text
 function Get-VersionFromText {
     param([string]$Text)
     if ($null -eq $Text) {
@@ -60,6 +71,8 @@ function Get-VersionFromText {
     return $null
 }
 
+# 添加候选 Revit 安装
+# Add candidate Revit installation
 function Add-Candidate {
     param(
         [hashtable]$Candidates,
@@ -97,10 +110,14 @@ function Add-Candidate {
     }
 }
 
+# 检测所有 Revit 安装（注册表 + 文件扫描）
+# Detect all Revit installations (registry + file scan)
 function Get-RevitInstallations {
     param([string[]]$Roots)
     $candidates = @{}
 
+    # 从注册表检测 Revit 安装
+    # Detect Revit installations from registry
     foreach ($registryRoot in @('HKLM:\SOFTWARE\Autodesk\Revit', 'HKLM:\SOFTWARE\WOW6432Node\Autodesk\Revit')) {
         if (-not (Test-Path -LiteralPath $registryRoot)) {
             continue
@@ -116,6 +133,8 @@ function Get-RevitInstallations {
         }
     }
 
+    # 从文件系统扫描 Revit.exe
+    # Scan filesystem for Revit.exe
     foreach ($root in $Roots) {
         if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-FileSystemDirectory $root)) {
             continue
@@ -130,6 +149,8 @@ function Get-RevitInstallations {
     return @($candidates.Values | Sort-Object RevitVersion)
 }
 
+# 读取编译包的元数据
+# Read package metadata from compiled build
 function Get-PackageMetadata {
     param([string]$Directory)
     $metadataPath = Join-Path $Directory 'bridge.config.json'
@@ -144,12 +165,16 @@ function Get-PackageMetadata {
     }
 }
 
+# 检测本机 Revit 安装
+# Detect local Revit installations
 $detected = Get-RevitInstallations -Roots $SearchRoot
 if ($ListDetected) {
     $detected
     return
 }
 
+# 自动推断 Revit 版本
+# Auto-detect Revit version
 if ([string]::IsNullOrWhiteSpace($RevitVersion) -and -not [string]::IsNullOrWhiteSpace($PackageDirectory)) {
     $packageMetadata = Get-PackageMetadata -Directory $PackageDirectory
     $RevitVersion = [string]$packageMetadata.revit_version
@@ -163,6 +188,8 @@ if ([string]::IsNullOrWhiteSpace($RevitVersion)) {
     }
 }
 
+# 定位编译包目录
+# Locate the built package directory
 if ([string]::IsNullOrWhiteSpace($PackageDirectory)) {
     $bundledAssembly = Join-Path $PSScriptRoot 'RevitCommandBridge.dll'
     $bundledMetadata = Join-Path $PSScriptRoot 'bridge.config.json'
@@ -178,6 +205,8 @@ if (-not (Test-FileSystemDirectory $PackageDirectory)) {
 }
 $PackageDirectory = [System.IO.Path]::GetFullPath($PackageDirectory)
 
+# 校验包元数据与版本匹配
+# Validate package metadata version matches
 $metadata = Get-PackageMetadata -Directory $PackageDirectory
 if ($null -eq $metadata) {
     throw "Package metadata is missing: $(Join-Path $PackageDirectory 'bridge.config.json'). Build the package with build.ps1 first."
@@ -186,6 +215,8 @@ if ([string]$metadata.revit_version -ne $RevitVersion) {
     throw "Package targets Revit $($metadata.revit_version), but -RevitVersion is $RevitVersion."
 }
 
+# 定位 Revit 安装目录并校验
+# Locate and validate Revit installation directory
 if ([string]::IsNullOrWhiteSpace($RevitInstallDirectory)) {
     $match = @($detected | Where-Object RevitVersion -eq $RevitVersion)
     if ($match.Count -ne 1) {
@@ -203,12 +234,16 @@ foreach ($requiredRevitFile in @('Revit.exe', 'RevitAPI.dll')) {
     }
 }
 
+# 校验编译包完整性
+# Validate built package completeness
 foreach ($requiredPackageFile in @('RevitCommandBridge.dll', 'deploy\RevitCommandBridge.addin.template', 'scripts\bridge-client.mjs')) {
     if (-not (Test-FileSystemPath (Join-Path $PackageDirectory $requiredPackageFile))) {
         throw "Incomplete package: $(Join-Path $PackageDirectory $requiredPackageFile)"
     }
 }
 
+# 设置安装路径
+# Set install paths
 if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
     $InstallDirectory = Join-Path $env:LOCALAPPDATA "RevitCommandBridge\$RevitVersion"
 }
@@ -218,6 +253,8 @@ if ([string]::IsNullOrWhiteSpace($AddinsDirectory)) {
 
 $bridgeRoot = Join-Path $env:LOCALAPPDATA "RevitCommandBridge\$RevitVersion"
 $manifestPath = Join-Path $AddinsDirectory 'RevitCommandBridge.addin'
+# 预览模式：仅输出安装计划而不执行
+# Preview mode: output installation plan without executing
 if (-not $PSCmdlet.ShouldProcess(
         "$InstallDirectory and $manifestPath",
         "Install Revit Command Bridge for Revit $RevitVersion")) {
@@ -234,10 +271,14 @@ if (-not $PSCmdlet.ShouldProcess(
     return
 }
 
+# 检查 Revit 是否正在运行
+# Check if Revit is running
 if (Get-Process -Name Revit -ErrorAction SilentlyContinue) {
     throw 'Close all Revit processes before installing or updating the add-in.'
 }
 
+# 将包文件复制到安装目录
+# Copy package files to install directory
 function Copy-PackageToInstallDirectory {
     param(
         [Parameter(Mandatory = $true)][string]$SourceDirectory,
@@ -257,6 +298,8 @@ function Copy-PackageToInstallDirectory {
     Write-Output 'RCB_INSTALL_STAGE=copy-complete'
 }
 
+# 获取包中所有文件的相对路径
+# Get all relative file paths in the package
 function Get-PackageRelativeFiles {
     param([Parameter(Mandatory = $true)][string]$SourceDirectory)
     $root = [System.IO.Path]::GetFullPath($SourceDirectory).TrimEnd('\') + '\'
@@ -265,6 +308,8 @@ function Get-PackageRelativeFiles {
     })
 }
 
+# 移除不再需要的旧文件
+# Remove stale files no longer in the new package
 function Remove-StaleBridgeFiles {
     param(
         [Parameter(Mandatory = $true)][string]$SourceDirectory,
@@ -281,8 +326,8 @@ function Remove-StaleBridgeFiles {
         foreach ($relative in @($oldManifest.files)) {
             $normalized = [string]$relative
             if ([string]::IsNullOrWhiteSpace($normalized) -or $newFiles.Contains($normalized.Replace('/', '\'))) { continue }
-            # Keep the runtime currently used by an AI client and user-created
-            # connection files even when an older package listed them.
+            # 保留 AI 客户端正在使用的运行时和用户创建的连接文件
+            # Keep the runtime currently used by an AI client and user-created connection files
             if ($normalized -match '^runtime[\\/]node\.exe$' -or $normalized -match '^connections[\\/]') { continue }
             $target = [System.IO.Path]::GetFullPath((Join-Path $DestinationDirectory $normalized))
             $destinationRoot = [System.IO.Path]::GetFullPath($DestinationDirectory).TrimEnd('\') + '\'
@@ -298,6 +343,8 @@ function Remove-StaleBridgeFiles {
     }
 }
 
+# 执行文件复制（先清理旧文件，再复制新文件）
+# Execute file copy (clean stale files first, then copy new ones)
 New-Item -ItemType Directory -Force -Path $InstallDirectory | Out-Null
 $packagePathForCopy = [System.IO.Path]::GetFullPath($PackageDirectory).TrimEnd('\')
 $installPathForCopy = [System.IO.Path]::GetFullPath($InstallDirectory).TrimEnd('\')
@@ -306,6 +353,8 @@ if (-not [string]::Equals($packagePathForCopy, $installPathForCopy, [StringCompa
     Copy-PackageToInstallDirectory -SourceDirectory $PackageDirectory -DestinationDirectory $InstallDirectory
 }
 
+# 生成并写入 Revit .addin 清单文件
+# Generate and write Revit .addin manifest file
 $installedAssembly = Join-Path $InstallDirectory 'RevitCommandBridge.dll'
 Write-Output 'RCB_INSTALL_STAGE=write-manifest'
 $manifestTemplate = Get-Content -LiteralPath (Join-Path $PackageDirectory 'deploy\RevitCommandBridge.addin.template') -Raw -Encoding UTF8
@@ -318,6 +367,8 @@ $manifest = $manifest.Replace('__FULL_CLASS_NAME__', $entryClass)
 New-Item -ItemType Directory -Force -Path $AddinsDirectory | Out-Null
 [System.IO.File]::WriteAllText($manifestPath, $manifest, (New-Object System.Text.UTF8Encoding($false)))
 
+# 写入安装元数据
+# Write installation metadata
 $installedMetadata = [ordered]@{
     product = 'RevitCommandBridge'
     revit_version = $RevitVersion
@@ -340,6 +391,8 @@ $ownedFiles += 'install-manifest.json'
 Write-Output 'RCB_INSTALL_STAGE=write-inventory'
 Write-Output 'RCB_INSTALL_STAGE=complete'
 
+# 配置 AI 连接器
+# Configure AI connector
 if ($Connector -ne 'none') {
     $connectorScript = Join-Path $InstallDirectory 'scripts\configure-connector.ps1'
     if (-not (Test-FileSystemPath $connectorScript)) {
@@ -348,6 +401,8 @@ if ($Connector -ne 'none') {
     & $connectorScript -Provider $Connector -RevitVersion $RevitVersion
 }
 
+# 输出安装结果
+# Output installation result
 [PSCustomObject]@{
     RevitVersion = $RevitVersion
     RevitInstallDirectory = $RevitInstallDirectory

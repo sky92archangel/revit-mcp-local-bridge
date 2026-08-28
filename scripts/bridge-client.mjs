@@ -1,3 +1,5 @@
+// 桥接客户端核心库 —— 通过本地文件系统队列与 Revit 命令桥通信（入队、结果读取、状态检查）
+// Bridge client core library — communicates with the Revit command bridge via a local file-system queue (enqueue, result read, status check)
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -11,8 +13,12 @@ import {
   writeFile,
 } from "node:fs/promises";
 
+// 当前命令协议版本标识
+// Current command protocol version identifier
 export const COMMAND_PROTOCOL = "revit-command-bridge/2.0";
 
+// 自定义桥接客户端错误类，携带错误码
+// Custom bridge client error class with error code
 export class BridgeClientError extends Error {
   constructor(message, code = "BRIDGE_ERROR") {
     super(message);
@@ -21,6 +27,8 @@ export class BridgeClientError extends Error {
   }
 }
 
+// 获取默认桥接根目录：%LOCALAPPDATA%\RevitCommandBridge\<版本号>
+// Get the default bridge root directory: %LOCALAPPDATA%\RevitCommandBridge\<version>
 export function defaultBridgeRoot() {
   const localApplicationData = process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
   const requestedVersion = process.env.REVIT_COMMAND_BRIDGE_VERSION || inferBundledRevitVersion();
@@ -30,10 +38,14 @@ export function defaultBridgeRoot() {
   return path.join(localApplicationData, "RevitCommandBridge", requestedVersion);
 }
 
+// 解析桥接根目录：优先使用传入值，其次是环境变量，最后取默认
+// Resolve bridge root: prefer explicit value, then env var, then default
 export function resolveBridgeRoot(value) {
   return path.resolve(value || process.env.REVIT_COMMAND_BRIDGE_ROOT || defaultBridgeRoot());
 }
 
+// 返回桥接队列所有子目录路径（inbox、processing、outbox、archive、logs、status）
+// Return all bridge queue subdirectory paths (inbox, processing, outbox, archive, logs, status)
 export function bridgePaths(rootDirectory) {
   const root = resolveBridgeRoot(rootDirectory);
   return {
@@ -47,10 +59,14 @@ export function bridgePaths(rootDirectory) {
   };
 }
 
+// 生成去连字符的 UUID 作为命令请求 ID
+// Generate a hyphen-stripped UUID as the command request ID
 export function createRequestId() {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
+// 验证请求 ID 格式：长度 1-128，仅含字母、数字、.、_、-
+// Validate request ID format: length 1-128, only letters, digits, ., _, -
 export function validateRequestId(value) {
   const id = String(value || "").trim();
   if (id.length < 1 || id.length > 128) {
@@ -62,6 +78,8 @@ export function validateRequestId(value) {
   return id;
 }
 
+// 标准化命令请求：统一字段名、校验必填项、生成 ID 和时间戳
+// Normalize a command request: unify field names, validate required fields, generate ID and timestamp
 export function normalizeRequest(input, defaults = {}) {
   if (!isRecord(input)) {
     throw new BridgeClientError("命令请求必须是 JSON 对象。", "INVALID_REQUEST");
@@ -91,6 +109,8 @@ export function normalizeRequest(input, defaults = {}) {
   };
 }
 
+// 确保桥接队列目录结构存在（递归创建）
+// Ensure the bridge queue directory structure exists (recursively create)
 export async function ensureBridgeDirectories(rootDirectory) {
   const paths = bridgePaths(rootDirectory);
   await Promise.all([
@@ -103,6 +123,8 @@ export async function ensureBridgeDirectories(rootDirectory) {
   return paths;
 }
 
+// 将标准化的命令请求写入 inbox 目录（先写临时文件再原子重命名）
+// Write a normalized command request to the inbox directory (atomic write via temp file + rename)
 export async function enqueueCommand(input, options = {}) {
   const paths = await ensureBridgeDirectories(options.rootDirectory);
   const request = normalizeRequest(input, options);
@@ -133,6 +155,8 @@ export async function enqueueCommand(input, options = {}) {
   };
 }
 
+// 从 outbox 读取命令执行结果，不存在时返回 null
+// Read a command result from the outbox; return null when not found
 export async function readCommandResult(id, options = {}) {
   const paths = bridgePaths(options.rootDirectory);
   const resultPath = path.join(paths.outbox, `${validateRequestId(id)}.result.json`);
@@ -147,6 +171,8 @@ export async function readCommandResult(id, options = {}) {
   }
 }
 
+// 轮询等待命令结果，直到超时
+// Poll for a command result until timeout
 export async function waitForCommandResult(id, options = {}) {
   const waitMilliseconds = Math.max(0, Number(options.waitMilliseconds ?? 60000));
   const pollMilliseconds = Math.max(50, Number(options.pollMilliseconds ?? 200));
@@ -171,6 +197,8 @@ export async function waitForCommandResult(id, options = {}) {
   return null;
 }
 
+// 读取桥接状态文件 status.json；文件不存在时返回 null
+// Read the bridge status file status.json; return null if the file does not exist
 export async function readBridgeStatus(options = {}) {
   const paths = bridgePaths(options.rootDirectory);
   try {
@@ -184,6 +212,8 @@ export async function readBridgeStatus(options = {}) {
   }
 }
 
+// 检查桥接是否在运行：状态为 running/busy 且最后更新时间在 maxAge 以内
+// Check whether the bridge is running: state must be running/busy and updated within maxAge
 export function isBridgeRunning(status, maxAgeMilliseconds = 5000) {
   if (!isRecord(status) || !["running", "busy"].includes(status.state)) {
     return false;
@@ -192,6 +222,8 @@ export function isBridgeRunning(status, maxAgeMilliseconds = 5000) {
   return Number.isFinite(updated) && Date.now() - updated <= maxAgeMilliseconds;
 }
 
+// 列出所有受支持的 Revit 顶层操作名称
+// List all supported Revit top-level operation names
 export function supportedOperations() {
   return [
     "health",

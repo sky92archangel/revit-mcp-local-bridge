@@ -1,3 +1,5 @@
+// Revit HTTP REST 网关 —— 以 HTTP REST API 封装文件队列，提供 health、capabilities、commands 端点
+// Revit HTTP REST gateway — wraps the file queue with a REST API, providing health, capabilities, and commands endpoints
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,11 +15,15 @@ import {
   waitForCommandResult,
 } from "./bridge-client.mjs";
 
+// 从环境变量读取主机、根目录、端口配置
+// Read host, root directory, and port configuration from environment variables
 const host = process.env.REVIT_BRIDGE_HOST || "127.0.0.1";
 const rootDirectory = resolveBridgeRoot(process.env.REVIT_COMMAND_BRIDGE_ROOT);
 const revitVersion = process.env.REVIT_COMMAND_BRIDGE_VERSION || path.basename(rootDirectory);
 const port = readPort(process.env.REVIT_BRIDGE_PORT || String(defaultPortForVersion(revitVersion)));
 
+// 创建 HTTP 服务器，所有请求路由到 handleRequest
+// Create HTTP server; all requests are routed to handleRequest
 export const server = http.createServer((request, response) => {
   handleRequest(request, response).catch((error) => {
     console.error(error);
@@ -29,10 +35,14 @@ export const server = http.createServer((request, response) => {
   });
 });
 
+// 处理客户端连接错误，返回 400
+// Handle client connection errors, return 400
 server.on("clientError", (_error, socket) => {
   socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
 });
 
+// 启动 HTTP 服务器监听，返回 Promise
+// Start the HTTP server listener, returns a Promise
 export function startGateway() {
   if (server.listening) {
     return Promise.resolve();
@@ -52,6 +62,8 @@ export function startGateway() {
   });
 }
 
+// 停止 HTTP 服务器，返回 Promise
+// Stop the HTTP server, returns a Promise
 export function stopGateway() {
   if (!server.listening) {
     return Promise.resolve();
@@ -61,6 +73,8 @@ export function stopGateway() {
   });
 }
 
+// 直接运行时启动网关并注册信号处理
+// When run directly, start the gateway and register signal handlers
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMainModule) {
   await startGateway();
@@ -69,6 +83,8 @@ if (isMainModule) {
   }
 }
 
+// 路由 HTTP 请求：OPTIONS、GET /health、GET /capabilities、GET/POST /commands
+// Route HTTP requests: OPTIONS, GET /health, GET /capabilities, GET/POST /commands
 async function handleRequest(request, response) {
   const url = new URL(request.url || "/", `http://${host}:${port}`);
   if (request.method === "OPTIONS") {
@@ -98,6 +114,8 @@ async function handleRequest(request, response) {
     return;
   }
 
+  // 匹配 GET /commands/{id} 路由，读取命令执行结果
+  // Match GET /commands/{id} route, read command execution result
   const resultMatch = /^\/commands\/([^/]+)$/.exec(url.pathname);
   if (request.method === "GET" && resultMatch) {
     let result;
@@ -121,6 +139,8 @@ async function handleRequest(request, response) {
     return;
   }
 
+  // 匹配 POST /commands 路由，提交新命令
+  // Match POST /commands route, submit a new command
   if (request.method === "POST" && url.pathname === "/commands") {
     await submitCommand(request, response, url);
     return;
@@ -133,6 +153,8 @@ async function handleRequest(request, response) {
   });
 }
 
+// 处理 POST /commands：解析请求体、检查桥状态、入队列、可选等待结果
+// Handle POST /commands: parse body, check bridge state, enqueue, optionally wait for result
 async function submitCommand(request, response, url) {
   let envelope;
   try {
@@ -142,9 +164,13 @@ async function submitCommand(request, response, url) {
     return;
   }
 
+  // 支持 envelope.command 包裹或直接作为命令对象
+  // Support either envelope.command wrapper or the envelope itself as the command
   const command = isRecord(envelope.command) ? envelope.command : envelope;
   const status = await readBridgeStatus({ rootDirectory });
   const requireRunning = envelope.require_running !== false;
+  // 默认要求桥接运行中，否则返回 503
+  // By default require the bridge to be running, otherwise return 503
   if (requireRunning && !isBridgeRunning(status)) {
     sendJson(response, 503, {
       ok: false,
@@ -163,6 +189,8 @@ async function submitCommand(request, response, url) {
     return;
   }
 
+  // 解析 wait_seconds 参数，大于 0 时同步等待结果
+  // Parse wait_seconds; if > 0, synchronously wait for the result
   let waitSeconds;
   try {
     waitSeconds = readWaitSeconds(url.searchParams.get("wait_seconds") ?? envelope.wait_seconds ?? 0);
@@ -181,6 +209,8 @@ async function submitCommand(request, response, url) {
     }
   }
 
+  // 不等待或超时：返回 202 Accepted 及结果轮询地址
+  // No wait or timeout: return 202 Accepted with result polling URL
   sendJson(response, 202, {
     ok: true,
     state: "queued",
@@ -190,6 +220,8 @@ async function submitCommand(request, response, url) {
   });
 }
 
+// 将客户端错误转换为对应的 HTTP 状态码和 JSON 响应
+// Convert client errors to appropriate HTTP status codes and JSON responses
 function sendClientError(response, error) {
   if (error instanceof BridgeClientError) {
     const status = error.code === "ID_CONFLICT" ? 409 : 400;
@@ -208,6 +240,8 @@ function sendClientError(response, error) {
   });
 }
 
+// 发送 JSON 响应，设置 Content-Type、Content-Length 和 Cache-Control
+// Send a JSON response with Content-Type, Content-Length, and Cache-Control headers
 function sendJson(response, statusCode, value) {
   if (response.writableEnded) {
     return;
@@ -221,6 +255,8 @@ function sendJson(response, statusCode, value) {
   response.end(body);
 }
 
+// 从 HTTP 请求体中读取并解析 JSON，限制 1MB
+// Read and parse JSON from the HTTP request body, limited to 1MB
 function readJsonBody(request) {
   return new Promise((resolve, reject) => {
     let size = 0;

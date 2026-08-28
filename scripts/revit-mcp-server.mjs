@@ -1,3 +1,5 @@
+// Revit MCP 服务器入口 —— 通过标准输入/输出实现 MCP 协议，将 Revit 操作暴露为 MCP 工具
+// Revit MCP server entry — implements the MCP protocol over stdio, exposing Revit operations as MCP tools
 import readline from "node:readline";
 import path from "node:path";
 import {
@@ -11,12 +13,16 @@ import {
   waitForCommandResult,
 } from "./bridge-client.mjs";
 
+// 支持的 MCP 协议版本与桥接根目录、Revit 版本号、控制字段集合
+// Supported MCP protocol versions, bridge root, Revit version, and control field set
 const MCP_PROTOCOL_VERSION = "2025-03-26";
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(["2024-11-05", "2025-03-26", "2025-06-18"]);
 const rootDirectory = resolveBridgeRoot(process.env.REVIT_COMMAND_BRIDGE_ROOT);
 const revitVersion = process.env.REVIT_COMMAND_BRIDGE_VERSION || path.basename(rootDirectory);
 const controlFields = new Set(["preview", "document_title", "documentTitle", "wait_seconds", "source"]);
 
+// 从标准输入逐行读取 JSON-RPC 请求
+// Read JSON-RPC requests line by line from stdin
 const input = readline.createInterface({
   input: process.stdin,
   crlfDelay: Infinity,
@@ -26,10 +32,15 @@ for await (const line of input) {
   if (!line.trim()) {
     continue;
   }
-
-  await handleLine(line);
+  try {
+    await handleLine(line);
+  } catch (loopErr) {
+    console.error("HANDLE_ERROR:", loopErr?.stack || loopErr);
+  }
 }
 
+// 处理单行 JSON-RPC 请求：解析、校验、分发并回写响应
+// Handle a single JSON-RPC request: parse, validate, dispatch, and write back the response
 async function handleLine(line) {
   let request;
   try {
@@ -61,6 +72,8 @@ async function handleLine(line) {
   }
 }
 
+// 根据 MCP 方法名分发到对应的处理函数
+// Dispatch to the appropriate handler based on the MCP method name
 async function dispatch(method, params) {
   switch (method) {
     case "initialize":
@@ -78,6 +91,8 @@ async function dispatch(method, params) {
   }
 }
 
+// 处理 MCP initialize 请求：协商协议版本并返回服务器能力声明
+// Handle MCP initialize request: negotiate protocol version and return server capabilities
 function initialize(params) {
   if (!isRecord(params)) {
     throw new McpRpcError(-32602, "initialize 参数必须是对象。");
@@ -99,6 +114,8 @@ function initialize(params) {
   };
 }
 
+// 处理 tools/call 请求：分配 revit_command 或各具名工具
+// Handle tools/call request: dispatch revit_command or individual named tools
 async function callTool(params) {
   if (!isRecord(params) || typeof params.name !== "string") {
     throw new McpRpcError(-32602, "tools/call 缺少 name。");
@@ -109,6 +126,8 @@ async function callTool(params) {
     throw new McpRpcError(-32602, "tools/call arguments 必须是对象。");
   }
 
+  // revit_command 是通用入口，从 arguments 中提取 operation
+  // revit_command is the generic entry point; extract operation from arguments
   if (params.name === "revit_command") {
     const operation = String(argumentsValue.operation || "").trim();
     if (!operation) {
@@ -123,11 +142,15 @@ async function callTool(params) {
     }, argumentsValue.wait_seconds);
   }
 
+  // 将具名工具名（如 revit_health）转换为 operation 字符串
+  // Convert named tool names (e.g. revit_health) to operation strings
   const directOperation = directToolOperation(params.name);
   if (directOperation == null) {
     return toolFailure(`未知 Revit 工具：${params.name}`);
   }
 
+  // 从参数中移除控制字段（preview、document_title 等），只保留传给 Revit 的参数
+  // Strip control fields (preview, document_title, etc.) leaving only Revit-bound arguments
   const args = {};
   for (const [key, value] of Object.entries(argumentsValue)) {
     if (!controlFields.has(key)) {
@@ -143,8 +166,12 @@ async function callTool(params) {
   }, argumentsValue.wait_seconds);
 }
 
+// 将命令排入文件队列，等待 Revit 桥端处理并返回结果
+// Enqueue a command to the file queue, wait for Revit bridge processing, and return the result
 async function invokeRevit(command, waitSecondsValue) {
   const waitSeconds = parseWaitSeconds(waitSecondsValue ?? 60);
+  // 检查 Revit 命令桥运行状态
+  // Check that the Revit command bridge is running
   const status = await readBridgeStatus({ rootDirectory });
   if (!isBridgeRunning(status)) {
     return toolFailure("Revit 命令桥未运行。先启动 Revit，打开项目，然后在 Revit 功能区点击“启动桥接”。", { status });
@@ -167,6 +194,8 @@ async function invokeRevit(command, waitSecondsValue) {
     return toolFailure(`读取 Revit 结果失败：${error instanceof Error ? error.message : String(error)}`);
   }
 
+  // 超时未返回结果，返回排队状态
+  // Timeout: return queued state when no result within wait period
   if (result == null) {
     return toolSuccess({
       ok: true,
@@ -180,6 +209,8 @@ async function invokeRevit(command, waitSecondsValue) {
   return result.ok ? toolSuccess(result) : toolFailure(result.message || "Revit 命令失败。", result);
 }
 
+// 构造所有 MCP 工具定义（输入 Schema）
+// Build all MCP tool definitions (input schemas)
 function toolDefinitions() {
   const controls = controlProperties();
   return [
@@ -248,6 +279,8 @@ function toolDefinitions() {
   ];
 }
 
+// 构造单个具名工具的工具定义模板
+// Build a tool definition template for a single named tool
 function directTool(name, operation, description, properties, required) {
   return {
     name,
@@ -335,6 +368,8 @@ function lengthSchema(description) {
   };
 }
 
+// 将工具名（revit_xxx）转换为后端 operation 名称，未知时返回 null
+// Convert tool name (revit_xxx) to backend operation name, return null if unknown
 function directToolOperation(name) {
   const prefix = "revit_";
   if (!name.startsWith(prefix)) {
@@ -344,6 +379,8 @@ function directToolOperation(name) {
   return supportedOperations().includes(operation) ? operation : null;
 }
 
+// 构造 MCP tools/call 成功响应（text content）
+// Build a successful MCP tools/call response (text content)
 function toolSuccess(value) {
   return {
     content: [
@@ -355,6 +392,8 @@ function toolSuccess(value) {
   };
 }
 
+// 构造 MCP tools/call 错误响应（isError=true）
+// Build an error MCP tools/call response (isError=true)
 function toolFailure(message, detail = null) {
   return {
     content: [
@@ -367,6 +406,8 @@ function toolFailure(message, detail = null) {
   };
 }
 
+// 解析等待秒数，验证范围 0-120
+// Parse and validate wait seconds, must be 0-120
 function parseWaitSeconds(value) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds) || seconds < 0 || seconds > 120) {
@@ -375,10 +416,18 @@ function parseWaitSeconds(value) {
   return seconds;
 }
 
+// 将 JSON-RPC 消息序列化为一行 JSON 写入标准输出（MCP 传输层）
+// Serialize a JSON-RPC message as a single JSON line to stdout (MCP transport)
 function writeMessage(message) {
-  process.stdout.write(`${JSON.stringify(message)}\n`);
+  try {
+    process.stdout.write(`${JSON.stringify(message)}\n`);
+  } catch (writeErr) {
+    console.error("WRITE_FAIL:", writeErr?.message, JSON.stringify(message).slice(0, 200));
+  }
 }
 
+// 构造 JSON-RPC 错误响应对象
+// Build a JSON-RPC error response object
 function jsonRpcError(id, code, message, data) {
   const error = { code, message };
   if (data !== undefined) {
@@ -387,10 +436,14 @@ function jsonRpcError(id, code, message, data) {
   return { jsonrpc: "2.0", id, error };
 }
 
+// 类型守卫：判断是否为普通对象（非 null、非数组）
+// Type guard: check if value is a plain object (not null, not array)
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// 自定义 MCP RPC 错误类，携带错误码和附加数据
+// Custom MCP RPC error class with error code and optional data payload
 class McpRpcError extends Error {
   constructor(code, message, data) {
     super(message);

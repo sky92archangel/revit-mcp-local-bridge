@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -10,11 +11,14 @@ namespace RevitCommandBridge
     /// <summary>
     /// 参数定义层（项目参数 / 共享参数 / 族参数）的类型与分组解析，
     /// 以及 manage_project_parameters 的实现。
-    /// 版本断代集中在此：2020 用 ParameterType/BuiltInParameterGroup，
-    /// 2021+ 用 ForgeTypeId 规格（REVIT_FORGE_UNITS），2023+ 分组也换成 ForgeTypeId（REVIT_PARAMETER_GROUPS）。
+    /// R2022+ 使用 ForgeTypeId（SpecTypeId / GroupTypeId）API，
+    /// R2020–R2021 使用 ParameterType / BuiltInParameterGroup 枚举。
     /// </summary>
     internal static class RevitParameterAdmin
     {
+        /// <summary>
+        /// 将参数规格（spec）的中英文标记归一化。 / Normalizes spec tokens from English or Chinese to a canonical form.
+        /// </summary>
         public static string NormalizeSpecToken(string token)
         {
             string value = (token ?? string.Empty).Trim().ToLowerInvariant();
@@ -43,6 +47,9 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 将参数分组（group）的中英文标记归一化。 / Normalizes group tokens from English or Chinese to a canonical form.
+        /// </summary>
         private static string NormalizeGroupToken(string token)
         {
             string value = (token ?? "data").Trim().ToLowerInvariant();
@@ -82,8 +89,24 @@ namespace RevitCommandBridge
             }
         }
 
-#if REVIT_FORGE_UNITS
-        public static ForgeTypeId ResolveSpec(string token)
+        /// <summary>
+        /// 向族管理器添加族参数（所有版本统一入口）。 / Adds a family parameter to the FamilyManager (unified entry for all versions).
+        /// </summary>
+        public static FamilyParameter AddFamilyParameter(
+            FamilyManager manager,
+            Document familyDocument,
+            string name,
+            string typeToken,
+            string groupToken,
+            bool isInstance)
+        {
+#if REVIT2022_OR_GREATER
+            ForgeTypeId spec = ResolveSpecForFamily(typeToken);
+            ForgeTypeId group = ResolveGroupForFamily(groupToken);
+            return manager.AddParameter(name, group, spec, isInstance);
+        }
+
+        private static ForgeTypeId ResolveSpecForFamily(string token)
         {
             switch (NormalizeSpecToken(token))
             {
@@ -97,25 +120,8 @@ namespace RevitCommandBridge
                 default: return SpecTypeId.Length;
             }
         }
-#else
-        public static ParameterType ResolveSpec(string token)
-        {
-            switch (NormalizeSpecToken(token))
-            {
-                case "length": return ParameterType.Length;
-                case "number": return ParameterType.Number;
-                case "text": return ParameterType.Text;
-                case "yesno": return ParameterType.YesNo;
-                case "angle": return ParameterType.Angle;
-                case "area": return ParameterType.Area;
-                case "volume": return ParameterType.Volume;
-                default: return ParameterType.Length;
-            }
-        }
-#endif
 
-#if REVIT_PARAMETER_GROUPS
-        private static ForgeTypeId ResolveGroup(string token)
+        private static ForgeTypeId ResolveGroupForFamily(string token)
         {
             switch (NormalizeGroupToken(token))
             {
@@ -136,7 +142,30 @@ namespace RevitCommandBridge
             }
         }
 #else
-        private static BuiltInParameterGroup ResolveGroup(string token)
+            ParameterType spec = ResolveSpecForFamily(typeToken);
+            BuiltInParameterGroup group = ResolveGroupForFamily(groupToken);
+            var options = new ExternalDefinitionCreationOptions(name, spec);
+            var defGroup = familyDocument.Application.OpenSharedParameterFile()?.Groups.Create("RevitCommandBridge");
+            ExternalDefinition definition = (ExternalDefinition)defGroup?.Definitions.Create(options);
+            return manager.AddParameter(definition, group, isInstance);
+        }
+
+        private static ParameterType ResolveSpecForFamily(string token)
+        {
+            switch (NormalizeSpecToken(token))
+            {
+                case "length": return ParameterType.Length;
+                case "number": return ParameterType.Integer;
+                case "text": return ParameterType.Text;
+                case "yesno": return ParameterType.YesNo;
+                case "angle": return ParameterType.Angle;
+                case "area": return ParameterType.Area;
+                case "volume": return ParameterType.Volume;
+                default: return ParameterType.Length;
+            }
+        }
+
+        private static BuiltInParameterGroup ResolveGroupForFamily(string token)
         {
             switch (NormalizeGroupToken(token))
             {
@@ -158,28 +187,53 @@ namespace RevitCommandBridge
         }
 #endif
 
-        public static FamilyParameter AddFamilyParameter(
-            FamilyManager manager,
-            string name,
-            string typeToken,
-            string groupToken,
-            bool isInstance)
+#if REVIT2023_OR_GREATER
+        private static ForgeTypeId ResolveSpecForProjectParam(string token) => ResolveSpecForFamily(token);
+#else
+        private static ParameterType ResolveSpecForProjectParam(string token)
         {
-#if REVIT_FORGE_UNITS
-            ForgeTypeId spec = ResolveSpec(typeToken);
-#else
-            ParameterType spec = ResolveSpec(typeToken);
-#endif
-#if REVIT_PARAMETER_GROUPS
-            ForgeTypeId group = ResolveGroup(groupToken);
-#else
-            BuiltInParameterGroup group = ResolveGroup(groupToken);
-#endif
-            // 2020: AddParameter(name, group, spec, isInstance)
-            // 2021+: 参数类型换 ForgeTypeId；2023+ 分组换 GroupTypeId——位置不变
-            return manager.AddParameter(name, group, spec, isInstance);
+            switch (NormalizeSpecToken(token))
+            {
+                case "length": return ParameterType.Length;
+                case "number": return ParameterType.Integer;
+                case "text": return ParameterType.Text;
+                case "yesno": return ParameterType.YesNo;
+                case "angle": return ParameterType.Angle;
+                case "area": return ParameterType.Area;
+                case "volume": return ParameterType.Volume;
+                default: return ParameterType.Length;
+            }
         }
+#endif
 
+#if REVIT2025_OR_GREATER
+        private static ForgeTypeId ResolveGroupForProjectParam(string token) => ResolveGroupForFamily(token);
+#else
+        private static BuiltInParameterGroup ResolveGroupForProjectParam(string token)
+        {
+            switch (NormalizeGroupToken(token))
+            {
+                case "geometry": return BuiltInParameterGroup.PG_GEOMETRY;
+                case "data": return BuiltInParameterGroup.PG_DATA;
+                case "general": return BuiltInParameterGroup.PG_GENERAL;
+                case "mechanical": return BuiltInParameterGroup.PG_MECHANICAL;
+                case "electrical": return BuiltInParameterGroup.PG_ELECTRICAL;
+                case "plumbing": return BuiltInParameterGroup.PG_PLUMBING;
+                case "text": return BuiltInParameterGroup.PG_TEXT;
+                case "identity": return BuiltInParameterGroup.PG_IDENTITY_DATA;
+                case "materials": return BuiltInParameterGroup.PG_MATERIALS;
+                case "structural": return BuiltInParameterGroup.PG_STRUCTURAL;
+                case "constraints": return BuiltInParameterGroup.PG_CONSTRAINTS;
+                case "visibility": return BuiltInParameterGroup.PG_VISIBILITY;
+                case "phasing": return BuiltInParameterGroup.PG_PHASING;
+                default: return BuiltInParameterGroup.PG_DATA;
+            }
+        }
+#endif
+
+        /// <summary>
+        /// 管理项目参数入口：支持 list / add_shared / delete 三种 action。 / Entry point for managing project parameters: supports list, add_shared, and delete actions.
+        /// </summary>
         public static Dictionary<string, object> ManageProjectParameters(PlanStep step, PlanExecutionContext context)
         {
             string action = PlanValues.String(step.Arguments, null, "action").Trim().ToLowerInvariant();
@@ -198,15 +252,17 @@ namespace RevitCommandBridge
             }
         }
 
+        /// <summary>
+        /// 列出当前项目所有绑定的项目参数。 / Lists all bound project parameters in the current document.
+        /// </summary>
         private static Dictionary<string, object> ListProjectParameters(PlanExecutionContext context)
         {
             var items = new List<Dictionary<string, object>>();
             BindingMap map = context.Document.ParameterBindings;
-            BindingMapIterator iterator = map.ForwardBindings();
-            while (iterator.MoveNext())
+            foreach (DictionaryEntry entry in map)
             {
-                Definition definition = iterator.Key as Definition;
-                ElementBinding binding = iterator.Current as ElementBinding;
+                Definition definition = entry.Key as Definition;
+                ElementBinding binding = entry.Value as ElementBinding;
                 if (definition == null || binding == null)
                 {
                     continue;
@@ -234,6 +290,9 @@ namespace RevitCommandBridge
             };
         }
 
+        /// <summary>
+        /// 添加共享参数到项目：创建或复用外部定义，绑定到指定类别。 / Adds a shared parameter to the project: creates or reuses an external definition and binds it to specified categories.
+        /// </summary>
         private static Dictionary<string, object> AddSharedParameter(PlanStep step, PlanExecutionContext context)
         {
             Application application = context.UiApplication.Application;
@@ -266,6 +325,8 @@ namespace RevitCommandBridge
                 return data;
             }
 
+            // 验证共享参数文件路径是否已配置
+            // Verify that the shared parameter file path is configured
             if (string.IsNullOrWhiteSpace(application.SharedParametersFilename))
             {
                 throw new BridgeCommandException(
@@ -276,6 +337,8 @@ namespace RevitCommandBridge
             {
                 throw new BridgeCommandException("无法打开共享参数文件。");
             }
+            // 查找或创建共享参数分组
+            // Find or create the shared parameter group
             DefinitionGroup group = null;
             foreach (DefinitionGroup candidate in definitionFile.Groups)
             {
@@ -289,22 +352,22 @@ namespace RevitCommandBridge
             {
                 group = definitionFile.Groups.Create(sharedGroupName);
             }
+            // 查找或创建参数定义（复用同名的现有定义）
+            // Find or create the parameter definition (reuse an existing definition with the same name)
             ExternalDefinition definition = group.Definitions.get_Item(name) as ExternalDefinition;
             if (definition == null)
             {
-#if REVIT_FORGE_UNITS
-                ExternalDefinitionCreationOptions options =
-                    new ExternalDefinitionCreationOptions(name, ResolveSpec(typeToken));
-                definition = group.Definitions.Create(options) as ExternalDefinition;
-#else
-                definition = group.Definitions.Create(name, ResolveSpec(typeToken)) as ExternalDefinition;
-#endif
+ExternalDefinitionCreationOptions options =
+    new ExternalDefinitionCreationOptions(name, ResolveSpecForProjectParam(typeToken));
+definition = group.Definitions.Create(options) as ExternalDefinition;
             }
             if (definition == null)
             {
                 throw new BridgeCommandException("在共享参数文件中创建定义失败：" + name);
             }
 
+            // 构建类别集合并绑定参数
+            // Build the category set and bind the parameter
             CategorySet categorySet = application.Create.NewCategorySet();
             foreach (string token in categoryTokens)
             {
@@ -312,7 +375,7 @@ namespace RevitCommandBridge
                 lookup["category"] = token;
                 ElementId categoryId = RevitLookups.ResolveCategoryId(
                     document, lookup, BuiltInCategory.OST_GenericModel);
-                Category category = document.GetElement(categoryId) as Category;
+Category category = Category.GetCategory(document, categoryId);
                 if (category == null)
                 {
                     throw new BridgeCommandException("找不到类别：“" + token + "”。");
@@ -322,15 +385,14 @@ namespace RevitCommandBridge
             ElementBinding binding = isInstance
                 ? (ElementBinding)application.Create.NewInstanceBinding(categorySet)
                 : application.Create.NewTypeBinding(categorySet);
-#if REVIT_PARAMETER_GROUPS
-            bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
-#else
-            bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroup(groupToken));
-#endif
+bool bound = document.ParameterBindings.Insert(definition, binding, ResolveGroupForProjectParam(groupToken));
             data["bound"] = bound;
             return data;
         }
 
+        /// <summary>
+        /// 删除项目参数（从参数绑定映射中移除）。 / Deletes a project parameter (removes it from the parameter binding map).
+        /// </summary>
         private static Dictionary<string, object> DeleteProjectParameter(PlanStep step, PlanExecutionContext context)
         {
             string name = PlanValues.String(step.Arguments, null, "name", "parameter_name");
@@ -350,10 +412,9 @@ namespace RevitCommandBridge
 
             Definition matched = null;
             BindingMap map = context.Document.ParameterBindings;
-            BindingMapIterator iterator = map.ForwardBindings();
-            while (iterator.MoveNext())
+            foreach (DictionaryEntry entry in map)
             {
-                Definition definition = iterator.Key as Definition;
+                Definition definition = entry.Key as Definition;
                 if (definition != null &&
                     string.Equals(definition.Name, name, StringComparison.OrdinalIgnoreCase))
                 {
@@ -369,6 +430,9 @@ namespace RevitCommandBridge
             return data;
         }
 
+        /// <summary>
+        /// 从参数字典读取类别列表。 / Reads the category list from the arguments dictionary.
+        /// </summary>
         private static List<string> ReadCategoryTokens(IDictionary<string, object> arguments)
         {
             object raw = PlanValues.Get(arguments, "categories", "category");
