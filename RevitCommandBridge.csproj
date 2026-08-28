@@ -112,27 +112,13 @@
         <Compile Include="src\Adapter\AdapterEntry26.cs" />
     </ItemGroup>
 
-    <!-- ========== Revit API 本地引用 ========== -->
+    <!-- ========== Nice3point Revit API NuGet 引用 ========== -->
 
-    <PropertyGroup>
-        <AssemblySearchPaths>{HintPathFromItem};{RawFileName}</AssemblySearchPaths>
-    </PropertyGroup>
-
-    <ItemGroup Condition="$(Configuration.Contains('R26'))">
-        <Reference Include="RevitAPI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2026DLL\RevitAPI.dll" Private="False" />
-        <Reference Include="RevitAPIUI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2026DLL\RevitAPIUI.dll" Private="False" />
-    </ItemGroup>
-    <ItemGroup Condition="$(Configuration.Contains('R23'))">
-        <Reference Include="RevitAPI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2023DLL\RevitAPI.dll" Private="False" />
-        <Reference Include="RevitAPIUI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2023DLL\RevitAPIUI.dll" Private="False" />
-    </ItemGroup>
-    <ItemGroup Condition="$(Configuration.Contains('R21'))">
-        <Reference Include="RevitAPI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2021DLL\RevitAPI.dll" Private="False" />
-        <Reference Include="RevitAPIUI" HintPath="$(MSBuildProjectDirectory)\depandency\Revit2021DLL\RevitAPIUI.dll" Private="False" />
-    </ItemGroup>
-    <ItemGroup Condition="$(Configuration.Contains('R20')) Or $(Configuration.Contains('R22')) Or $(Configuration.Contains('R24')) Or $(Configuration.Contains('R25'))">
-        <Reference Include="RevitAPI" HintPath="$(MSBuildProjectDirectory)\depandency\RevitAPI.dll" Private="False" />
-        <Reference Include="RevitAPIUI" HintPath="$(MSBuildProjectDirectory)\depandency\RevitAPIUI.dll" Private="False" />
+    <!-- Build.Tasks: 自动处理 Private=false、生成 .addin、部署到 Revit Addins -->
+    <ItemGroup>
+        <PackageReference Include="Nice3point.Revit.Build.Tasks" Version="2.*" />
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPI" Version="$(RevitVersion).0.*" />
+        <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(RevitVersion).0.*" />
     </ItemGroup>
 
     <!-- ========== 其他依赖 ========== -->
