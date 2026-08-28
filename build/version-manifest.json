@@ -1,29 +1,12 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "versions": [
-    {
-      "year": 2025,
-      "runtime": "net8.0-windows",
-      "compiler": "dotnet",
-      "project_file": "src-net8/RevitCommandBridge.Adapter25.csproj",
-      "define_symbols": [],
-      "entry_class": "RevitCommandBridgeApp25"
-    },
-    {
-      "year": 2026,
-      "runtime": "net8.0-windows",
-      "compiler": "dotnet",
-      "project_file": "src-net8/RevitCommandBridge.Adapter26.csproj",
-      "define_symbols": [],
-      "entry_class": "RevitCommandBridgeApp26"
-    },
-    {
-      "year": 2027,
-      "runtime": "net10.0-windows",
-      "compiler": "dotnet",
-      "project_file": "src-net10/RevitCommandBridge.Adapter27.csproj",
-      "define_symbols": [],
-      "entry_class": "RevitCommandBridgeApp27"
-    }
+    { "year": 2020, "runtime": "net48",           "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp20" },
+    { "year": 2021, "runtime": "net48",           "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp21" },
+    { "year": 2022, "runtime": "net48",           "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp22" },
+    { "year": 2023, "runtime": "net48",           "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp23" },
+    { "year": 2024, "runtime": "net48",           "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp24" },
+    { "year": 2025, "runtime": "net8.0-windows",  "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp25" },
+    { "year": 2026, "runtime": "net8.0-windows",  "compiler": "dotnet", "project_file": "RevitCommandBridge.csproj", "entry_class": "RevitCommandBridgeApp26" }
   ]
 }
