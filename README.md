@@ -2,53 +2,55 @@
 
 A local command bridge for Revit. The Revit add-in only executes controlled Revit API commands; Codex, WorkBuddy, any MCP client, any Function Calling Harness, or any OpenAI-compatible model API can invoke it through a unified JSON, CLI, REST, or MCP interface. It does not depend on Dynamo, nor is it tied to any specific model vendor. All new modeling goes through `execute_plan`: a single plan can combine architecture, structure, MEP, spaces, documentation, parameters, and selection display, instead of adding a new add-in command for each element type.
 
-> Each Revit year must use a DLL compiled against its corresponding API; a single "universal DLL" cannot be shared across versions. This delivery package supports Revit 2025–2027; see [VERSION-SUPPORT.md](./VERSION-SUPPORT.md) for version boundaries.
+> Each Revit year must use a DLL compiled against its corresponding API; a single "universal DLL" cannot be shared across versions. This delivery package supports Revit 2020–2026; see [VERSION-SUPPORT.md](./VERSION-SUPPORT.md) for version boundaries.
 
-The single-file installer automatically scans for locally installed Revit 2025–2027 and uses the built-in precompiled adapter packages. End users do not need to select DLLs, install Visual Studio, or manually fill in Revit paths. Build machines must have the corresponding Revit version and .NET 8/10 SDK installed.
+The single-file installer automatically scans for locally installed Revit 2020–2026 and uses the built-in precompiled adapter packages. End users do not need to select DLLs, install Visual Studio, or manually fill in Revit paths. Build machines must have the corresponding Revit version and .NET Framework 4.8 / .NET 8 SDK installed.
 
 ## Directory Structure
 
 ```
 revit-mcp-local-bridge/
 │
-├── src/                               ← ★ Single source of truth (22 .cs files, shared across all versions)
+├── src/                               ← ★ Single source of truth (shared across all versions)
 │   ├── BridgeModels.cs
 │   ├── BridgeRuntime.cs
 │   ├── PlanCommandExecutor.cs
-│   ├── RevitCommandExecutor.cs
+│   ├── PlanValues.cs
+│   ├── RevitApiExtensions.cs
 │   ├── RevitCommandBridgeApp.cs
+│   ├── RevitCommandExecutor.cs
+│   ├── RevitFamilyOperations.cs
+│   ├── RevitGeometryFactory.cs
 │   ├── RevitLookups.cs
+│   ├── RevitOutputOperations.cs
 │   ├── RevitParameterAdmin.cs
 │   ├── RevitPlanCreations.cs
 │   ├── RevitPlanMutations.cs
 │   ├── RevitPlanQueries.cs
 │   ├── RevitPlanOperations.cs
-│   ├── RevitFamilyOperations.cs
-│   ├── RevitGeometryFactory.cs
 │   ├── RevitSectionFactory.cs
-│   ├── RevitOutputOperations.cs
 │   ├── CommandPanelForm.cs
 │   ├── BridgeFailurePreprocessor.cs
 │   ├── BridgeFamilyLoadOptions.cs
 │   ├── BridgeFileQueue.cs
 │   ├── BridgeSchemas.cs
 │   ├── BridgeBuildInfo.cs
-│   └── PlanValues.cs
+│   ├── GlobalUsings.cs
+│   │
+│   ├── Adapter/                       ← Version-specific entry points (R20–R27)
+│   │   ├── AdapterEntry20.cs
+│   │   ├── AdapterEntry21.cs
+│   │   ├── AdapterEntry22.cs
+│   │   ├── AdapterEntry23.cs
+│   │   ├── AdapterEntry24.cs
+│   │   ├── AdapterEntry25.cs
+│   │   ├── AdapterEntry26.cs
+│   │   └── AdapterEntry27.cs
+│   │
+│   └── Utils/                         ← Utility classes
 │
 ├── build/                             ← Version manifest
 │   └── version-manifest.json
-│
-├── src-net8/                          ← .NET 8 project family (Revit 2025–2026)
-│   ├── Directory.Build.props
-│   ├── RevitCommandBridge.Adapter25.csproj
-│   ├── RevitCommandBridge.Adapter26.csproj
-│   ├── AdapterEntry25.cs
-│   └── AdapterEntry26.cs
-│
-├── src-net10/                         ← .NET 10 project family (Revit 2027+)
-│   ├── Directory.Build.props
-│   ├── RevitCommandBridge.Adapter27.csproj
-│   └── AdapterEntry27.cs
 │
 ├── scripts/                           ← Runtime scripts
 │   ├── revit-mcp-server.mjs
@@ -77,13 +79,14 @@ revit-mcp-local-bridge/
 ├── plans/                             ← Design documents
 │   ├── BUILD-PIPELINE.md
 │   ├── EXTENSION-PLAN.md
-│   ├── REVIT2025-PORT.md
-│   ├── SEPD-ATOMIC-ANALYSIS.md
+│   ├── CAD-BRIDGE-PLAN.md
+│   ├── ATOMIC-ANALYSIS.md
 │   ├── FAQ.md
 │   └── PR-DESCRIPTION.md
 │
 ├── deploy/
-│   └── RevitCommandBridge.addin.template
+│   ├── RevitCommandBridge.addin.template
+│   └── RevitCommandBridge.2026.addin    ← Generated deployment manifest
 │
 ├── verification/
 │   └── 2026-08-19-regression.md
@@ -92,12 +95,18 @@ revit-mcp-local-bridge/
 │   ├── RevitAIHubSetup.cs
 │   └── RevitCommandBridge.ico
 │
+├── depandency/                        ← Precompiled dependencies (SQLite, Json, RevitAPI, etc.)
+│
 ├── release/                           ← Release package output
 ├── build.ps1                          ← Single-version build
 ├── build-all.ps1                      ← Multi-version batch build
 ├── build-installer.ps1                ← Installer packaging
 ├── install-revit.ps1                  ← Install / detect
 ├── uninstall-revit.ps1
+├── fix_all.ps1
+├── fix_value.ps1
+├── RevitCommandBridge.csproj          ← Single project, conditional compilation R20–R26
+├── RevitCommandBridge.slnx            ← .slnx format solution
 ├── PROTOCOL.md
 ├── ARCHITECTURE.md
 ├── VERSION-SUPPORT.md

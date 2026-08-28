@@ -2,53 +2,55 @@
 
 面向 Revit 的本地命令桥。Revit 插件只执行受控 Revit API 命令；Codex、WorkBuddy、任意 MCP 客户端、任意 Function Calling Harness 或 OpenAI 兼容模型 API，通过统一 JSON、CLI、REST 或 MCP 接口调用。它不依赖 Dynamo，也不绑定模型厂商。新建模统一走 `execute_plan`：一个计划可组合建筑、结构、机电、空间、出图、参数和选中显示，而不是为每一种构件增加一个插件命令。
 
-> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个"万能 DLL"。本交付包支持 Revit 2025–2027；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
+> 每个 Revit 年份必须使用对应 API 编译出的 DLL，不能共用一个"万能 DLL"。本交付包支持 Revit 2020–2026；版本边界见 [VERSION-SUPPORT.md](./VERSION-SUPPORT.md)。
 
-单文件安装器会自动扫描本机 Revit 2025–2027，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit 和 .NET 8/10 SDK。
+单文件安装器会自动扫描本机 Revit 2020–2026，使用内置预编译适配包。普通用户不需要选择 DLL、安装 Visual Studio 或手工填写 Revit 路径。构建机器需安装对应年份的 Revit 和 .NET Framework 4.8 / .NET 8 SDK。
 
 ## 目录结构
 
 ```
 revit-mcp-local-bridge/
 │
-├── src/                               ← ★ 单一事实源（22 个 .cs，全部版本共享）
+├── src/                               ← ★ 单一事实源（全部版本共享）
 │   ├── BridgeModels.cs
 │   ├── BridgeRuntime.cs
 │   ├── PlanCommandExecutor.cs
-│   ├── RevitCommandExecutor.cs
+│   ├── PlanValues.cs
+│   ├── RevitApiExtensions.cs
 │   ├── RevitCommandBridgeApp.cs
+│   ├── RevitCommandExecutor.cs
+│   ├── RevitFamilyOperations.cs
+│   ├── RevitGeometryFactory.cs
 │   ├── RevitLookups.cs
+│   ├── RevitOutputOperations.cs
 │   ├── RevitParameterAdmin.cs
 │   ├── RevitPlanCreations.cs
 │   ├── RevitPlanMutations.cs
 │   ├── RevitPlanQueries.cs
 │   ├── RevitPlanOperations.cs
-│   ├── RevitFamilyOperations.cs
-│   ├── RevitGeometryFactory.cs
 │   ├── RevitSectionFactory.cs
-│   ├── RevitOutputOperations.cs
 │   ├── CommandPanelForm.cs
 │   ├── BridgeFailurePreprocessor.cs
 │   ├── BridgeFamilyLoadOptions.cs
 │   ├── BridgeFileQueue.cs
 │   ├── BridgeSchemas.cs
 │   ├── BridgeBuildInfo.cs
-│   └── PlanValues.cs
+│   ├── GlobalUsings.cs
+│   │
+│   ├── Adapter/                       ← 版本适配入口（R20–R27）
+│   │   ├── AdapterEntry20.cs
+│   │   ├── AdapterEntry21.cs
+│   │   ├── AdapterEntry22.cs
+│   │   ├── AdapterEntry23.cs
+│   │   ├── AdapterEntry24.cs
+│   │   ├── AdapterEntry25.cs
+│   │   ├── AdapterEntry26.cs
+│   │   └── AdapterEntry27.cs
+│   │
+│   └── Utils/                         ← 工具类
 │
 ├── build/                             ← 版本矩阵
 │   └── version-manifest.json
-│
-├── src-net8/                          ← .NET 8 项目族（Revit 2025–2026）
-│   ├── Directory.Build.props
-│   ├── RevitCommandBridge.Adapter25.csproj
-│   ├── RevitCommandBridge.Adapter26.csproj
-│   ├── AdapterEntry25.cs
-│   └── AdapterEntry26.cs
-│
-├── src-net10/                         ← .NET 10 项目族（Revit 2027+）
-│   ├── Directory.Build.props
-│   ├── RevitCommandBridge.Adapter27.csproj
-│   └── AdapterEntry27.cs
 │
 ├── scripts/                           ← 运行时脚本
 │   ├── revit-mcp-server.mjs
@@ -77,13 +79,14 @@ revit-mcp-local-bridge/
 ├── plans/                             ← 设计方案
 │   ├── BUILD-PIPELINE.md
 │   ├── EXTENSION-PLAN.md
-│   ├── REVIT2025-PORT.md
-│   ├── SEPD-ATOMIC-ANALYSIS.md
+│   ├── CAD-BRIDGE-PLAN.md
+│   ├── ATOMIC-ANALYSIS.md
 │   ├── FAQ.md
 │   └── PR-DESCRIPTION.md
 │
 ├── deploy/
-│   └── RevitCommandBridge.addin.template
+│   ├── RevitCommandBridge.addin.template
+│   └── RevitCommandBridge.2026.addin    ← 生成部署清单
 │
 ├── verification/
 │   └── 2026-08-19-regression.md
@@ -92,12 +95,18 @@ revit-mcp-local-bridge/
 │   ├── RevitAIHubSetup.cs
 │   └── RevitCommandBridge.ico
 │
+├── depandency/                        ← 预编译依赖（SQLite、Json、RevitAPI 等）
+│
 ├── release/                           ← 发布包输出
 ├── build.ps1                          ← 单版本编译
 ├── build-all.ps1                      ← 全版本批量编译
 ├── build-installer.ps1                ← 安装器打包
 ├── install-revit.ps1                  ← 安装/检测
 ├── uninstall-revit.ps1
+├── fix_all.ps1
+├── fix_value.ps1
+├── RevitCommandBridge.csproj          ← 单一项目，条件编译 R20–R26
+├── RevitCommandBridge.slnx            ← .slnx 新格式解决方案
 ├── PROTOCOL.md
 ├── ARCHITECTURE.md
 ├── VERSION-SUPPORT.md
