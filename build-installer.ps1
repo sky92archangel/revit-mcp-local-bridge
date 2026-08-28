@@ -6,7 +6,7 @@ param(
     [string]$DistDirectory,  # 编译产物目录 / Build output directory
     [string]$OutputPath,  # 安装器输出路径 / Installer output path
     [string]$NodeExecutable,  # Node.js 可执行文件路径 / Node.js executable path
-    [ValidatePattern('^20(2[5-7])$')]
+    [ValidatePattern('^20(2[0-6])$')]
     [string[]]$RevitVersion  # 要打包的 Revit 版本（可选）/ Revit versions to bundle (optional)
 )
 
