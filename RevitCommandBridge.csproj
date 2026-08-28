@@ -42,7 +42,7 @@
         <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER;REVIT2024_OR_GREATER</DefineConstants>
     </PropertyGroup>
     <PropertyGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
-        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER;REVIT2024_OR_GREATER</DefineConstants>
+        <DefineConstants>$(DefineConstants);REVIT2022_OR_GREATER;REVIT2023_OR_GREATER;REVIT2024_OR_GREATER;REVIT2025_OR_GREATER</DefineConstants>
     </PropertyGroup>
 
     <!-- RevitVersion 与输出目录 -->
@@ -120,7 +120,7 @@
 
     <!-- ========== 其他依赖 ========== -->
     <ItemGroup>
-        <PackageReference Include="System.Text.Json" Version="8.0.4" />
+        <PackageReference Include="System.Text.Json" Version="8.0.6" />
     </ItemGroup>
 
     <!-- ========== 调试启动 ========== -->

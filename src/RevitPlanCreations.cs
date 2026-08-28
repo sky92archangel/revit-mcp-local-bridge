@@ -202,7 +202,7 @@ namespace RevitCommandBridge
             var floorProfile = new CurveLoop();
             foreach (Curve c in profile)
                 floorProfile.Append(c);
-            Floor floor = Floor.Create(context.Document, new[] { floorProfile }, floorType.Id, level.Id, structural, 0.0);
+            Floor floor = Floor.Create(context.Document, new[] { floorProfile }, floorType.Id, level.Id, structural, null, 0.0);
 #else
             Floor floor = context.Document.Create.NewFloor(profile, floorType, level, structural);
 #endif

@@ -1,20 +1,4 @@
 <Solution>
-  <SolutionConfigurationPlatforms>
-    <SolutionConfigurationPlatform Name="Debug R20|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R21|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R22|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R23|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R24|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R25|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Debug R26|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R20|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R21|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R22|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R23|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R24|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R25|AnyCPU" />
-    <SolutionConfigurationPlatform Name="Release R26|AnyCPU" />
-  </SolutionConfigurationPlatforms>
   <Configurations>
     <BuildType Name="Debug R20" />
     <BuildType Name="Debug R21" />
@@ -31,21 +15,5 @@
     <BuildType Name="Release R25" />
     <BuildType Name="Release R26" />
   </Configurations>
-  <Project Path="RevitCommandBridge.csproj">
-    <BuildType Solution="Debug R20|*" Project="Debug R20" />
-    <BuildType Solution="Debug R21|*" Project="Debug R21" />
-    <BuildType Solution="Debug R22|*" Project="Debug R22" />
-    <BuildType Solution="Debug R23|*" Project="Debug R23" />
-    <BuildType Solution="Debug R24|*" Project="Debug R24" />
-    <BuildType Solution="Debug R25|*" Project="Debug R25" />
-    <BuildType Solution="Debug R26|*" Project="Debug R26" />
-    <BuildType Solution="Release R20|*" Project="Release R20" />
-    <BuildType Solution="Release R21|*" Project="Release R21" />
-    <BuildType Solution="Release R22|*" Project="Release R22" />
-    <BuildType Solution="Release R23|*" Project="Release R23" />
-    <BuildType Solution="Release R24|*" Project="Release R24" />
-    <BuildType Solution="Release R25|*" Project="Release R25" />
-    <BuildType Solution="Release R26|*" Project="Release R26" />
-    <Platform Project="AnyCPU|Any CPU" />
-  </Project>
+  <Project Path="RevitCommandBridge.csproj" />
 </Solution>

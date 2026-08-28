@@ -1066,7 +1066,7 @@ namespace RevitCommandBridge
             }
             if (value is double || value is float || value is decimal)
             {
-#if REVIT2022_OR_GREATER
+#if REVIT2023_OR_GREATER
 return ParameterFilterRuleFactory.CreateEqualsRule(
                     parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
 #else
@@ -1077,7 +1077,7 @@ return ParameterFilterRuleFactory.CreateEqualsRule(
                     false);
 #endif
             }
-#if REVIT2022_OR_GREATER
+#if REVIT2023_OR_GREATER
             return ParameterFilterRuleFactory.CreateEqualsRule(
                 parameterId, Convert.ToString(value, CultureInfo.InvariantCulture));
 #else
