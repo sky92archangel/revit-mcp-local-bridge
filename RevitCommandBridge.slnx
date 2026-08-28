@@ -1,5 +1,20 @@
 <Solution>
-  <Folder Name="/src-net8/">
-    <Project Path="src-net8/RevitCommandBridge.Adapter26.csproj" />
-  </Folder>
+  <Project Path="RevitCommandBridge.csproj">
+    <ProjectConfiguration>
+      <Configuration Name="Debug R20|Any CPU">Debug R20|Any CPU</Configuration>
+      <Configuration Name="Debug R21|Any CPU">Debug R21|Any CPU</Configuration>
+      <Configuration Name="Debug R22|Any CPU">Debug R22|Any CPU</Configuration>
+      <Configuration Name="Debug R23|Any CPU">Debug R23|Any CPU</Configuration>
+      <Configuration Name="Debug R24|Any CPU">Debug R24|Any CPU</Configuration>
+      <Configuration Name="Debug R25|Any CPU">Debug R25|Any CPU</Configuration>
+      <Configuration Name="Debug R26|Any CPU">Debug R26|Any CPU</Configuration>
+      <Configuration Name="Release R20|Any CPU">Release R20|Any CPU</Configuration>
+      <Configuration Name="Release R21|Any CPU">Release R21|Any CPU</Configuration>
+      <Configuration Name="Release R22|Any CPU">Release R22|Any CPU</Configuration>
+      <Configuration Name="Release R23|Any CPU">Release R23|Any CPU</Configuration>
+      <Configuration Name="Release R24|Any CPU">Release R24|Any CPU</Configuration>
+      <Configuration Name="Release R25|Any CPU">Release R25|Any CPU</Configuration>
+      <Configuration Name="Release R26|Any CPU">Release R26|Any CPU</Configuration>
+    </ProjectConfiguration>
+  </Project>
 </Solution>
