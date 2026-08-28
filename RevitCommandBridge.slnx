@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="RevitCommandBridge.csproj" />
   <Configurations>
     <BuildType Name="Debug R20" />
     <BuildType Name="Debug R21" />
@@ -15,5 +16,4 @@
     <BuildType Name="Release R25" />
     <BuildType Name="Release R26" />
   </Configurations>
-  <Project Path="RevitCommandBridge.csproj" />
 </Solution>

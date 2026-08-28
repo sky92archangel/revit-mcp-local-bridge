@@ -4,8 +4,10 @@ namespace RevitCommandBridge
 {
     internal static class RevitApiExtensions
     {
-#if REVIT2024_OR_GREATER
-        public static long GetValue(this ElementId id) => id.GetValue();
+#if REVIT2026_OR_GREATER
+        public static long GetValue(this ElementId id) => id.Value;
+#elif REVIT2024_OR_GREATER
+        public static long GetValue(this ElementId id) => id.IntegerValue;
 #else
         public static long GetValue(this ElementId id) => id.IntegerValue;
 #endif

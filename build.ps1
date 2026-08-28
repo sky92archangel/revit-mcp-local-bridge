@@ -97,6 +97,19 @@ foreach ($fileName in @('README.md', 'PROTOCOL.md', 'ARCHITECTURE.md',
     }
 }
 
+# ── 6.5 复制 Node.js 运行时 ──
+$nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+if ($null -ne $nodeCommand) {
+    $nodeExe = $nodeCommand.Source
+    $runtimeDir = Join-Path $outputDir 'runtime'
+    New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+    Copy-Item -LiteralPath $nodeExe -Destination (Join-Path $runtimeDir 'node.exe') -Force
+    & (Join-Path $runtimeDir 'node.exe') --version | Set-Content -LiteralPath (Join-Path $runtimeDir 'version.txt') -Encoding ASCII
+    Write-Host "[runtime] node.exe -> $runtimeDir"
+} else {
+    Write-Host "[runtime] node.exe 未找到，跳过"
+}
+
 # ── 7. 版本元数据 ──
 $entryClass = 'RevitCommandBridge.' + $versionConfig.entry_class
 $metadata = [ordered]@{
