@@ -1,20 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// 桥接请求对象，表示从外部发向 Revit 的一条命令。
+    /// 桥接请求对象，表示从外部发向 Revit 的一条命令�?
     /// Bridge request object representing a command sent from an external source to Revit.
     /// </summary>
     internal sealed class BridgeRequest
     {
         /// <summary>
-        /// 初始化请求，自动生成 ID、设置来源和创建时间。
+        /// 初始化请求，自动生成 ID、设置来源和创建时间�?
         /// Initializes the request with auto-generated ID, default source, and current UTC time.
         /// </summary>
         public BridgeRequest()
@@ -28,56 +21,56 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 请求唯一标识符。
+        /// 请求唯一标识符�?
         /// Unique identifier for the request.
         /// </summary>
         public string Id { get; set; }
 
         /// <summary>
-        /// 操作名称，如 "create_wall"、"delete_element"。
+        /// 操作名称，如 "create_wall"�?delete_element"�?
         /// Operation name, e.g. "create_wall", "delete_element".
         /// </summary>
         public string Operation { get; set; }
 
         /// <summary>
-        /// 操作的参数字典。
+        /// 操作的参数字典�?
         /// Arguments dictionary for the operation.
         /// </summary>
         public Dictionary<string, object> Arguments { get; set; }
 
         /// <summary>
-        /// 预览模式：为 true 时仅校验不实际执行。
+        /// 预览模式：为 true 时仅校验不实际执行�?
         /// Preview mode: when true, validates without executing.
         /// </summary>
         public bool Preview { get; set; }
 
         /// <summary>
-        /// 目标文档标题，为空时取活动文档。
+        /// 目标文档标题，为空时取活动文档�?
         /// Target document title; uses the active document when empty.
         /// </summary>
         public string DocumentTitle { get; set; }
 
         /// <summary>
-        /// 请求来源标识。
+        /// 请求来源标识�?
         /// Source identifier of the request.
         /// </summary>
         public string Source { get; set; }
 
         /// <summary>
-        /// 请求创建时的 UTC 时间。
+        /// 请求创建时的 UTC 时间�?
         /// UTC time when the request was created.
         /// </summary>
         public DateTime CreatedUtc { get; set; }
     }
 
     /// <summary>
-    /// 桥接响应对象，封装命令执行的结果状态和数据。
+    /// 桥接响应对象，封装命令执行的结果状态和数据�?
     /// Bridge response object encapsulating the result status and data of command execution.
     /// </summary>
     internal sealed class BridgeResponse
     {
         /// <summary>
-        /// 私有构造，通过静态工厂方法 Success / Failure 创建。
+        /// 私有构造，通过静态工厂方�?Success / Failure 创建�?
         /// Private constructor; instances are created via the Success / Failure factory methods.
         /// </summary>
         private BridgeResponse(bool ok, string state, string message, Dictionary<string, object> data)
@@ -90,37 +83,37 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 执行是否成功。
+        /// 执行是否成功�?
         /// Whether the execution succeeded.
         /// </summary>
         public bool Ok { get; private set; }
 
         /// <summary>
-        /// 状态标识（如 "running"、"busy"、"failed"）。
+        /// 状态标识（�?"running"�?busy"�?failed"）�?
         /// State identifier (e.g. "running", "busy", "failed").
         /// </summary>
         public string State { get; private set; }
 
         /// <summary>
-        /// 描述消息。
+        /// 描述消息�?
         /// Descriptive message.
         /// </summary>
         public string Message { get; private set; }
 
         /// <summary>
-        /// 响应中附带的数据。
+        /// 响应中附带的数据�?
         /// Additional data attached to the response.
         /// </summary>
         public Dictionary<string, object> Data { get; private set; }
 
         /// <summary>
-        /// 响应完成的 UTC 时间。
+        /// 响应完成�?UTC 时间�?
         /// UTC time when the response was completed.
         /// </summary>
         public DateTime CompletedUtc { get; private set; }
 
         /// <summary>
-        /// 创建成功响应。
+        /// 创建成功响应�?
         /// Creates a success response.
         /// </summary>
         public static BridgeResponse Success(string state, string message, Dictionary<string, object> data)
@@ -129,7 +122,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 创建失败响应，State 固定为 "failed"。
+        /// 创建失败响应，State 固定�?"failed"�?
         /// Creates a failure response with State fixed to "failed".
         /// </summary>
         public static BridgeResponse Failure(string message, Dictionary<string, object> data)
@@ -138,7 +131,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将响应序列化为字典（便于 JSON 输出）。
+        /// 将响应序列化为字典（便于 JSON 输出）�?
         /// Serializes the response into a dictionary (for JSON output).
         /// </summary>
         public Dictionary<string, object> ToDictionary(string requestId)
@@ -155,7 +148,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将响应转为 JSON 字符串。
+        /// 将响应转�?JSON 字符串�?
         /// Converts the response to a JSON string.
         /// </summary>
         public string ToDisplayText(string requestId)
@@ -165,13 +158,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 桥接命令执行过程中抛出的自定义异常，用于业务逻辑错误。
+    /// 桥接命令执行过程中抛出的自定义异常，用于业务逻辑错误�?
     /// Custom exception thrown during bridge command execution for business logic errors.
     /// </summary>
     internal sealed class BridgeCommandException : Exception
     {
         /// <summary>
-        /// 以错误消息构造异常。
+        /// 以错误消息构造异常�?
         /// Constructs the exception with an error message.
         /// </summary>
         public BridgeCommandException(string message)
@@ -181,12 +174,12 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 桥接 JSON 序列化工具，提供自定义的 Dictionary 序列化/反序列化与请求/响应转换。
+    /// 桥接 JSON 序列化工具，提供自定义的 Dictionary 序列�?反序列化与请�?响应转换�?
     /// Bridge JSON serialization utility providing custom Dictionary serialization/deserialization and request/response conversion.
     /// </summary>
     internal static class BridgeJson
     {
-        // 自定义的 JSON 序列化选项：MaxDepth=10，不区分大小写属性名，使用 DictionaryConverter
+        // 自定义的 JSON 序列化选项：MaxDepth=10，不区分大小写属性名，使�?DictionaryConverter
         // Custom JSON serializer options: MaxDepth=10, case-insensitive property names, with DictionaryConverter
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
@@ -196,7 +189,7 @@ namespace RevitCommandBridge
         };
 
         /// <summary>
-        /// 自定义 Dictionary&lt;string, object&gt; 转换器，支持任意嵌套的 JSON 结构。
+        /// 自定�?Dictionary&lt;string, object&gt; 转换器，支持任意嵌套�?JSON 结构�?
         /// Custom converter for Dictionary&lt;string, object&gt; supporting arbitrarily nested JSON structures.
         /// </summary>
         private sealed class DictionaryConverter : JsonConverter<Dictionary<string, object>>
@@ -207,7 +200,7 @@ namespace RevitCommandBridge
             }
 
             /// <summary>
-            /// 递归读取 JSON 对象到不区分大小写的字典。
+            /// 递归读取 JSON 对象到不区分大小写的字典�?
             /// Recursively reads a JSON object into a case-insensitive dictionary.
             /// </summary>
             private static Dictionary<string, object> ReadDictionary(ref Utf8JsonReader reader)
@@ -225,7 +218,7 @@ namespace RevitCommandBridge
             }
 
             /// <summary>
-            /// 递归读取 JSON 值（支持对象、数组、布尔、数字、字符串、null）。
+            /// 递归读取 JSON 值（支持对象、数组、布尔、数字、字符串、null）�?
             /// Recursively reads a JSON value (supports object, array, boolean, number, string, null).
             /// </summary>
             private static object ReadValue(ref Utf8JsonReader reader)
@@ -246,7 +239,7 @@ namespace RevitCommandBridge
                     case JsonTokenType.Null:
                         return null;
                     case JsonTokenType.Number:
-                        // 优先按 Int64 读取，失败再按 Double
+                        // 优先�?Int64 读取，失败再�?Double
                         // Prefer Int64, fall back to Double
                         if (reader.TryGetInt64(out long l)) return l;
                         return reader.GetDouble();
@@ -269,7 +262,7 @@ namespace RevitCommandBridge
             }
 
             /// <summary>
-            /// 递归写入 JSON 值，处理字典、列表、基本类型。
+            /// 递归写入 JSON 值，处理字典、列表、基本类型�?
             /// Recursively writes a JSON value, handling dictionaries, lists, and primitive types.
             /// </summary>
             private static void WriteValue(Utf8JsonWriter writer, object value)
@@ -290,7 +283,7 @@ namespace RevitCommandBridge
                     writer.WriteEndObject();
                     return;
                 }
-                // 使用非泛型 IList 接口以兼容更多集合类型
+                // 使用非泛�?IList 接口以兼容更多集合类�?
                 // Use non-generic IList interface for broader collection type compatibility
                 if (value is System.Collections.IList list)
                 {
@@ -311,14 +304,14 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 解析 JSON 字符串为 BridgeRequest。
+        /// 解析 JSON 字符串为 BridgeRequest�?
         /// Parses a JSON string into a BridgeRequest.
         /// </summary>
         public static BridgeRequest ParseRequest(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
             {
-                throw new BridgeCommandException("命令请求为空。");
+                throw new BridgeCommandException("命令请求为空�?);
             }
 
             Dictionary<string, object> root;
@@ -328,19 +321,19 @@ namespace RevitCommandBridge
             }
             catch (Exception ex)
             {
-                throw new BridgeCommandException("命令 JSON 无法解析：" + ex.Message);
+                throw new BridgeCommandException("命令 JSON 无法解析�? + ex.Message);
             }
 
             if (root == null)
             {
-                throw new BridgeCommandException("命令 JSON 顶层必须是对象。");
+                throw new BridgeCommandException("命令 JSON 顶层必须是对象�?);
             }
 
             return BuildRequest(root);
         }
 
         /// <summary>
-        /// 将任意对象序列化为 JSON 字符串。
+        /// 将任意对象序列化�?JSON 字符串�?
         /// Serializes any object to a JSON string.
         /// </summary>
         public static string Serialize(object value)
@@ -349,7 +342,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 从解析后的字典构建 BridgeRequest 实例。
+        /// 从解析后的字典构�?BridgeRequest 实例�?
         /// Builds a BridgeRequest instance from a parsed dictionary.
         /// </summary>
         private static BridgeRequest BuildRequest(IDictionary<string, object> root)
@@ -366,22 +359,22 @@ namespace RevitCommandBridge
             request.Operation = ReadString(root, "operation", "command");
             if (string.IsNullOrWhiteSpace(request.Operation))
             {
-                throw new BridgeCommandException("缺少 operation 字段。");
+                throw new BridgeCommandException("缺少 operation 字段�?);
             }
 
-            // preview 支持 "preview" 和 "dry_run" 两个字段名
+            // preview 支持 "preview" �?"dry_run" 两个字段�?
             // preview accepts both "preview" and "dry_run" field names
             request.Preview = ReadBoolean(root, false, "preview", "dry_run");
             request.DocumentTitle = ReadString(root, "document_title", "documentTitle");
             request.Source = ReadString(root, "source") ?? "external";
-            // args 支持 "args" 和 "arguments" 两个字段名
+            // args 支持 "args" �?"arguments" 两个字段�?
             // args accepts both "args" and "arguments" field names
             request.Arguments = ReadDictionary(root, "args", "arguments");
             return request;
         }
 
         /// <summary>
-        /// 将 BridgeRequest 序列化为 JSON 字符串。
+        /// �?BridgeRequest 序列化为 JSON 字符串�?
         /// Serializes a BridgeRequest to a JSON string.
         /// </summary>
         public static string SerializeRequest(BridgeRequest request)
@@ -400,7 +393,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将 BridgeResponse 序列化为 JSON 字符串。
+        /// �?BridgeResponse 序列化为 JSON 字符串�?
         /// Serializes a BridgeResponse to a JSON string.
         /// </summary>
         public static string SerializeResponse(string requestId, BridgeResponse response)
@@ -409,7 +402,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 从字典中按多个可能的键名读取字符串值。
+        /// 从字典中按多个可能的键名读取字符串值�?
         /// Reads a string value from a dictionary by trying multiple possible key names.
         /// </summary>
         public static string ReadString(IDictionary<string, object> values, params string[] names)
@@ -424,7 +417,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 从字典中按多个可能的键名读取布尔值，解析失败时返回默认值。
+        /// 从字典中按多个可能的键名读取布尔值，解析失败时返回默认值�?
         /// Reads a boolean from a dictionary by trying multiple key names; returns default on parse failure.
         /// </summary>
         public static bool ReadBoolean(IDictionary<string, object> values, bool defaultValue, params string[] names)
@@ -445,7 +438,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 从字典中按多个可能的键名读取子字典，并返回副本。
+        /// 从字典中按多个可能的键名读取子字典，并返回副本�?
         /// Reads a sub-dictionary from a dictionary by trying multiple key names, returning a copy.
         /// </summary>
         public static Dictionary<string, object> ReadDictionary(IDictionary<string, object> values, params string[] names)
@@ -459,10 +452,10 @@ namespace RevitCommandBridge
             IDictionary<string, object> source = value as IDictionary<string, object>;
             if (source == null)
             {
-                throw new BridgeCommandException("args 必须是对象。");
+                throw new BridgeCommandException("args 必须是对象�?);
             }
 
-            // 创建副本避免外部修改影响内部状态
+            // 创建副本避免外部修改影响内部状�?
             // Create a copy to prevent external mutation from affecting internal state
             var copy = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             foreach (KeyValuePair<string, object> pair in source)
@@ -474,7 +467,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 尝试在字典中按多个可能的键名查找值（不区分大小写）。
+        /// 尝试在字典中按多个可能的键名查找值（不区分大小写）�?
         /// Attempts to find a value in a dictionary by multiple possible key names (case-insensitive).
         /// </summary>
         private static bool TryRead(IDictionary<string, object> values, out object value, params string[] names)
@@ -497,13 +490,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 桥接参数提取工具，从 BridgeRequest.Arguments 中按不区分大小写的键名读取各类值。
+    /// 桥接参数提取工具，从 BridgeRequest.Arguments 中按不区分大小写的键名读取各类值�?
     /// Bridge argument extraction utility for reading typed values from BridgeRequest.Arguments by case-insensitive key names.
     /// </summary>
     internal static class BridgeArguments
     {
         /// <summary>
-        /// 判断请求参数中是否包含指定键（任一匹配即返回 true）。
+        /// 判断请求参数中是否包含指定键（任一匹配即返�?true）�?
         /// Checks whether the request arguments contain any of the specified keys.
         /// </summary>
         public static bool Contains(BridgeRequest request, params string[] names)
@@ -513,7 +506,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取字符串参数，不存在时返回默认值。
+        /// 读取字符串参数，不存在时返回默认值�?
         /// Reads a string argument, returning the default if not found.
         /// </summary>
         public static string GetString(BridgeRequest request, string defaultValue, params string[] names)
@@ -528,7 +521,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取长度参数（以毫米为单位），支持 "m" 和 "mm" 后缀以及中文单位。
+        /// 读取长度参数（以毫米为单位），支�?"m" �?"mm" 后缀以及中文单位�?
         /// Reads a length argument in millimeters, supporting "m"/"mm" suffixes and Chinese units.
         /// </summary>
         public static double GetMillimeters(BridgeRequest request, double defaultValue, params string[] names)
@@ -543,7 +536,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取长度参数（以毫米为单位），不存在时抛出异常。
+        /// 读取长度参数（以毫米为单位），不存在时抛出异常�?
         /// Reads a required length argument in millimeters, throwing if not found.
         /// </summary>
         public static double RequireMillimeters(BridgeRequest request, params string[] names)
@@ -551,14 +544,14 @@ namespace RevitCommandBridge
             object value;
             if (!TryGet(request, out value, names) || value == null)
             {
-                throw new BridgeCommandException("缺少参数：" + string.Join("/", names));
+                throw new BridgeCommandException("缺少参数�? + string.Join("/", names));
             }
 
             return ParseMillimeters(value, string.Join("/", names));
         }
 
         /// <summary>
-        /// 读取以分隔符隔开的长度列表参数（毫米），支持中文逗号/分号分隔。
+        /// 读取以分隔符隔开的长度列表参数（毫米），支持中文逗号/分号分隔�?
         /// Reads a delimited list of length values in millimeters, supporting Chinese commas/semicolons as delimiters.
         /// </summary>
         public static IList<double> RequireMillimeterList(BridgeRequest request, params string[] names)
@@ -566,16 +559,16 @@ namespace RevitCommandBridge
             object value;
             if (!TryGet(request, out value, names) || value == null)
             {
-                throw new BridgeCommandException("缺少参数：" + string.Join("/", names));
+                throw new BridgeCommandException("缺少参数�? + string.Join("/", names));
             }
 
             string text = Convert.ToString(value, CultureInfo.InvariantCulture);
-            // 支持英文逗号、中文逗号、英文分号、中文分号、空格分割
+            // 支持英文逗号、中文逗号、英文分号、中文分号、空格分�?
             // Supports splitting by ASCII comma, Chinese comma, semicolon, Chinese semicolon, and space
-            string[] chunks = text.Split(new[] { ',', '，', ';', '；', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] chunks = text.Split(new[] { ',', '�?, ';', '�?, ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (chunks.Length == 0)
             {
-                throw new BridgeCommandException("参数 " + string.Join("/", names) + " 不能为空。");
+                throw new BridgeCommandException("参数 " + string.Join("/", names) + " 不能为空�?);
             }
 
             var result = new List<double>();
@@ -588,7 +581,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 读取布尔参数，解析失败时返回默认值。
+        /// 读取布尔参数，解析失败时返回默认值�?
         /// Reads a boolean argument, returning the default if parsing fails.
         /// </summary>
         public static bool GetBoolean(BridgeRequest request, bool defaultValue, params string[] names)
@@ -609,7 +602,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 在请求的参数中按多个可能的键名查找值（不区分大小写）。
+        /// 在请求的参数中按多个可能的键名查找值（不区分大小写）�?
         /// Looks up a value in request arguments by multiple possible key names (case-insensitive).
         /// </summary>
         private static bool TryGet(BridgeRequest request, out object value, params string[] names)
@@ -631,7 +624,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 将值解析为毫米长度：数字直接返回，字符串支持 "m"/"mm" 后缀和中文单位换算。
+        /// 将值解析为毫米长度：数字直接返回，字符串支�?"m"/"mm" 后缀和中文单位换算�?
         /// Parses a value to millimeters: numeric values are returned directly, strings support "m"/"mm" suffixes and Chinese unit conversion.
         /// </summary>
         private static double ParseMillimeters(object value, string name)
@@ -646,13 +639,13 @@ namespace RevitCommandBridge
             string text = Convert.ToString(value, CultureInfo.InvariantCulture);
             if (string.IsNullOrWhiteSpace(text))
             {
-                throw new BridgeCommandException("参数 " + name + " 不能为空。");
+                throw new BridgeCommandException("参数 " + name + " 不能为空�?);
             }
 
             // 将中文单位替换为英文字母单位
             // Replace Chinese unit characters with English unit letters
-            text = text.Trim().Replace("毫米", "mm").Replace("米", "m");
-            // 只有 "m" 后缀而没有 "mm" 后缀时才视为米
+            text = text.Trim().Replace("毫米", "mm").Replace("�?, "m");
+            // 只有 "m" 后缀而没�?"mm" 后缀时才视为�?
             // Only treat as meters when the suffix is "m" but not "mm"
             bool meters = text.EndsWith("mm", StringComparison.OrdinalIgnoreCase) == false &&
                           text.EndsWith("m", StringComparison.OrdinalIgnoreCase);
@@ -668,7 +661,7 @@ namespace RevitCommandBridge
             double parsed;
             if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
             {
-                throw new BridgeCommandException("参数 " + name + " 不是有效长度：" + value);
+                throw new BridgeCommandException("参数 " + name + " 不是有效长度�? + value);
             }
 
             // 米转毫米

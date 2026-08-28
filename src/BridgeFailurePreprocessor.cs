@@ -1,19 +1,15 @@
-using System.Collections.Generic;
-using System.Linq;
-using Autodesk.Revit.DB;
-
 namespace RevitCommandBridge
 {
     /// <summary>
     /// 无人值守计划事务的失败预处理器：
-    /// Warning 直接消除并记录文本；Error 尝试默认解决方案；无法解决的错误回滚整个计划。
+    /// Warning 直接消除并记录文本；Error 尝试默认解决方案；无法解决的错误回滚整个计划�?
     /// Failure preprocessor for unattended transaction groups:
     /// Warnings are dismissed and recorded as text; Errors attempt the default resolution; unresolvable errors roll back the entire transaction.
     /// </summary>
     internal sealed class BridgeFailurePreprocessor : IFailuresPreprocessor
     {
         /// <summary>
-        /// 所有失败消息的收集列表（供后续读取）。
+        /// 所有失败消息的收集列表（供后续读取）�?
         /// Collected list of all failure messages (for later inspection).
         /// </summary>
         public List<string> Messages { get; private set; }
@@ -24,7 +20,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 逐条处理 Revit 失败消息：Warning 直接删除，Error 标记为不可解决。
+        /// 逐条处理 Revit 失败消息：Warning 直接删除，Error 标记为不可解决�?
         /// Processes Revit failure messages one by one: deletes warnings, marks errors as unresolvable.
         /// </summary>
         public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
@@ -38,7 +34,7 @@ namespace RevitCommandBridge
                 string description = failure.GetDescriptionText() ?? string.Empty;
                 Messages.Add(severity + ": " + description.Trim());
 
-                // Warning 直接消除（不影响事务提交）
+                // Warning 直接消除（不影响事务提交�?
                 // Dismiss warnings directly (does not affect transaction commit)
                 if (severity == FailureSeverity.Warning)
                 {
@@ -46,7 +42,7 @@ namespace RevitCommandBridge
                     continue;
                 }
 
-                // Error 或 DocumentCorruption 无法自动解决，触发回滚
+                // Error �?DocumentCorruption 无法自动解决，触发回�?
                 // Error or DocumentCorruption cannot be auto-resolved, trigger rollback
                 if (severity == FailureSeverity.Error || severity == FailureSeverity.DocumentCorruption)
                 {

@@ -1,43 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
-using System.Text;
-using System.Windows.Forms;
-using Autodesk.Revit.Attributes;
-using Autodesk.Revit.DB;
-using Autodesk.Revit.UI;
-using WpfPoint = System.Windows.Point;
-using WpfRect = System.Windows.Rect;
-using WpfColor = System.Windows.Media.Color;
-using WpfImageSource = System.Windows.Media.ImageSource;
-using WpfDrawingGroup = System.Windows.Media.DrawingGroup;
-using WpfDrawingContext = System.Windows.Media.DrawingContext;
-using WpfSolidColorBrush = System.Windows.Media.SolidColorBrush;
-using WpfPen = System.Windows.Media.Pen;
-using WpfBrushes = System.Windows.Media.Brushes;
-using WpfPenLineCap = System.Windows.Media.PenLineCap;
-using WpfDrawingImage = System.Windows.Media.DrawingImage;
-using WpfFormattedText = System.Windows.Media.FormattedText;
-using WpfFlowDirection = System.Windows.FlowDirection;
-using WpfTypeface = System.Windows.Media.Typeface;
-
 namespace RevitCommandBridge
 {
     /// <summary>
-    /// Revit 外部应用入口：启动时创建 Ribbon 面板并启动运行时，关闭时清理资源。 / Revit external application entry point: creates the ribbon panel on startup and disposes the runtime on shutdown.
+    /// Revit 外部应用入口：启动时创建 Ribbon 面板并启动运行时，关闭时清理资源�?/ Revit external application entry point: creates the ribbon panel on startup and disposes the runtime on shutdown.
     /// </summary>
     public class RevitCommandBridgeApp : IExternalApplication
     {
         /// <summary>
-        /// Revit 启动时调用：初始化队列、创建 Ribbon 面板和按钮、启动桥接运行时。 / Called when Revit starts: initializes queues, creates ribbon panel and buttons, starts the bridge runtime.
+        /// Revit 启动时调用：初始化队列、创�?Ribbon 面板和按钮、启动桥接运行时�?/ Called when Revit starts: initializes queues, creates ribbon panel and buttons, starts the bridge runtime.
         /// </summary>
         public virtual Result OnStartup(UIControlledApplication application)
         {
             try
             {
                 BridgeFileQueue.Initialize();
-                const string tabName = "命令桥";
+                const string tabName = "命令�?;
                 try
                 {
                     application.CreateRibbonTab(tabName);
@@ -46,21 +22,21 @@ namespace RevitCommandBridge
                 {
                     // Tab already exists after an update or reload.
                 }
-                RibbonPanel panel = application.CreateRibbonPanel(tabName, "Revit 命令桥");
+                RibbonPanel panel = application.CreateRibbonPanel(tabName, "Revit 命令�?);
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 AddButton(
                     panel,
                     "RCB_OpenPanel",
                     "命令\n面板",
-                    "打开命令桥面板。桥接会自动启动；在面板中查看状态、预览和执行命令。",
+                    "打开命令桥面板。桥接会自动启动；在面板中查看状态、预览和执行命令�?,
                     assemblyPath,
                     typeof(OpenCommandPanelCommand),
                     RibbonIcon.Panel);
                 AddButton(
                     panel,
                     "RCB_Connection",
-                    "连接\n状态",
-                    "查看 Revit 桥接、MCP/REST 和当前项目的连接状态。",
+                    "连接\n状�?,
+                    "查看 Revit 桥接、MCP/REST 和当前项目的连接状态�?,
                     assemblyPath,
                     typeof(ShowConnectionCommand),
                     RibbonIcon.Status);
@@ -68,7 +44,7 @@ namespace RevitCommandBridge
                     panel,
                     "RCB_CopyMcp",
                     "复制\nMCP",
-                    "复制当前 Revit 年份的通用 MCP 配置，可直接粘贴到 Codex、WorkBuddy 或其它 MCP 客户端。",
+                    "复制当前 Revit 年份的通用 MCP 配置，可直接粘贴�?Codex、WorkBuddy 或其�?MCP 客户端�?,
                     assemblyPath,
                     typeof(CopyMcpConfigCommand),
                     RibbonIcon.Mcp);
@@ -76,7 +52,7 @@ namespace RevitCommandBridge
                     panel,
                     "RCB_Help",
                     "使用\n说明",
-                    "查看从连接检查到预览建模、确认执行的完整使用流程。",
+                    "查看从连接检查到预览建模、确认执行的完整使用流程�?,
                     assemblyPath,
                     typeof(ShowHelpCommand),
                     RibbonIcon.Help);
@@ -91,7 +67,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// Revit 关闭时调用：关闭命令面板、释放运行时资源。 / Called when Revit shuts down: closes the command panel and disposes the runtime.
+        /// Revit 关闭时调用：关闭命令面板、释放运行时资源�?/ Called when Revit shuts down: closes the command panel and disposes the runtime.
         /// </summary>
         public virtual Result OnShutdown(UIControlledApplication application)
         {
@@ -103,7 +79,7 @@ namespace RevitCommandBridge
             }
             else
             {
-                BridgeFileQueue.PublishStatus("stopped", "Revit 已关闭，命令桥不可用。", new Dictionary<string, object>
+                BridgeFileQueue.PublishStatus("stopped", "Revit 已关闭，命令桥不可用�?, new Dictionary<string, object>
                 {
                     { "revit_api", BridgeBuildInfo.RevitVersion },
                     { "protocol", BridgeProtocol.Version }
@@ -114,7 +90,7 @@ namespace RevitCommandBridge
         }
 
         /// <summary>
-        /// 在 Ribbon 面板上添加按钮。 / Adds a button to the ribbon panel.
+        /// �?Ribbon 面板上添加按钮�?/ Adds a button to the ribbon panel.
         /// </summary>
         private static void AddButton(
             RibbonPanel panel,
@@ -140,29 +116,29 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// Ribbon 按钮图标类型枚举。 / Ribbon button icon type enumeration.
+    /// Ribbon 按钮图标类型枚举�?/ Ribbon button icon type enumeration.
     /// </summary>
     internal enum RibbonIcon
     {
-        /// <summary>命令面板图标。 / Command panel icon.</summary>
+        /// <summary>命令面板图标�?/ Command panel icon.</summary>
         Panel,
-        /// <summary>连接状态图标。 / Connection status icon.</summary>
+        /// <summary>连接状态图标�?/ Connection status icon.</summary>
         Status,
-        /// <summary>MCP 配置图标。 / MCP configuration icon.</summary>
+        /// <summary>MCP 配置图标�?/ MCP configuration icon.</summary>
         Mcp,
-        /// <summary>帮助图标。 / Help icon.</summary>
+        /// <summary>帮助图标�?/ Help icon.</summary>
         Help
     }
 
     /// <summary>
-    /// 在内存中生成 Ribbon 按钮图标，避免依赖外部图标文件。 / Generates ribbon button icons in memory, avoiding external icon file dependencies.
+    /// 在内存中生成 Ribbon 按钮图标，避免依赖外部图标文件�?/ Generates ribbon button icons in memory, avoiding external icon file dependencies.
     /// </summary>
     internal static class RibbonIconFactory
     {
-        // 直接在内存中绘制图标，插件无需附带任何图标文件。
+        // 直接在内存中绘制图标，插件无需附带任何图标文件�?
         // Images are drawn in memory so the add-in carries no loose icon files.
         /// <summary>
-        /// 按图标类型创建 WPF DrawingImage。 / Creates a WPF DrawingImage for the given icon type.
+        /// 按图标类型创�?WPF DrawingImage�?/ Creates a WPF DrawingImage for the given icon type.
         /// </summary>
         internal static WpfImageSource Create(RibbonIcon icon)
         {
@@ -184,14 +160,6 @@ namespace RevitCommandBridge
             }
 
             var drawing = new WpfDrawingGroup();
-            using (WpfDrawingContext context = drawing.Open())
-            {
-                context.DrawRoundedRectangle(
-                    new WpfSolidColorBrush(background),
-                    null,
-                    new WpfRect(1, 1, 30, 30),
-                    5,
-                    5);
 
                 WpfPen white = new WpfPen(WpfBrushes.White, 2.1);
                 white.StartLineCap = WpfPenLineCap.Round;
@@ -237,13 +205,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 手动启动桥接的命令。 / Command to manually start the bridge.
+    /// 手动启动桥接的命令�?/ Command to manually start the bridge.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class StartBridgeCommand : IExternalCommand
     {
         /// <summary>
-        /// 执行：启动桥接并显示提示。 / Executes: starts the bridge and shows a confirmation dialog.
+        /// 执行：启动桥接并显示提示�?/ Executes: starts the bridge and shows a confirmation dialog.
         /// </summary>
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -251,9 +219,9 @@ namespace RevitCommandBridge
             {
                 BridgeRuntime.Start();
                 Autodesk.Revit.UI.TaskDialog.Show(
-                    "Revit 命令桥",
+                    "Revit 命令�?,
                     "命令桥已启动。\n\n队列目录：\n" + BridgeFileQueue.RootDirectory +
-                    "\n\n现在可使用命令面板、CLI、REST 网关或 MCP 客户端提交命令。");
+                    "\n\n现在可使用命令面板、CLI、REST 网关�?MCP 客户端提交命令�?);
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -265,13 +233,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 打开命令面板的命令。 / Command to open the command panel.
+    /// 打开命令面板的命令�?/ Command to open the command panel.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class OpenCommandPanelCommand : IExternalCommand
     {
         /// <summary>
-        /// 执行：启动桥接并打开命令面板。 / Executes: starts the bridge and shows the command panel.
+        /// 执行：启动桥接并打开命令面板�?/ Executes: starts the bridge and shows the command panel.
         /// </summary>
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -290,13 +258,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 显示连接状态和指引的命令。 / Command to display connection status and guidance.
+    /// 显示连接状态和指引的命令�?/ Command to display connection status and guidance.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class ShowConnectionCommand : IExternalCommand
     {
         /// <summary>
-        /// 执行：显示连接状态对话框。 / Executes: shows the connection status dialog.
+        /// 执行：显示连接状态对话框�?/ Executes: shows the connection status dialog.
         /// </summary>
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -304,8 +272,8 @@ namespace RevitCommandBridge
             {
                 BridgeRuntime.Start();
                 Autodesk.Revit.UI.TaskDialog.Show(
-                    "Revit 命令桥",
-                    "✓ Revit 这一端已连接。\n\n下一步不是在这里输入命令。请回到 Codex、WorkBuddy 或已连接的 AI 对话框，发送：\n\n请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型。");
+                    "Revit 命令�?,
+                    "�?Revit 这一端已连接。\n\n下一步不是在这里输入命令。请回到 Codex、WorkBuddy 或已连接�?AI 对话框，发送：\n\n请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型�?);
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -317,13 +285,13 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 复制 MCP 配置到剪贴板的命令。 / Command to copy MCP configuration to clipboard.
+    /// 复制 MCP 配置到剪贴板的命令�?/ Command to copy MCP configuration to clipboard.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class CopyMcpConfigCommand : IExternalCommand
     {
         /// <summary>
-        /// 执行：读取 MCP 配置文件并复制到剪贴板。 / Executes: reads the MCP config file and copies it to the clipboard.
+        /// 执行：读�?MCP 配置文件并复制到剪贴板�?/ Executes: reads the MCP config file and copies it to the clipboard.
         /// </summary>
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -338,20 +306,20 @@ namespace RevitCommandBridge
                 if (!File.Exists(configPath))
                 {
                     Autodesk.Revit.UI.TaskDialog.Show(
-                        "Revit 命令桥 - MCP 配置",
-                        "未找到当前版本的 MCP 配置。\n\n请重新运行安装器并完成“配置 AI 客户端”，然后再点击此按钮。\n\n预期文件：\n" + configPath);
+                        "Revit 命令�?- MCP 配置",
+                        "未找到当前版本的 MCP 配置。\n\n请重新运行安装器并完成“配�?AI 客户端”，然后再点击此按钮。\n\n预期文件：\n" + configPath);
                     return Result.Cancelled;
                 }
 
                 string config = File.ReadAllText(configPath, Encoding.UTF8);
                 if (string.IsNullOrWhiteSpace(config))
                 {
-                    throw new InvalidOperationException("MCP 配置文件为空：" + configPath);
+                    throw new InvalidOperationException("MCP 配置文件为空�? + configPath);
                 }
                 Clipboard.SetText(config);
                 Autodesk.Revit.UI.TaskDialog.Show(
-                    "Revit 命令桥 - MCP 配置",
-                    "✓ MCP 配置已复制到剪贴板。\n\n到 Codex、WorkBuddy 或其它 MCP 客户端的配置页面粘贴或导入即可。\n\n配置文件：\n" + configPath);
+                    "Revit 命令�?- MCP 配置",
+                    "�?MCP 配置已复制到剪贴板。\n\n�?Codex、WorkBuddy 或其�?MCP 客户端的配置页面粘贴或导入即可。\n\n配置文件：\n" + configPath);
                 return Result.Succeeded;
             }
             catch (Exception ex)
@@ -363,23 +331,23 @@ namespace RevitCommandBridge
     }
 
     /// <summary>
-    /// 显示使用帮助的命令。 / Command to display usage help.
+    /// 显示使用帮助的命令�?/ Command to display usage help.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public sealed class ShowHelpCommand : IExternalCommand
     {
         /// <summary>
-        /// 执行：显示帮助对话框。 / Executes: shows the help dialog.
+        /// 执行：显示帮助对话框�?/ Executes: shows the help dialog.
         /// </summary>
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             Autodesk.Revit.UI.TaskDialog.Show(
-                "命令桥 - 使用说明",
+                "命令�?- 使用说明",
                 "只要三步：\n\n" +
                 "1. 保持 Revit 和项目打开。\n\n" +
-                "2. 在你的 AI 对话框发送：请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型。\n\n" +
-                "3. 再发送你的建模要求，例如：请先预览，在标高 1，从 (0,0) 到 (6000,0) 创建一面 200mm 厚、3m 高的墙。确认预览无误后，再说：确认执行上一步。\n\n" +
-                "不需要填写 JSON、路径或任何英文接口。");
+                "2. 在你�?AI 对话框发送：请通过 Revit 命令桥查询当前打开的项目和可用标高，只查询，不要修改模型。\n\n" +
+                "3. 再发送你的建模要求，例如：请先预览，在标�?1，从 (0,0) �?(6000,0) 创建一�?200mm 厚�?m 高的墙。确认预览无误后，再说：确认执行上一步。\n\n" +
+                "不需要填�?JSON、路径或任何英文接口�?);
             return Result.Succeeded;
         }
     }
